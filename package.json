@@ -14,7 +14,7 @@
   },
   "bugs": "https://github.com/az2aws/az2aws/issues",
   "engines": {
-    "node": ">=22.0"
+    "node": ">=18.0"
   },
   "bin": {
     "az2aws": "lib/index.js"
