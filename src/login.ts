@@ -710,14 +710,15 @@ export const login = {
           await mkdirp(paths.chromium);
           args.push(`--user-data-dir=${paths.chromium}`);
         }
+
+        // --profile-directory requires --user-data-dir to work properly
+        if (paths.profileDir) {
+          args.push(`--profile-directory=${paths.profileDir}`);
+        }
       }
 
       if (process.env.https_proxy) {
         args.push(`--proxy-server=${process.env.https_proxy}`);
-      }
-
-      if (paths.profileDir) {
-        args.push(`--profile-directory=${paths.profileDir}`);
       }
 
       const ignoreDefaultArgs = noDisableExtensions
