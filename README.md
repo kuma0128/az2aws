@@ -132,6 +132,30 @@ Use the `HISTCONTROL` environment variable to avoid storing the password in your
     $  export AZURE_DEFAULT_PASSWORD=mypassword
     $ aws-azure-login
 
+#### Use an Existing Chrome Install and Profile
+
+Instead of using the bundled Chromium, you can use an existing Chrome installation with your own user profile by setting the following environment variables:
+
+- `BROWSER_CHROME_BIN` - Path to Chrome executable
+- `BROWSER_USER_DATA_DIR` - Chrome user data directory
+- `BROWSER_PROFILE_DIR` - Chrome profile name (e.g., "Default")
+
+Example (macOS):
+
+    export BROWSER_CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    export BROWSER_USER_DATA_DIR="/Users/<user>/Library/Application Support/Google/Chrome"
+    export BROWSER_PROFILE_DIR="Default"
+    aws-azure-login --mode gui --no-disable-extensions --no-sandbox
+
+Example (Linux):
+
+    export BROWSER_CHROME_BIN="/usr/bin/google-chrome"
+    export BROWSER_USER_DATA_DIR="/home/<user>/.config/google-chrome"
+    export BROWSER_PROFILE_DIR="Default"
+    aws-azure-login --mode gui --no-disable-extensions --no-sandbox
+
+Using Chrome instead of Chromium allows you to use browser extensions such as password managers.
+
 ### Logging In
 
 Once aws-azure-login is configured, you can log in. For the default profile, just run:
