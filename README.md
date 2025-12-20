@@ -58,8 +58,17 @@ The Docker image is configured with an entrypoint so you can just feed any argum
 
 You can also put the docker-launch.sh script into your bin directory for the az2aws command to function as usual:
 
-    sudo curl -o /usr/local/bin/az2aws https://raw.githubusercontent.com/az2aws/az2aws/main/docker-launch.sh -L
-    sudo chmod o+x /usr/local/bin/az2aws
+    # Download the script (replace VERSION with a specific release tag, e.g., v1.0.0)
+    curl -o /tmp/az2aws https://raw.githubusercontent.com/az2aws/az2aws/VERSION/docker-launch.sh -L
+
+    # IMPORTANT: Review the script before installing
+    cat /tmp/az2aws
+
+    # Install after verification
+    sudo mv /tmp/az2aws /usr/local/bin/az2aws
+    sudo chmod +x /usr/local/bin/az2aws
+
+> **Security Note:** Always download from a specific release tag (not `main`) and review the script contents before installing. Downloading and executing scripts directly from mutable branch heads poses a supply chain risk.
 
 Now just run `az2aws`.
 

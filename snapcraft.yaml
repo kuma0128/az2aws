@@ -6,7 +6,7 @@ description: |
   $ az2aws --configure
   Once az2aws is configured, you can log in. For the default profile, just run:-
   $ az2aws
-base: core18
+base: core22
 confinement: strict
 
 parts:
