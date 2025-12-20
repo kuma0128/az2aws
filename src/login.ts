@@ -16,7 +16,7 @@ import mkdirp from "mkdirp";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 
-const debug = _debug("aws-azure-login");
+const debug = _debug("az2aws");
 
 const WIDTH = 425;
 const HEIGHT = 550;
@@ -841,7 +841,7 @@ export const login = {
           } else {
             debug("State not recognized!");
             if (totalUnrecognizedDelay > MAX_UNRECOGNIZED_PAGE_DELAY) {
-              const path = "aws-azure-login-unrecognized-state.png";
+              const path = "az2aws-unrecognized-state.png";
               await page.screenshot({ path });
               throw new CLIError(
                 `Unable to recognize page state! A screenshot has been dumped to ${path}. If this problem persists, try running with --mode=gui or --mode=debug`

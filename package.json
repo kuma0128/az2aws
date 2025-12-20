@@ -1,23 +1,23 @@
 {
-  "name": "aws-azure-login",
-  "version": "3.6.5",
+  "name": "az2aws",
+  "version": "1.0.0",
   "description": "Use Azure AD SSO to log into the AWS CLI.",
   "main": "index.js",
   "author": {
-    "name": "aws-azure-login devs",
-    "url": "https://github.com/aws-azure-login"
+    "name": "az2aws devs",
+    "url": "https://github.com/az2aws"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aws-azure-login/aws-azure-login.git"
+    "url": "https://github.com/az2aws/az2aws.git"
   },
-  "bugs": "https://github.com/aws-azure-loginc/aws-azure-login/issues",
+  "bugs": "https://github.com/az2aws/az2aws/issues",
   "engines": {
-    "node": ">=12.0"
+    "node": ">=22.0"
   },
   "bin": {
-    "aws-azure-login": "lib/index.js"
+    "az2aws": "lib/index.js"
   },
   "scripts": {
     "start": "ts-node-dev src/index.ts",
@@ -26,7 +26,7 @@
     "eslint": "eslint . --ext .ts",
     "prettier:write": "prettier --write \"src/**/*.{ts,json}\"",
     "prettier:check": "prettier --check \"src/**/*.ts\"",
-    "test": "yarn eslint && yarn prettier:check"
+    "test": "npm run eslint && npm run prettier:check"
   },
   "dependencies": {
     "@aws-sdk/client-sts": "^3.473.0",
