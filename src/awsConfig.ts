@@ -5,7 +5,7 @@ import mkdirp from "mkdirp";
 import fs from "fs";
 import util from "util";
 
-const debug = _debug("aws-azure-login");
+const debug = _debug("az2aws");
 
 const writeFile = util.promisify(fs.writeFile);
 

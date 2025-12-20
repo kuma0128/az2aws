@@ -2,21 +2,21 @@
 
 ## Get started
 
-This project is written in TypeScript and is using prettier and eslint for code formatting. You need node v18.
+This project is written in TypeScript and is using prettier and eslint for code formatting. You need node v22.
 
-1. Install node v18. I recommend installing that with nvm: https://github.com/nvm-sh/nvm
-
-```sh
-nvm install 18
-```
-
-2. Make node v18 default
+1. Install node v22. I recommend installing that with nvm: https://github.com/nvm-sh/nvm
 
 ```sh
-nvm alias default 18
+nvm install 22
 ```
 
-3. Open a new terminal and verify node version (should return v18.X.X)
+2. Make node v22 default
+
+```sh
+nvm alias default 22
+```
+
+3. Open a new terminal and verify node version (should return v22.X.X)
 
 ```sh
 node -v
@@ -31,8 +31,8 @@ npm install -g yarn
 5. Fork and clone project
 
 ```sh
-git clone git@github.com:<GITHUB_USERNAME>/aws-azure-login.git
-cd aws-azure-login
+git clone git@github.com:<GITHUB_USERNAME>/az2aws.git
+cd az2aws
 ```
 
 6. Install dependencies
