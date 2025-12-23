@@ -76,6 +76,23 @@ Now just run `az2aws`.
 
 https://snapcraft.io/az2aws
 
+## Command Options
+
+| Option | Description |
+|--------|-------------|
+| `--profile (-p)` | Profile name to use. Default: `default` or `AWS_PROFILE` |
+| `--all-profiles (-a)` | Run for all configured profiles |
+| `--force-refresh (-f)` | Force refresh even if credentials are valid |
+| `--configure (-c)` | Configure the profile |
+| `--mode (-m) <mode>` | `cli` (default), `gui`, or `debug` |
+| `--no-sandbox` | Disable Puppeteer sandbox (needed on Linux) |
+| `--no-prompt` | Skip prompts, use defaults |
+| `--enable-chrome-network-service` | Enable Network Service (for 3XX redirects) |
+| `--no-verify-ssl` | Disable AWS SSL verification |
+| `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
+| `--no-disable-extensions` | Keep browser extensions enabled |
+| `--disable-gpu` | Disable GPU acceleration |
+
 ## Usage
 
 ### Configuration
@@ -103,43 +120,25 @@ To use az2aws with AWS China Cloud, set the `region` profile property in your ~/
 
 - cn-north-1
 
-#### Staying logged in, skip username/password for future logins
+#### Stay Logged In
 
-During the configuration you can decide to stay logged in:
-
-    ? Stay logged in: skip authentication while refreshing aws credentials (true|false) (false)
-
-If you set this configuration to true, the usual authentication with username/password/MFA is skipped as it's using session cookies to remember your identity. This enables you to use `--no-prompt` without the need to store your password anywhere, it's an alternative for using environment variables as described below.
-As soon as you went through the full login procedure once, you can just use:
+During configuration, you can enable "Stay logged in" to skip username/password/MFA on subsequent logins. Session cookies will remember your identity, allowing you to use `--no-prompt` without storing passwords:
 
     az2aws --no-prompt
-
-or
-
     az2aws --profile foo --no-prompt
-
-to refresh your aws credentials.
 
 #### Environment Variables
 
-You can optionally store your responses as environment variables:
+You can set defaults via environment variables (use with `--no-prompt`):
 
-- `AZURE_TENANT_ID`
-- `AZURE_APP_ID_URI`
-- `AZURE_DEFAULT_USERNAME`
-- `AZURE_DEFAULT_PASSWORD`
-- `AZURE_DEFAULT_ROLE_ARN`
-- `AZURE_DEFAULT_DURATION_HOURS`
+- `AZURE_TENANT_ID` / `AZURE_APP_ID_URI` - Azure AD settings
+- `AZURE_DEFAULT_USERNAME` / `AZURE_DEFAULT_PASSWORD` - Credentials
+- `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` - AWS role settings
 
-To avoid having to `<Enter>` through the prompts after setting these environment variables, use the `--no-prompt` option when running the command.
+To avoid storing passwords in bash history, use a leading space:
 
-    az2aws --no-prompt
-
-Use the `HISTCONTROL` environment variable to avoid storing the password in your bash history (notice the space at the beginning):
-
-    $ HISTCONTROL=ignoreboth
-    $  export AZURE_DEFAULT_PASSWORD=mypassword
-    $ az2aws
+    HISTCONTROL=ignoreboth
+     export AZURE_DEFAULT_PASSWORD=mypassword
 
 #### Use an Existing Chrome Install and Profile
 
@@ -154,63 +153,39 @@ Example (macOS):
     export BROWSER_CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     export BROWSER_USER_DATA_DIR="/Users/<user>/Library/Application Support/Google/Chrome"
     export BROWSER_PROFILE_DIR="Default"
-    aws-azure-login --mode gui --no-disable-extensions --no-sandbox
+    az2aws --mode gui --no-disable-extensions --no-sandbox
 
 Example (Linux):
 
     export BROWSER_CHROME_BIN="/usr/bin/google-chrome"
     export BROWSER_USER_DATA_DIR="/home/<user>/.config/google-chrome"
     export BROWSER_PROFILE_DIR="Default"
-    aws-azure-login --mode gui --no-disable-extensions --no-sandbox
+    az2aws --mode gui --no-disable-extensions --no-sandbox
 
 Using Chrome instead of Chromium allows you to use browser extensions such as password managers.
 
 ### Logging In
 
-Once az2aws is configured, you can log in. For the default profile, just run:
+    az2aws                    # Default profile
+    az2aws --profile foo      # Named profile
+    az2aws --mode gui         # Use browser UI (more reliable)
 
-    az2aws
+You'll be prompted for username, password, and MFA if required. After login, use AWS CLI/SDKs as usual.
 
-You will be prompted for your username and password. If MFA is required you'll also be prompted for a verification code or mobile device approval. To log in with a named profile:
-
-    az2aws --profile foo
-
-Alternatively, you can set the `AWS_PROFILE` environmental variable to the name of the profile just like the AWS CLI.
-
-Once you log in you can use the AWS CLI or SDKs as usual!
-
-If you are logging in on an operating system with a GUI, you can log in using the actual Azure web form instead of the CLI:
-
-    az2aws --mode gui
-
-Logging in with GUI mode is likely to be much more reliable.
-
-_Note:_ on virtual machines, or when rendering of the puppeteer UI fails, you might need to disable the GPU Hardware Acceleration:
-
-    az2aws --mode gui --disable-gpu
-
-_Note:_ on Linux you will likely need to disable the Puppeteer sandbox or Chrome will fail to launch:
-
-    az2aws --no-sandbox
-
-### Behind corporate proxy
-
-If behind corporate proxy, then just set https_proxy env variable.
+**Tips:**
+- Set `AWS_PROFILE` env var instead of using `--profile`
+- Use `--mode gui --disable-gpu` on VMs or if rendering fails
+- Use `--no-sandbox` on Linux
+- Set `https_proxy` env var for corporate proxy
 
 ## Automation
 
-### Renew credentials for all configured profiles
-
-You can renew credentials for all configured profiles in one run. This is especially useful, if the maximum session length on AWS side is configured to a low value due to security constraints. Just run:
+Renew all profiles at once (useful for short session limits):
 
     az2aws --all-profiles
+    az2aws --all-profiles --no-prompt    # With "Stay logged in" enabled
 
-If you configure all profiles to stay logged in, you can easily skip the prompts:
-
-    az2aws --all-profiles --no-prompt
-
-This will allow you to automate the credentials refresh procedure, eg. by running a cronjob every 5 minutes.
-To skip unnecessary calls, the credentials are only getting refreshed if the time to expire is lower than 11 minutes.
+Credentials are only refreshed if expiring within 11 minutes - safe to run as a cron job.
 
 ## Getting Your Tenant ID and App ID URI
 
@@ -232,14 +207,11 @@ The Azure login page uses JavaScript, which requires a real web browser. To auto
 
 ## Troubleshooting
 
-The nature of browser automation with Puppeteer means the solution is bit brittle. A minor change on the Microsoft side could break the tool. If something isn't working, you can fall back to GUI mode (above). To debug an issue, you can run in debug mode (--mode debug) to see the GUI while az2aws tries to populate it. You can also have the tool print out more detail on what it is doing to try to do in order to diagnose. az2aws uses the [Node debug module](https://www.npmjs.com/package/debug) to print out debug info. Just set the DEBUG environmental variable to 'az2aws'. On Linux/OS X:
+If login fails, try these in order:
 
-    DEBUG=az2aws az2aws
-
-On Windows:
-
-    set DEBUG=az2aws
-    az2aws
+1. **GUI mode**: `az2aws --mode gui` - most reliable
+2. **Debug mode**: `az2aws --mode debug` - see browser while CLI runs
+3. **Verbose logging**: `DEBUG=az2aws az2aws` (Windows: `set DEBUG=az2aws && az2aws`)
 
 ## Support for Other Authentication Providers
 

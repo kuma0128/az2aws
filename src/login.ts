@@ -697,6 +697,7 @@ export const login = {
           `--auth-server-whitelist=${AZURE_AD_SSO}`,
           `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`
         );
+      debug(`rememberMe value: ${rememberMe} (type: ${typeof rememberMe})`);
       if (rememberMe) {
         if (paths.userDataDir) {
           args.push(`--user-data-dir=${paths.userDataDir}`);
