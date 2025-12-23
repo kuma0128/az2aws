@@ -10,9 +10,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/az2aws/az2aws.git"
+    "url": "git+https://github.com/kuma0128/az2aws.git"
   },
-  "bugs": "https://github.com/az2aws/az2aws/issues",
+  "bugs": "https://github.com/az2aws/kuma0128/issues",
   "engines": {
     "node": ">=22.0"
   },
