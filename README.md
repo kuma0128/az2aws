@@ -76,6 +76,23 @@ Now just run `az2aws`.
 
 https://snapcraft.io/az2aws
 
+## Command Options
+
+| Option | Description |
+|--------|-------------|
+| `--profile (-p)` | Profile name to use. Default: `default` or `AWS_PROFILE` |
+| `--all-profiles (-a)` | Run for all configured profiles |
+| `--force-refresh (-f)` | Force refresh even if credentials are valid |
+| `--configure (-c)` | Configure the profile |
+| `--mode (-m) <mode>` | `cli` (default), `gui`, or `debug` |
+| `--no-sandbox` | Disable Puppeteer sandbox (needed on Linux) |
+| `--no-prompt` | Skip prompts, use defaults |
+| `--enable-chrome-network-service` | Enable Network Service (for 3XX redirects) |
+| `--no-verify-ssl` | Disable AWS SSL verification |
+| `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
+| `--no-disable-extensions` | Keep browser extensions enabled |
+| `--disable-gpu` | Disable GPU acceleration |
+
 ## Usage
 
 ### Configuration
