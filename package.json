@@ -12,7 +12,7 @@
     "type": "git",
     "url": "git+https://github.com/kuma0128/az2aws.git"
   },
-  "bugs": "https://github.com/az2aws/kuma0128/issues",
+  "bugs": "https://github.com/kuma0128/az2aws/issues",
   "engines": {
     "node": ">=22.0"
   },
