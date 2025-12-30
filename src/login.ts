@@ -1041,6 +1041,11 @@ export const login = {
     }
 
     if (awsNoVerifySsl) {
+      console.warn(
+        "WARNING: SSL certificate verification is disabled. " +
+          "This makes the connection vulnerable to MITM attacks. " +
+          "Consider using NODE_EXTRA_CA_CERTS environment variable instead."
+      );
       stsOptions = {
         ...stsOptions,
         requestHandler: new NodeHttpHandler({
