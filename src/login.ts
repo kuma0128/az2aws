@@ -296,6 +296,11 @@ const states = [
       console.log(descriptionMessage);
 
       try {
+        debug("Waiting for authentication code to be displayed");
+        await page.waitForSelector("#idRichContext_DisplaySign", {
+          visible: true,
+          timeout: 5000,
+        });
         debug("Checking if authentication code is displayed");
         const authenticationCodeElement = await page.$(
           "#idRichContext_DisplaySign"
