@@ -34,7 +34,7 @@ curl https://mise.run | sh
 echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc
 ```
 
-Then restart your shell or run `source ~/.bashrc` (or `~/.zshrc`).
+Then restart your shell or run `source ~/.zshrc` (or the appropriate config file for your shell, such as `~/.bashrc`).
 
 3. Install Node.js v22:
 
