@@ -3,7 +3,6 @@
     "node": true,
     "es6": true
   },
-  "ignorePatterns": ["**/*.test.ts", "vitest.config.ts"],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaVersion": 2018,

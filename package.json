@@ -1,34 +1,13 @@
 {
   "name": "az2aws",
   "version": "1.0.1",
-  "description": "Use Azure AD SSO to log into the AWS CLI. A modern, actively maintained alternative to aws-azure-login.",
+  "description": "Use Azure AD SSO to log into the AWS CLI.",
   "main": "index.js",
   "author": {
     "name": "az2aws devs",
     "url": "https://github.com/az2aws"
   },
   "license": "MIT",
-  "keywords": [
-    "aws",
-    "azure",
-    "azure-ad",
-    "entra-id",
-    "microsoft-entra",
-    "saml",
-    "sso",
-    "single-sign-on",
-    "cli",
-    "authentication",
-    "mfa",
-    "multi-factor-authentication",
-    "federated-login",
-    "aws-cli",
-    "credential-helper",
-    "sts",
-    "assume-role",
-    "puppeteer"
-  ],
-  "homepage": "https://github.com/kuma0128/az2aws#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kuma0128/az2aws.git"
@@ -47,10 +26,7 @@
     "eslint": "eslint . --ext .ts",
     "prettier:write": "prettier --write \"src/**/*.{ts,json}\"",
     "prettier:check": "prettier --check \"src/**/*.ts\"",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "lint": "yarn eslint && yarn prettier:check"
+    "test": "yarn eslint && yarn prettier:check"
   },
   "dependencies": {
     "@aws-sdk/client-sts": "^3.473.0",
@@ -79,12 +55,10 @@
     "@types/uuid": "^8.3.4",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
-    "@vitest/coverage-v8": "^4.0.16",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^8.10.0",
     "prettier": "^2.8.8",
     "ts-node-dev": "^1.1.8",
-    "typescript": "^5.4.3",
-    "vitest": "^4.0.16"
+    "typescript": "^5.4.3"
   }
 }

@@ -1,7 +1,5 @@
 [![view on npm](http://img.shields.io/npm/v/az2aws.svg)](https://www.npmjs.org/package/az2aws)
 [![npm module downloads per month](http://img.shields.io/npm/dm/az2aws.svg)](https://www.npmjs.org/package/az2aws)
-[![CI](https://github.com/kuma0128/az2aws/actions/workflows/main.yml/badge.svg)](https://github.com/kuma0128/az2aws/actions/workflows/main.yml)
-[![codecov](https://codecov.io/gh/kuma0128/az2aws/graph/badge.svg)](https://codecov.io/gh/kuma0128/az2aws)
 
 # az2aws
 

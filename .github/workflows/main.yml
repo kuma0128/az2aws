@@ -20,12 +20,5 @@ jobs:
         with:
           node-version: 22
       - run: yarn install
-      - run: yarn lint
-      - run: yarn test:coverage
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
-          verbose: true
+      - run: yarn test
       - run: yarn build

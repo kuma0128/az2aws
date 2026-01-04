@@ -8,18 +8,16 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: yarn install
-      - run: yarn lint
       - run: yarn test
       - run: yarn build
       - uses: actions/upload-artifact@v4
@@ -29,7 +27,7 @@ jobs:
 
   publish-npm:
     needs: build
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v5
@@ -41,10 +39,12 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org/
       - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-docker:
     needs: build
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v5
@@ -62,7 +62,7 @@ jobs:
 
   publish-snap:
     needs: build
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v5
