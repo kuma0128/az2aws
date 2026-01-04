@@ -217,6 +217,8 @@ When reporting a bug, please include:
    DEBUG=az2aws az2aws [your options]
    ```
 
+   **Security note**: Debug logs may contain sensitive information (for example, SAML assertions such as SAMLResponse, SAML XML, role details, or other credentials/tokens). Do not share unredacted debug output in public issues or forums. If you attach logs to a bug report, carefully review and redact any secrets or identifiers before posting.
+
 ### Feature Requests
 
 When requesting a feature, please include:
