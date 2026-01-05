@@ -12,7 +12,7 @@ confinement: strict
 parts:
   az2aws:
     plugin: nodejs
-    nodejs-version: "22"
+    nodejs-version: "24"
     nodejs-package-manager: yarn
     source: .
 

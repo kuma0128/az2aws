@@ -7,7 +7,8 @@ on:
       - "*"
 
 permissions:
-  contents: read
+  contents: write
+  packages: write
   id-token: write
 
 jobs:
@@ -17,12 +18,13 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
+      - run: corepack enable
       - run: yarn install
       - run: yarn lint
       - run: yarn test
       - run: yarn build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: lib
           path: lib
@@ -31,15 +33,16 @@ jobs:
     needs: build
     runs-on: ubuntu-slim
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
         with:
           name: lib
           path: lib
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org/
+      # OIDC
       - run: npm publish
 
   publish-docker:
@@ -47,7 +50,7 @@ jobs:
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         with:
           name: lib
           path: lib
@@ -59,13 +62,32 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           snapshot: true
           dockerfile: Dockerfile
+          
+  create-release:
+    needs: build
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          name: lib
+          path: lib
+          
+      - name: Archive artifacts
+        run: zip -r az2aws-lib.zip lib package.json
+  
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: az2aws-lib.zip
+          generate_release_notes: true
 
   publish-snap:
     needs: build
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         with:
           name: lib
           path: lib

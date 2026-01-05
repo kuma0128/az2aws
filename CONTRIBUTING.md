@@ -18,7 +18,7 @@ Please be respectful and constructive in all interactions. We are committed to p
 
 ## Getting Started
 
-This project is written in TypeScript and uses Prettier and ESLint for code formatting. You need Node.js v22 or higher.
+This project is written in TypeScript and uses Prettier and ESLint for code formatting. You need Node.js v24 or higher.
 
 ### Prerequisites
 
@@ -36,13 +36,13 @@ echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc
 
 Then restart your shell or run `source ~/.zshrc` (or the appropriate config file for your shell, such as `~/.bashrc`).
 
-3. Install Node.js v22:
+3. Install Node.js v24:
 
 ```sh
-mise use --global node@22
+mise use --global node@24
 ```
 
-4. Verify Node.js version (should return v22.x.x):
+4. Verify Node.js version (should return v24.x.x):
 
 ```sh
 node -v
