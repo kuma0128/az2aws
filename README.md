@@ -1,5 +1,7 @@
 [![view on npm](http://img.shields.io/npm/v/az2aws.svg)](https://www.npmjs.org/package/az2aws)
 [![npm module downloads per month](http://img.shields.io/npm/dm/az2aws.svg)](https://www.npmjs.org/package/az2aws)
+[![CI](https://github.com/kuma0128/az2aws/actions/workflows/main.yml/badge.svg)](https://github.com/kuma0128/az2aws/actions/workflows/main.yml)
+[![codecov](https://codecov.io/gh/kuma0128/az2aws/graph/badge.svg)](https://codecov.io/gh/kuma0128/az2aws)
 
 # az2aws
 
@@ -11,7 +13,7 @@ Installation can be done in any of the following platform - Windows, Linux, Dock
 
 ### Windows
 
-Install [Node.js](https://nodejs.org/) v22 or higher. Then install az2aws with npm:
+Install [Node.js](https://nodejs.org/) v24 or higher. Then install az2aws with npm:
 
     npm install -g az2aws
 
@@ -21,7 +23,7 @@ You may need to install puppeteer dependency, if you're getting missing chrome o
 
 ### Linux
 
-In Linux you can either install for all users or just the current user. In either case, you must first install [Node.js](https://nodejs.org/) v22 or higher and any [puppeteer dependencies](https://github.com/GoogleChrome/puppeteer/blob/master/docs/troubleshooting.md#chrome-headless-doesnt-launch). Then follow the appropriate instructions.
+In Linux you can either install for all users or just the current user. In either case, you must first install [Node.js](https://nodejs.org/) v24 or higher and any [puppeteer dependencies](https://github.com/GoogleChrome/puppeteer/blob/master/docs/troubleshooting.md#chrome-headless-doesnt-launch). Then follow the appropriate instructions.
 
 #### Option A: Install for All Users
 
