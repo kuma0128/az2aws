@@ -6,7 +6,7 @@ on:
     types: [published]
 
 permissions:
-  contents: write
+  contents: read
   packages: write
   id-token: write
 
@@ -15,14 +15,17 @@ jobs:
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+
       - run: corepack enable
       - run: yarn install
       - run: yarn lint
       - run: yarn test
       - run: yarn build
+
       - uses: actions/upload-artifact@v6
         with:
           name: lib
@@ -31,72 +34,78 @@ jobs:
   publish-npm:
     needs: build
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/download-artifact@v7
         with:
           name: lib
           path: lib
+
       - uses: actions/setup-node@v5
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org/
-      # OIDC
-      - run: npm publish
+
+      - name: Publish to npm with provenance (OIDC)
+        run: npm publish
 
   publish-docker:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/download-artifact@v7
         with:
           name: lib
           path: lib
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/az2aws
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/az2aws:latest
-          
-  create-release:
-    needs: build
-    runs-on: ubuntu-slim
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v7
-        with:
-          name: lib
-          path: lib
-          
-      - name: Archive artifacts
-        run: zip -r az2aws-lib.zip lib package.json
-  
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: az2aws-lib.zip
-          generate_release_notes: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
   publish-snap:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/download-artifact@v7
         with:
           name: lib
           path: lib
+
       - uses: snapcore/action-build@v1
         id: build
+        with:
+          snapcraft-args: --destructive-mode
+
       - uses: snapcore/action-publish@v1
         with:
           store_login: ${{ secrets.SNAPCRAFT_STORE_LOGIN }}
