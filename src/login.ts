@@ -761,7 +761,7 @@ export const login = {
       const samlResponsePromise = new Promise((resolve) => {
         page.on("request", (req: HTTPRequest) => {
           const reqURL = req.url();
-          debug(`Request: ${url}`);
+          debug(`Request: ${reqURL}`);
           if (
             reqURL === AWS_SAML_ENDPOINT ||
             reqURL === AWS_GOV_SAML_ENDPOINT ||
