@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/kuma0128/az2aws/compare/v1.1.1...v1.1.2) (2026-01-19)
+
+
+### Bug Fixes
+
+* snapcraft deploy flow ([#61](https://github.com/kuma0128/az2aws/issues/61)) ([48cff62](https://github.com/kuma0128/az2aws/commit/48cff6225ef79050137ad815f1dd5bacb4f9131f))
+* Unreachable code in account selection logic ([#63](https://github.com/kuma0128/az2aws/issues/63)) ([eb1f0de](https://github.com/kuma0128/az2aws/commit/eb1f0de464ad5d991c82d2982abf9b0ffd9a7b49))
+
 ## [1.1.1](https://github.com/kuma0128/az2aws/compare/v1.1.0...v1.1.1) (2026-01-19)
 
 
