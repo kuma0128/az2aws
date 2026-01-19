@@ -11,9 +11,9 @@ confinement: strict
 
 parts:
   az2aws:
-    plugin: nodejs
-    nodejs-version: "24"
-    nodejs-package-manager: yarn
+    plugin: npm
+    npm-include-node: true
+    npm-node-version: "24"
     source: .
 
 apps:
