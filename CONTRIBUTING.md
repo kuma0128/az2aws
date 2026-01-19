@@ -10,6 +10,7 @@ Thank you for your interest in contributing to az2aws! This document provides gu
 - [Pull Request Process](#pull-request-process)
 - [Coding Standards](#coding-standards)
 - [Commit Message Guidelines](#commit-message-guidelines)
+- [Release Process](#release-process)
 - [Reporting Issues](#reporting-issues)
 
 ## Code of Conduct
@@ -193,7 +194,97 @@ src/
 
 ## Commit Message Guidelines
 
-Commit messages should be generated using some LLM model.
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) for commit messages. The commit message format is used by [release-please](https://github.com/googleapis/release-please) to automatically generate changelogs and determine version bumps.
+
+### Commit Message Format
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Commit Types and Their Effects
+
+| Type | CHANGELOG Section | Release Trigger | Version Bump |
+|------|-------------------|-----------------|--------------|
+| `feat` | Features | Yes | MINOR (1.x.0) |
+| `fix` | Bug Fixes | Yes | PATCH (1.0.x) |
+| `docs` | Not included | No | - |
+| `chore` | Not included | No | - |
+| `refactor` | Not included | No | - |
+| `test` | Not included | No | - |
+| `style` | Not included | No | - |
+| `perf` | Performance Improvements | Yes | PATCH (1.0.x) |
+
+### Breaking Changes
+
+For breaking changes, add `!` after the type or include `BREAKING CHANGE:` in the footer:
+
+```
+feat!: remove deprecated --legacy flag
+
+BREAKING CHANGE: The --legacy flag has been removed. Use --mode instead.
+```
+
+Breaking changes trigger a MAJOR version bump (x.0.0).
+
+### Examples
+
+```sh
+# New feature (triggers MINOR release, appears in CHANGELOG)
+feat: add support for credential_process
+
+# Bug fix (triggers PATCH release, appears in CHANGELOG)
+fix: resolve proxy configuration conflict
+
+# Documentation only (no release, not in CHANGELOG)
+docs: update installation instructions
+
+# If you want documentation changes to appear in CHANGELOG, use feat:
+feat(docs): add mise installation guide
+
+# Maintenance (no release, not in CHANGELOG)
+chore: update dependencies
+```
+
+### Important Notes
+
+- **PR titles matter**: When a PR is squash-merged, the PR title becomes the commit message. Ensure your PR title follows this format.
+- **Use `feat(docs):`** if you want documentation changes to appear in the changelog and trigger a release.
+- Commit messages can be generated using an LLM model, but ensure they follow the Conventional Commits format.
+
+## Release Process
+
+This project uses [release-please](https://github.com/googleapis/release-please) for automated releases.
+
+### How It Works
+
+1. When PRs are merged to `main`, release-please analyzes commit messages
+2. If releasable commits exist (`feat`, `fix`, `perf`, or breaking changes), release-please creates/updates a Release PR
+3. The Release PR contains:
+   - Version bump in `package.json`
+   - Updated `CHANGELOG.md` with all changes since the last release
+4. When the Release PR is merged, a new GitHub release is created with the appropriate tag
+
+### What Triggers a Release
+
+| Commit Type | Triggers Release? | Example |
+|-------------|-------------------|---------|
+| `feat:` | Yes (MINOR) | `feat: add SSO support` |
+| `fix:` | Yes (PATCH) | `fix: handle timeout error` |
+| `perf:` | Yes (PATCH) | `perf: optimize credential caching` |
+| `feat!:` / `BREAKING CHANGE` | Yes (MAJOR) | `feat!: change config format` |
+| `docs:` | No | `docs: update README` |
+| `chore:` | No | `chore: update deps` |
+
+### Tips for Contributors
+
+- If your change should appear in the release notes, use `feat:` or `fix:`
+- For documentation improvements that benefit users, consider using `feat(docs):` to include them in the release
+- Multiple commits of the same type are grouped together in the CHANGELOG
 
 ## Reporting Issues
 
