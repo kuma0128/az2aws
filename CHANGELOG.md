@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/kuma0128/az2aws/compare/v1.1.0...v1.1.1) (2026-01-19)
+
+
+### Bug Fixes
+
+* update Snapcraft config to use npm plugin ([#59](https://github.com/kuma0128/az2aws/issues/59)) ([e574441](https://github.com/kuma0128/az2aws/commit/e57444187fc37460c3838d973c28563fe9e13913))
+
 ## [1.1.0](https://github.com/kuma0128/az2aws/compare/v1.0.2...v1.1.0) (2026-01-09)
 
 
