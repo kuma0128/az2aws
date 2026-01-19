@@ -107,7 +107,8 @@ jobs:
           snapcraft-args: --destructive-mode
 
       - uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
-          store_login: ${{ secrets.SNAPCRAFT_STORE_LOGIN }}
           snap: ${{ steps.build.outputs.snap }}
           release: stable

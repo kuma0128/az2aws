@@ -9,6 +9,9 @@ description: |
   $ az2aws
 license: MIT
 contact: https://github.com/kuma0128/az2aws
+issues: https://github.com/kuma0128/az2aws/issues
+source-code: https://github.com/kuma0128/az2aws
+website: https://github.com/kuma0128/az2aws
 base: core22
 confinement: strict
 
