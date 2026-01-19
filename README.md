@@ -9,50 +9,60 @@ If your organization uses [Azure Active Directory](https://azure.microsoft.com) 
 
 ## Installation
 
-Installation can be done in any of the following platform - Windows, Linux, Docker, Snap
+### mise (Recommended)
 
-### Windows
+[mise](https://mise.jdx.dev/) is a polyglot version manager that can install az2aws directly.
 
-Install [Node.js](https://nodejs.org/) v24 or higher. Then install az2aws with npm:
+Install mise:
+
+    curl https://mise.run | sh
+
+Activate mise in your shell:
+
+    # For zsh (macOS default)
+    echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc
+    source ~/.zshrc
+
+    # For bash (Linux default)
+    echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc
+    source ~/.bashrc
+
+Install az2aws:
+
+    mise use -g npm:az2aws
+
+### npm
+
+Install [Node.js](https://nodejs.org/) v24 or higher, then install az2aws:
 
     npm install -g az2aws
 
-You may need to install puppeteer dependency, if you're getting missing chrome or chromium message
+#### Linux Notes
 
-    node <node_modules_dir>/az2aws/node_modules/puppeteer/install.js
+You must install [puppeteer dependencies](https://github.com/GoogleChrome/puppeteer/blob/master/docs/troubleshooting.md#chrome-headless-doesnt-launch) first.
 
-### Linux
-
-In Linux you can either install for all users or just the current user. In either case, you must first install [Node.js](https://nodejs.org/) v24 or higher and any [puppeteer dependencies](https://github.com/GoogleChrome/puppeteer/blob/master/docs/troubleshooting.md#chrome-headless-doesnt-launch). Then follow the appropriate instructions.
-
-#### Option A: Install for All Users
-
-Install az2aws globally with npm:
+**Install for all users:**
 
     sudo npm install -g az2aws --unsafe-perm
-
-Puppeteer doesn't install globally with execution permissions for all users so you'll need to modify them:
-
     sudo chmod -R go+rx $(npm root -g)
 
-#### Option B: Install Only for Current User
-
-First configure npm to install global packages in [your home directory](https://docs.npmjs.com/getting-started/fixing-npm-permissions):
+**Install for current user only:**
 
     mkdir ~/.npm-global
     npm config set prefix '~/.npm-global'
-    export PATH=~/.npm-global/bin:$PATH
-    source ~/.profile
     echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.profile
     source ~/.profile
-
-Then install az2aws:
-
     npm install -g az2aws
+
+#### Windows Notes
+
+If you get a missing Chrome/Chromium error, install the puppeteer dependency manually:
+
+    node <node_modules_dir>/az2aws/node_modules/puppeteer/install.js
 
 ### Docker
 
-A Docker image has been built with az2aws preinstalled. You simply need to run the command with a volume mounted to your AWS configuration directory.
+Run az2aws with a volume mounted to your AWS configuration directory:
 
     docker run --rm -it -v ~/.aws:/root/.aws az2aws/az2aws
 
