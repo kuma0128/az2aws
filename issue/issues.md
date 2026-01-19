@@ -710,12 +710,12 @@ The README installation section was organized by platform (Windows, Linux, Docke
 
 ---
 
-### Issue #56: Create issues.md to track project issues
+### [RESOLVED] Issue #56: Create issues.md to track project issues
 
 **Labels:** `documentation`
 
 **Description:**
-Create an issues documentation file (`issues.md`) to track and document all known bugs, feature requests, and enhancements for the project.
+Created an issues documentation file (`issue/issues.md`) to track and document all known bugs, feature requests, and enhancements for the project.
 
 **Tasks:**
 - Document all known issues with descriptions and proposed fixes
