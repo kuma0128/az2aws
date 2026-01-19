@@ -153,9 +153,9 @@ const states = [
       );
 
       const accounts = [
-        { message: aadTileMessage, selector: "#aadTileTitle" },
-        { message: msaTileMessage, selector: "#msaTileTitle" },
-      ];
+        aadTile ? { message: aadTileMessage, selector: "#aadTileTitle" } : null,
+        msaTile ? { message: msaTileMessage, selector: "#msaTileTitle" } : null,
+      ].filter((a): a is { message: string; selector: string } => a !== null);
 
       let account;
       if (accounts.length === 0) {
