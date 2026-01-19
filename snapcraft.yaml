@@ -1,11 +1,14 @@
 name: az2aws
 version: git
+title: az2aws
 summary: Use Azure AD SSO to log into the AWS via CLI.
 description: |
   To configure the az2aws client run:-
   $ az2aws --configure
   Once az2aws is configured, you can log in. For the default profile, just run:-
   $ az2aws
+license: MIT
+contact: https://github.com/kuma0128/az2aws
 base: core22
 confinement: strict
 
@@ -18,4 +21,4 @@ parts:
 
 apps:
   az2aws:
-    command: az2aws
+    command: bin/az2aws
