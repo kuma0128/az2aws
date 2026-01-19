@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/kuma0128/az2aws/compare/v1.1.2...v1.1.3) (2026-01-19)
+
+
+### Bug Fixes
+
+* snapcraft deploy flow ([#65](https://github.com/kuma0128/az2aws/issues/65)) ([a4a41d7](https://github.com/kuma0128/az2aws/commit/a4a41d79c3142762f3d593796c8bf31b558bb8fe))
+
 ## [1.1.2](https://github.com/kuma0128/az2aws/compare/v1.1.1...v1.1.2) (2026-01-19)
 
 
