@@ -681,9 +681,10 @@ Without this fix, the snap package cannot be built correctly using the current s
 ### Issue #55: Refactor README installation section by method instead of platform
 
 **Labels:** `documentation`, `enhancement`
+**Status:** Resolved (implemented in README installation section)
 
 **Description:**
-The README installation section was organized by platform (Windows, Linux, Docker, Snap), which caused duplication and made it harder to find the preferred installation method. Refactored to organize by installation method instead.
+This issue tracked refactoring the README installation section, which was previously organized by platform (Windows, Linux, Docker, Snap) and caused duplication and made it harder to find the preferred installation method. The README has been updated to organize installation by method instead.
 
 **Changes:**
 - Reorganized structure from platform-based to method-based
