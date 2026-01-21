@@ -11,7 +11,26 @@ vi.mock("inquirer", () => ({
 vi.mock("./awsConfig", () => ({
   awsConfig: {
     getProfileConfigAsync: vi.fn(),
+    setProfileCredentialsAsync: vi.fn(),
   },
+}));
+
+const { mockSend, mockHttpsProxyAgent } = vi.hoisted(() => {
+  const mockSend = vi.fn();
+  const mockHttpsProxyAgent = vi.fn();
+  return { mockSend, mockHttpsProxyAgent };
+});
+
+vi.mock("@aws-sdk/client-sts", () => {
+  return {
+    STS: class MockSTS {
+      assumeRoleWithSAML = mockSend;
+    },
+  };
+});
+
+vi.mock("https-proxy-agent", () => ({
+  HttpsProxyAgent: mockHttpsProxyAgent,
 }));
 
 import inquirer from "inquirer";
@@ -467,6 +486,106 @@ describe("login", () => {
 
       expect(result.azure_tenant_id).toBe("env-tenant");
       expect(result.azure_default_username).toBe("env-user@example.com");
+    });
+  });
+
+  describe("_assumeRoleAsync", () => {
+    const originalEnv = process.env;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      process.env = { ...originalEnv };
+      delete process.env.https_proxy;
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      mockSend.mockResolvedValue({
+        Credentials: {
+          AccessKeyId: "AKIAIOSFODNN7EXAMPLE",
+          SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          SessionToken: "session-token",
+          Expiration: new Date("2024-01-01T00:00:00Z"),
+        },
+      });
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+
+    it("should use HttpsProxyAgent with rejectUnauthorized:false when both proxy and noVerifySsl are set", async () => {
+      process.env.https_proxy = "http://proxy.example.com:8080";
+
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        true, // awsNoVerifySsl
+        "us-east-1"
+      );
+
+      expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
+        "http://proxy.example.com:8080",
+        { rejectUnauthorized: false }
+      );
+    });
+
+    it("should use HttpsProxyAgent without rejectUnauthorized when only proxy is set", async () => {
+      process.env.https_proxy = "http://proxy.example.com:8080";
+
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        false, // awsNoVerifySsl
+        "us-east-1"
+      );
+
+      expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
+        "http://proxy.example.com:8080",
+        {}
+      );
+    });
+
+    it("should not use HttpsProxyAgent when proxy is not set", async () => {
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        false,
+        "us-east-1"
+      );
+
+      expect(mockHttpsProxyAgent).not.toHaveBeenCalled();
+    });
+
+    it("should show warning when noVerifySsl is true", async () => {
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        true, // awsNoVerifySsl
+        "us-east-1"
+      );
+
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining("SSL certificate verification is disabled")
+      );
     });
   });
 });
