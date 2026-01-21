@@ -8,7 +8,7 @@ import { configureProfileAsync } from "./configureProfileAsync";
 import { login } from "./login";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { version } = require("../package.json");
+const { version } = require("../package.json") as { version: string };
 
 const program = new Command();
 
