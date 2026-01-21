@@ -906,8 +906,8 @@ export const login = {
    * @private
    */
   _parseRolesFromSamlResponse(assertion: string): Role[] {
-    debug("Converting assertion from base64 to ASCII");
-    const samlText = Buffer.from(assertion, "base64").toString("ascii");
+    debug("Converting assertion from base64 to UTF-8");
+    const samlText = Buffer.from(assertion, "base64").toString("utf8");
     debug("Converted", samlText);
 
     debug("Parsing SAML XML");
