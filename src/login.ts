@@ -956,7 +956,7 @@ export const login = {
     durationHours: number;
   }> {
     let role;
-    let durationHours = parseInt(defaultDurationHours, 10);
+    let durationHours = parseInt(defaultDurationHours, 10) || 1;
     const questions: QuestionCollection[] = [];
     if (roles.length === 0) {
       throw new CLIError("No roles found in SAML response.");
