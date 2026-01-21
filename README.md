@@ -5,13 +5,13 @@
 
 # az2aws
 
-If your organization uses [Azure Active Directory](https://azure.microsoft.com) to provide SSO login to the AWS console, then there is no easy way to log in on the command line or to use the [AWS CLI](https://aws.amazon.com/cli/). This tool fixes that. It lets you use the normal Azure AD login (including MFA) from a command line to create a federated AWS session and places the temporary credentials in the proper place for the AWS CLI and SDKs.
+Log in to AWS CLI using [Azure Active Directory](https://azure.microsoft.com) SSO. Supports MFA and places temporary credentials in the proper location for AWS CLI and SDKs.
 
 ## Installation
 
 ### mise (Recommended)
 
-[mise](https://mise.jdx.dev/) is a polyglot version manager that can install az2aws directly.
+[mise](https://mise.jdx.dev/) is a version manager that can install az2aws directly.
 
 Install mise:
 
@@ -66,12 +66,10 @@ Run az2aws with a volume mounted to your AWS configuration directory:
 
     docker run --rm -it -v ~/.aws:/root/.aws az2aws/az2aws
 
-The Docker image is configured with an entrypoint so you can just feed any arguments in at the end.
-
-You can also put the docker-launch.sh script into your bin directory for the az2aws command to function as usual:
+You can also install the docker-launch.sh script to your PATH:
 
     # Download the script (replace VERSION with a specific release tag, e.g., v1.0.0)
-    curl -o /tmp/az2aws https://raw.githubusercontent.com/az2aws/az2aws/VERSION/docker-launch.sh -L
+    curl -o /tmp/az2aws https://raw.githubusercontent.com/kuma0128/az2aws/VERSION/docker-launch.sh -L
 
     # IMPORTANT: Review the script before installing
     cat /tmp/az2aws
@@ -80,9 +78,7 @@ You can also put the docker-launch.sh script into your bin directory for the az2
     sudo mv /tmp/az2aws /usr/local/bin/az2aws
     sudo chmod +x /usr/local/bin/az2aws
 
-> **Security Note:** Always download from a specific release tag (not `main`) and review the script contents before installing. Downloading and executing scripts directly from mutable branch heads poses a supply chain risk.
-
-Now just run `az2aws`.
+> **Security Note:** Always download from a specific release tag (not `main`) and review the script before installing.
 
 ### Snap
 
@@ -104,12 +100,11 @@ https://snapcraft.io/az2aws
 | `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
 | `--no-disable-extensions` | Keep browser extensions enabled |
 | `--disable-gpu` | Disable GPU acceleration |
+| `--version (-v)` | Show version number |
 
 ## Usage
 
 ### Configuration
-
-#### AWS
 
 To configure the az2aws client run:
 
@@ -119,22 +114,16 @@ You'll need your [Azure Tenant ID and the App ID URI](#getting-your-tenant-id-an
 
     az2aws --configure --profile foo
 
-##### GovCloud Support
+#### GovCloud / China Region Support
 
-To use az2aws with AWS GovCloud, set the `region` profile property in your ~/.aws/config to the one of the GovCloud regions:
+Set the `region` in your ~/.aws/config to use non-standard AWS partitions:
 
-- us-gov-west-1
-- us-gov-east-1
-
-##### China Region Support
-
-To use az2aws with AWS China Cloud, set the `region` profile property in your ~/.aws/config to the China region:
-
-- cn-north-1
+- **GovCloud**: us-gov-west-1, us-gov-east-1
+- **China**: cn-north-1, cn-northwest-1
 
 #### Stay Logged In
 
-During configuration, you can enable "Stay logged in" to skip username/password/MFA on subsequent logins. Session cookies will remember your identity, allowing you to use `--no-prompt` without storing passwords:
+Enable "Stay logged in" during configuration to use `--no-prompt` without storing passwords:
 
     az2aws --no-prompt
     az2aws --profile foo --no-prompt
@@ -154,27 +143,25 @@ To avoid storing passwords in bash history, use a leading space:
 
 #### Use an Existing Chrome Install and Profile
 
-Instead of using the bundled Chromium, you can use an existing Chrome installation with your own user profile by setting the following environment variables:
+Use your own Chrome installation by setting these environment variables:
 
 - `BROWSER_CHROME_BIN` - Path to Chrome executable
 - `BROWSER_USER_DATA_DIR` - Chrome user data directory
 - `BROWSER_PROFILE_DIR` - Chrome profile name (e.g., "Default")
 
-Example (macOS):
+Example:
 
+    # macOS
     export BROWSER_CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    export BROWSER_USER_DATA_DIR="/Users/<user>/Library/Application Support/Google/Chrome"
-    export BROWSER_PROFILE_DIR="Default"
-    az2aws --mode gui --no-disable-extensions --no-sandbox
+    export BROWSER_USER_DATA_DIR="$HOME/Library/Application Support/Google/Chrome"
 
-Example (Linux):
-
+    # Linux
     export BROWSER_CHROME_BIN="/usr/bin/google-chrome"
-    export BROWSER_USER_DATA_DIR="/home/<user>/.config/google-chrome"
+    export BROWSER_USER_DATA_DIR="$HOME/.config/google-chrome"
+
+    # Common
     export BROWSER_PROFILE_DIR="Default"
     az2aws --mode gui --no-disable-extensions --no-sandbox
-
-Using Chrome instead of Chromium allows you to use browser extensions such as password managers.
 
 ### Logging In
 
@@ -187,12 +174,11 @@ You'll be prompted for username, password, and MFA if required. After login, use
 **Tips:**
 - Set `AWS_PROFILE` env var instead of using `--profile`
 - Use `--mode gui --disable-gpu` on VMs or if rendering fails
-- Use `--no-sandbox` on Linux
 - Set `https_proxy` env var for corporate proxy
 
 ## Automation
 
-Renew all profiles at once (useful for short session limits):
+Renew all profiles at once:
 
     az2aws --all-profiles
     az2aws --all-profiles --no-prompt    # With "Stay logged in" enabled
@@ -201,21 +187,21 @@ Credentials are only refreshed if expiring within 11 minutes - safe to run as a 
 
 ## Getting Your Tenant ID and App ID URI
 
-Your Azure AD system admin should be able to provide you with your Tenant ID and App ID URI. If you can't get it from them, you can scrape it from a login page from the myapps.microsoft.com page.
+Ask your Azure AD admin for these values, or extract them from myapps.microsoft.com:
 
 1. Load the myapps.microsoft.com page.
-2. Click the chicklet for the login you want.
-3. In the window the pops open quickly copy the login.microsoftonline.com URL. (If you miss it just try again. You can also open the developer console with nagivation preservation to capture the URL.)
+2. Click the app tile for the login you want.
+3. In the window that pops open, quickly copy the login.microsoftonline.com URL. (You can also use browser DevTools with "Preserve log" enabled to capture it.)
 4. The GUID right after login.microsoftonline.com/ is the tenant ID.
 5. Copy the SAMLRequest URL param.
 6. Paste it into a URL decoder ([like this one](https://www.samltool.com/url.php)) and decode.
-7. Paste the decoded output into the a SAML deflated and encoded XML decoder ([like this one](https://www.samltool.com/decode.php)).
+7. Paste the decoded output into a SAML deflated and encoded XML decoder ([like this one](https://www.samltool.com/decode.php)).
 8. In the decoded XML output the value of the `Audience` tag is the App ID URI.
-9. You may double-check tenant ID using `Attribute` tag named `tenantid` provided in XML.
+9. Verify the tenant ID using the `tenantid` attribute in the XML.
 
 ## How It Works
 
-The Azure login page uses JavaScript, which requires a real web browser. To automate this from a command line, az2aws uses [Puppeteer](https://github.com/GoogleChrome/puppeteer), which automates a real Chromium browser. It loads the Azure login page behind the scenes, populates your username and password (and MFA token), parses the SAML assertion, uses the [AWS STS AssumeRoleWithSAML API](http://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html) to get temporary credentials, and saves these in the CLI credentials file.
+az2aws uses [Puppeteer](https://github.com/GoogleChrome/puppeteer) to automate a Chromium browser for Azure AD login. It parses the SAML response and calls [AWS STS AssumeRoleWithSAML](http://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html) to get temporary credentials.
 
 ## Troubleshooting
 
@@ -227,7 +213,7 @@ If login fails, try these in order:
 
 ## Support for Other Authentication Providers
 
-Obviously, this tool only supports Azure AD as an identity provider. However, there is a lot of similarity with how other logins with other providers would work (especially if they are SAML providers). If you are interested in building support for a different provider let me know. It would be great to build a more generic AWS CLI login tool with plugins for the various providers.
+This tool only supports Azure AD. Contributions for other SAML providers are welcome - open an issue on GitHub to discuss.
 
 ## Acknowledgements
 
