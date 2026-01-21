@@ -109,6 +109,7 @@ Promise.resolve()
       console.error(err.message);
       process.exit(2);
     } else {
-      console.log(err);
+      console.error(err);
+      process.exit(1);
     }
   });
