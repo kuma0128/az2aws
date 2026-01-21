@@ -7,9 +7,13 @@ import { Command } from "commander";
 import { configureProfileAsync } from "./configureProfileAsync";
 import { login } from "./login";
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { version } = require("../package.json") as { version: string };
+
 const program = new Command();
 
 program
+  .version(version, "-v, --version")
   .option(
     "-p, --profile <name>",
     "The name of the profile to log in with (or configure)"
