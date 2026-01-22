@@ -60,11 +60,11 @@
     "cheerio": "^1.0.0-rc.10",
     "commander": "^9.5.0",
     "debug": "^4.3.1",
+    "https-proxy-agent": "^7.0.6",
     "ini": "^3.0.1",
     "inquirer": "^8.2.6",
     "lodash": "^4.17.21",
     "mkdirp": "^1.0.4",
-    "proxy-agent": "^6.4.0",
     "puppeteer": "^24.34.0",
     "uuid": "^8.3.2"
   },

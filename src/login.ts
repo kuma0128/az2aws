@@ -15,7 +15,7 @@ import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
 import { awsConfig, ProfileConfig } from "./awsConfig";
-import proxy from "proxy-agent";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { paths } from "./paths";
 import mkdirp from "mkdirp";
 import { Agent } from "https";
@@ -1036,14 +1036,6 @@ export const login = {
   ): Promise<void> {
     console.log(`Assuming role ${role.roleArn} in region ${region}...`);
     let stsOptions: STSClientConfig = {};
-    if (process.env.https_proxy) {
-      stsOptions = {
-        ...stsOptions,
-        requestHandler: new NodeHttpHandler({
-          httpsAgent: proxy(process.env.https_proxy),
-        }),
-      };
-    }
 
     if (awsNoVerifySsl) {
       console.warn(
@@ -1051,6 +1043,20 @@ export const login = {
           "This makes the connection vulnerable to MITM attacks. " +
           "Consider using NODE_EXTRA_CA_CERTS environment variable instead."
       );
+    }
+
+    if (process.env.https_proxy) {
+      const proxyOptions = awsNoVerifySsl ? { rejectUnauthorized: false } : {};
+      stsOptions = {
+        ...stsOptions,
+        requestHandler: new NodeHttpHandler({
+          httpsAgent: new HttpsProxyAgent(
+            process.env.https_proxy,
+            proxyOptions
+          ),
+        }),
+      };
+    } else if (awsNoVerifySsl) {
       stsOptions = {
         ...stsOptions,
         requestHandler: new NodeHttpHandler({

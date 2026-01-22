@@ -43,7 +43,7 @@ program
   )
   .option(
     "--no-verify-ssl",
-    "Disable SSL Peer Verification for connections to AWS (no effect if behind proxy)"
+    "Disable SSL Peer Verification for connections to AWS"
   )
   .option(
     "--enable-chrome-seamless-sso",
