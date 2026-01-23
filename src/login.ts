@@ -804,7 +804,7 @@ export const login = {
         if (err instanceof Error) {
           // An error will be thrown if you're still logged in cause the page.goto ot waitForNavigation
           // will be a redirect to AWS. That's usually OK
-          debug(`Error occured during loading the first page: ${err.message}`);
+          debug(`Error occurred during loading the first page: ${err.message}`);
         }
       }
 
