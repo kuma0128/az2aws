@@ -1,8 +1,15 @@
+FROM node:24-slim AS build
+WORKDIR /az2aws
+COPY package.json yarn.lock ./
+RUN yarn install --production
+
 FROM node:24-slim
+WORKDIR /az2aws
+ENV NODE_ENV=production
 
 # Install Puppeteer dependencies: https://github.com/GoogleChrome/puppeteer/blob/master/docs/troubleshooting.md#chrome-headless-doesnt-launch
 RUN apt-get update \
-   && apt-get install -y \
+   && apt-get install -y --no-install-recommends \
    ca-certificates \
    fonts-liberation \
    libasound2 \
@@ -39,14 +46,11 @@ RUN apt-get update \
    lsb-release \
    wget \
    xdg-utils \
-   && apt-get -q -y clean \
-   && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*
+   && apt-get clean \
+   && rm -rf /var/lib/apt/lists/*
 
-COPY package.json yarn.lock /az2aws/
-
-RUN cd /az2aws \
-   && yarn install --production
-
+COPY --from=build /az2aws/node_modules /az2aws/node_modules
+COPY --from=build /az2aws/package.json /az2aws/package.json
 COPY lib /az2aws/lib
 
 ENTRYPOINT ["node", "/az2aws/lib", "--no-sandbox"]
