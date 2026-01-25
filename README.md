@@ -176,6 +176,11 @@ You'll be prompted for username, password, and MFA if required. After login, use
 - Use `--mode gui --disable-gpu` on VMs or if rendering fails
 - Set `https_proxy` env var for corporate proxy
 
+#### Troubleshooting
+
+If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
+try `--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
+
 ## Automation
 
 Renew all profiles at once:
