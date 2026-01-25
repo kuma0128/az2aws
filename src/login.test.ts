@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { login } from "./login";
 import { CLIError } from "./CLIError";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 vi.mock("inquirer", () => ({
   default: {
@@ -245,6 +248,105 @@ describe("login", () => {
       const roles = login._parseRolesFromSamlResponse(samlAssertion);
 
       expect(roles).toHaveLength(0);
+    });
+  });
+
+  describe("_runHookScript", () => {
+    const createTempScript = (content: string, mode: number): string => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "az2aws-hook-"));
+      const scriptPath = path.join(tempDir, "hook.sh");
+      fs.writeFileSync(scriptPath, content);
+      fs.chmodSync(scriptPath, mode);
+      return scriptPath;
+    };
+
+    const cleanupTempScript = (scriptPath: string) => {
+      fs.rmSync(path.dirname(scriptPath), { recursive: true, force: true });
+    };
+
+    it("should return undefined when script does not exist", async () => {
+      const result = await login._runHookScript(
+        path.join(os.tmpdir(), "az2aws-missing-hook.sh")
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("should read output from an executable script", async () => {
+      const scriptPath = createTempScript(
+        "#!/bin/sh\necho hook-value\n",
+        0o700
+      );
+
+      try {
+        const result = await login._runHookScript(scriptPath);
+        expect(result).toBe("hook-value");
+      } finally {
+        cleanupTempScript(scriptPath);
+      }
+    });
+
+    it("should throw when script is not executable", async () => {
+      const scriptPath = createTempScript("#!/bin/sh\necho nope\n", 0o600);
+
+      try {
+        await expect(login._runHookScript(scriptPath)).rejects.toThrow(
+          CLIError
+        );
+      } finally {
+        cleanupTempScript(scriptPath);
+      }
+    });
+
+    it("should throw when script returns empty output", async () => {
+      const scriptPath = createTempScript("#!/bin/sh\n", 0o700);
+
+      try {
+        await expect(login._runHookScript(scriptPath)).rejects.toThrow(
+          CLIError
+        );
+      } finally {
+        cleanupTempScript(scriptPath);
+      }
+    });
+
+    it("should throw when script exits non-zero", async () => {
+      const scriptPath = createTempScript("#!/bin/sh\nexit 1\n", 0o700);
+
+      try {
+        await expect(login._runHookScript(scriptPath)).rejects.toThrow();
+      } finally {
+        cleanupTempScript(scriptPath);
+      }
+    });
+
+    it("should throw when script has group write permission", async () => {
+      const scriptPath = createTempScript(
+        "#!/bin/sh\necho insecure\n",
+        0o720
+      );
+
+      try {
+        await expect(login._runHookScript(scriptPath)).rejects.toThrow(
+          /insecure permissions/
+        );
+      } finally {
+        cleanupTempScript(scriptPath);
+      }
+    });
+
+    it("should throw when script has world write permission", async () => {
+      const scriptPath = createTempScript(
+        "#!/bin/sh\necho insecure\n",
+        0o702
+      );
+
+      try {
+        await expect(login._runHookScript(scriptPath)).rejects.toThrow(
+          /insecure permissions/
+        );
+      } finally {
+        cleanupTempScript(scriptPath);
+      }
     });
   });
 

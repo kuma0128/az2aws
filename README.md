@@ -149,6 +149,15 @@ To avoid storing passwords in bash history, use a leading space:
     HISTCONTROL=ignoreboth
      export AZURE_DEFAULT_PASSWORD=mypassword
 
+#### Shell Script Hooks
+
+You can provide authentication values via executable scripts. If a script exists
+and exits with code 0, its stdout is used:
+
+- `~/.aws/.aws-azure-login.username.sh` - Username
+- `~/.aws/.aws-azure-login.password.sh` - Password
+- `~/.aws/.aws-azure-login.static-challenge.sh` - MFA code
+
 #### Use an Existing Chrome Install and Profile
 
 Use your own Chrome installation by setting these environment variables:

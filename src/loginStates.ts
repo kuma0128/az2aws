@@ -3,8 +3,141 @@ import inquirer, { Question } from "inquirer";
 import { Page, ElementHandle } from "puppeteer";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import util from "util";
+import { execFile } from "child_process";
 
 const debug = _debug("az2aws");
+
+const execFileAsync = util.promisify(execFile);
+export const hookScripts = {
+  username: path.join(os.homedir(), ".aws", ".aws-azure-login.username.sh"),
+  password: path.join(os.homedir(), ".aws", ".aws-azure-login.password.sh"),
+  mfa: path.join(os.homedir(), ".aws", ".aws-azure-login.static-challenge.sh"),
+};
+
+const logHookStderr = (
+  scriptPath: string,
+  stderr: string,
+  context: "success" | "failure"
+): void => {
+  const trimmed = stderr.trim();
+  if (!trimmed) {
+    return;
+  }
+  debug(`Hook script stderr on ${context} (${scriptPath}): ${trimmed}`);
+};
+
+/**
+ * Validate hook script security: ownership and permissions.
+ * - Script must be owned by the current user
+ * - Script must not be writable by group or others
+ */
+const validateHookScriptSecurity = async (scriptPath: string): Promise<void> => {
+  const stat = await fs.promises.stat(scriptPath);
+  const currentUid = process.getuid?.();
+
+  // Check ownership (skip on Windows where getuid is not available)
+  if (currentUid !== undefined && stat.uid !== currentUid) {
+    throw new CLIError(
+      `Hook script is not owned by current user: ${scriptPath}. ` +
+        `This is a security risk. Please ensure you own the script.`
+    );
+  }
+
+  // Check that group and others cannot write to the script (mode & 022)
+  const unsafePermissions = stat.mode & 0o022;
+  if (unsafePermissions) {
+    throw new CLIError(
+      `Hook script has insecure permissions: ${scriptPath}. ` +
+        `Group or others have write access. Please run: chmod go-w "${scriptPath}"`
+    );
+  }
+};
+
+/**
+ * Run a hook script and return its stdout output.
+ * Logs stderr for debugging purposes.
+ * Use runHookScriptSensitive for hooks that return sensitive data.
+ */
+export const runHookScript = async (
+  scriptPath: string
+): Promise<string | undefined> => {
+  try {
+    await fs.promises.access(scriptPath, fs.constants.F_OK);
+  } catch {
+    return undefined;
+  }
+
+  try {
+    await fs.promises.access(scriptPath, fs.constants.X_OK);
+  } catch {
+    throw new CLIError(`Hook script is not executable: ${scriptPath}`);
+  }
+
+  // Validate script ownership and permissions
+  await validateHookScriptSecurity(scriptPath);
+
+  try {
+    const { stdout, stderr } = await execFileAsync(scriptPath, [], {
+      env: process.env,
+      timeout: 30000,
+      maxBuffer: 10 * 1024,
+    });
+    if (stderr) {
+      logHookStderr(scriptPath, stderr, "success");
+    }
+    const output = stdout.replace(/(?:\r?\n)+$/, "");
+    if (!output) {
+      throw new CLIError(`Hook script returned empty output: ${scriptPath}`);
+    }
+    return output;
+  } catch (err) {
+    if (err && typeof err === "object" && "stderr" in err) {
+      const errorStderr = err.stderr;
+      if (typeof errorStderr === "string") {
+        logHookStderr(scriptPath, errorStderr, "failure");
+      }
+    }
+    throw err;
+  }
+};
+
+/**
+ * Run a hook script for sensitive data (password, MFA).
+ * Does NOT log stderr to prevent leaking sensitive information.
+ */
+export const runHookScriptSensitive = async (
+  scriptPath: string
+): Promise<string | undefined> => {
+  try {
+    await fs.promises.access(scriptPath, fs.constants.F_OK);
+  } catch {
+    return undefined;
+  }
+
+  try {
+    await fs.promises.access(scriptPath, fs.constants.X_OK);
+  } catch {
+    throw new CLIError(`Hook script is not executable: ${scriptPath}`);
+  }
+
+  // Validate script ownership and permissions
+  await validateHookScriptSecurity(scriptPath);
+
+  const { stdout } = await execFileAsync(scriptPath, [], {
+    env: process.env,
+    timeout: 30000,
+    maxBuffer: 10 * 1024,
+  });
+  const output = stdout.replace(/(?:\r?\n)+$/, "");
+  if (!output) {
+    throw new CLIError(`Hook script returned empty output: ${scriptPath}`);
+  }
+  return output;
+};
 
 export type StateHandler = (
   page: Page,
@@ -52,7 +185,11 @@ export const states: State[] = [
 
       let username;
 
-      if (noPrompt && defaultUsername) {
+      const hookUsername = await runHookScript(hookScripts.username);
+      if (hookUsername) {
+        debug("Using username from hook script");
+        username = hookUsername;
+      } else if (noPrompt && defaultUsername) {
         debug("Not prompting user for username");
         username = defaultUsername;
       } else {
@@ -239,7 +376,11 @@ export const states: State[] = [
 
       let password;
 
-      if (noPrompt && defaultPassword) {
+      const hookPassword = await runHookScriptSensitive(hookScripts.password);
+      if (hookPassword) {
+        debug("Using password from hook script");
+        password = hookPassword;
+      } else if (noPrompt && defaultPassword) {
         debug("Not prompting user for password");
         password = defaultPassword;
       } else {
@@ -346,12 +487,19 @@ export const states: State[] = [
         console.log(descriptionMessage);
       }
 
-      const { verificationCode } = await inquirer.prompt([
-        {
-          name: "verificationCode",
-          message: "Verification Code:",
-        } as Question,
-      ]);
+      let verificationCode;
+      const hookCode = await runHookScriptSensitive(hookScripts.mfa);
+      if (hookCode) {
+        debug("Using verification code from hook script");
+        verificationCode = hookCode;
+      } else {
+        ({ verificationCode } = await inquirer.prompt([
+          {
+            name: "verificationCode",
+            message: "Verification Code:",
+          } as Question,
+        ]));
+      }
 
       debug("Focusing on verification code input");
       await page.focus(`input[name="otc"]`);

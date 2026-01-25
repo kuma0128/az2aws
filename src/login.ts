@@ -15,7 +15,7 @@ import mkdirp from "mkdirp";
 import fs from "fs/promises";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
-import { states } from "./loginStates";
+import { states, runHookScript, runHookScriptSensitive } from "./loginStates";
 
 const debug = _debug("az2aws");
 
@@ -569,6 +569,14 @@ export const login = {
       .get();
     debug("Found roles", roles);
     return roles;
+  },
+
+  _runHookScript(scriptPath: string): Promise<string | undefined> {
+    return runHookScript(scriptPath);
+  },
+
+  _runHookScriptSensitive(scriptPath: string): Promise<string | undefined> {
+    return runHookScriptSensitive(scriptPath);
   },
 
   /**
