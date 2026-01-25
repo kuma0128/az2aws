@@ -597,6 +597,20 @@ export const login = {
         durationHours = parsedDuration;
       }
     }
+    const defaultRoleArns = defaultRoleArn
+      ? defaultRoleArn
+          .split(",")
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0)
+      : [];
+    const findDefaultRole = (): Role | undefined => {
+      if (defaultRoleArns.length === 0) return undefined;
+      for (const roleArn of defaultRoleArns) {
+        const match = roles.find((r) => r.roleArn === roleArn);
+        if (match) return match;
+      }
+      return undefined;
+    };
     const questions: QuestionCollection[] = [];
     if (roles.length === 0) {
       throw new CLIError("No roles found in SAML response.");
@@ -611,7 +625,7 @@ export const login = {
           );
         }
 
-        role = roles.find((r) => r.roleArn === defaultRoleArn);
+        role = findDefaultRole();
         if (!role) {
           throw new CLIError(
             `Default role ARN '${defaultRoleArn}' was not found in the SAML response.`
@@ -620,12 +634,13 @@ export const login = {
         debug("Valid role found. No need to ask.");
       } else {
         debug("Asking user to choose role");
+        const defaultRoleSelection = findDefaultRole();
         questions.push({
           name: "role",
           message: "Role:",
           type: "list",
           choices: roles.map((r) => r.roleArn).sort(),
-          default: defaultRoleArn,
+          default: defaultRoleSelection?.roleArn,
         });
       }
     }

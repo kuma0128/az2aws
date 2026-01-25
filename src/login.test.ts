@@ -604,6 +604,29 @@ describe("login", () => {
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toBe("Unable to find role");
     });
+
+    it("should select the first matching role from a comma-separated default list", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role1",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider1",
+        },
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role2",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider2",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "arn:aws:iam::123456789012:role/Missing, arn:aws:iam::123456789012:role/Role2",
+        "8"
+      );
+
+      expect(result.role.roleArn).toBe("arn:aws:iam::123456789012:role/Role2");
+      expect(result.durationHours).toBe(8);
+    });
   });
 
   describe("_loadProfileAsync", () => {
