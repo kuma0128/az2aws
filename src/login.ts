@@ -993,7 +993,7 @@ export const login = {
         validate: (input): boolean | string => {
           input = Number(input);
           if (input > 0 && input <= 12) return true;
-          return "Duration hours must be between 0 and 12";
+          return "Duration hours must be between 1 and 12";
         },
       });
     }
