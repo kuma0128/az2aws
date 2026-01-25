@@ -100,6 +100,7 @@ https://snapcraft.io/az2aws
 | `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
 | `--no-disable-extensions` | Keep browser extensions enabled |
 | `--disable-gpu` | Disable GPU acceleration |
+| `--print` | Print credentials to stdout instead of writing to files |
 | `--version (-v)` | Show version number |
 
 ## Usage
@@ -139,6 +140,7 @@ You can set defaults via environment variables (use with `--no-prompt`):
 - `AZURE_TENANT_ID` / `AZURE_APP_ID_URI` - Azure AD settings
 - `AZURE_DEFAULT_USERNAME` / `AZURE_DEFAULT_PASSWORD` - Credentials
 - `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` - AWS role settings
+- `AZURE_VERIFICATION_CODE` - MFA verification code (used once per prompt)
 
 When using `--no-prompt` with multiple available roles, you must set
 `AZURE_DEFAULT_ROLE_ARN` (or configure `azure_default_role_arn`) so the CLI can

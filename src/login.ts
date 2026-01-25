@@ -8,14 +8,14 @@ import puppeteer, { Browser, HTTPRequest } from "puppeteer";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
-import { awsConfig, ProfileConfig } from "./awsConfig";
+import { awsConfig, ProfileConfig, ProfileCredentials } from "./awsConfig";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { paths } from "./paths";
 import mkdirp from "mkdirp";
 import fs from "fs/promises";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
-import { states } from "./loginStates";
+import { states, getVerificationCodeFromEnv } from "./loginStates";
 
 const debug = _debug("az2aws");
 
@@ -41,6 +41,8 @@ interface Role {
   principalArn: string;
 }
 
+type AwsCredentials = ProfileCredentials;
+
 export const login = {
   async loginAsync(
     profileName: string,
@@ -51,78 +53,104 @@ export const login = {
     awsNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    printCredentials = false
   ): Promise<void> {
-    let headless, cliProxy;
-    if (mode === "cli") {
-      headless = true;
-      cliProxy = true;
-    } else if (mode === "gui") {
-      headless = false;
-      cliProxy = false;
-    } else if (mode === "debug") {
-      headless = false;
-      cliProxy = true;
-    } else {
-      throw new CLIError("Invalid mode");
-    }
+    const originalConsoleLog = console.log;
+    try {
+      if (printCredentials) {
+        console.log = (...args: unknown[]) => console.error(...args);
+      }
 
-    const profile = await this._loadProfileAsync(profileName);
-    console.log(
-      `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`
-    );
-    if (profile.region && profile.region.startsWith("us-gov")) {
-      console.warn(
-        "GovCloud region detected in profile. Note: Other AWS CLI operations " +
-          "will use your AWS CLI default region. If needed, set it to match " +
-          "this GovCloud region (us-gov-west-1 or us-gov-east-1)."
+      let headless, cliProxy;
+      if (mode === "cli") {
+        headless = true;
+        cliProxy = true;
+      } else if (mode === "gui") {
+        headless = false;
+        cliProxy = false;
+      } else if (mode === "debug") {
+        headless = false;
+        cliProxy = true;
+      } else {
+        throw new CLIError("Invalid mode");
+      }
+
+      const profile = await this._loadProfileAsync(profileName);
+      console.log(
+        `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`
       );
-    }
-    let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
-    if (profile.region && profile.region.startsWith("us-gov")) {
-      assertionConsumerServiceURL = AWS_GOV_SAML_ENDPOINT;
-    }
-    if (profile.region && profile.region.startsWith("cn-")) {
-      assertionConsumerServiceURL = AWS_CN_SAML_ENDPOINT;
-    }
+      if (profile.region && profile.region.startsWith("us-gov")) {
+        console.warn(
+          "GovCloud region detected in profile. Note: Other AWS CLI operations " +
+            "will use your AWS CLI default region. If needed, set it to match " +
+            "this GovCloud region (us-gov-west-1 or us-gov-east-1)."
+        );
+      }
+      let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
+      if (profile.region && profile.region.startsWith("us-gov")) {
+        assertionConsumerServiceURL = AWS_GOV_SAML_ENDPOINT;
+      }
+      if (profile.region && profile.region.startsWith("cn-")) {
+        assertionConsumerServiceURL = AWS_CN_SAML_ENDPOINT;
+      }
 
-    console.log("Using AWS SAML endpoint", assertionConsumerServiceURL);
+      console.log("Using AWS SAML endpoint", assertionConsumerServiceURL);
 
-    const loginUrl = await this._createLoginUrlAsync(
-      profile.azure_app_id_uri,
-      profile.azure_tenant_id,
-      assertionConsumerServiceURL
-    );
-    const samlResponse = await this._performLoginAsync(
-      loginUrl,
-      headless,
-      disableSandbox,
-      cliProxy,
-      noPrompt,
-      enableChromeNetworkService,
-      profile.azure_default_username,
-      profile.azure_default_password,
-      enableChromeSeamlessSso,
-      profile.azure_default_remember_me,
-      noDisableExtensions,
-      disableGpu
-    );
-    const roles = this._parseRolesFromSamlResponse(samlResponse);
-    const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
-      roles,
-      noPrompt,
-      profile.azure_default_role_arn,
-      profile.azure_default_duration_hours
-    );
+      const loginUrl = await this._createLoginUrlAsync(
+        profile.azure_app_id_uri,
+        profile.azure_tenant_id,
+        assertionConsumerServiceURL
+      );
+      const samlResponse = await this._performLoginAsync(
+        loginUrl,
+        headless,
+        disableSandbox,
+        cliProxy,
+        noPrompt,
+        enableChromeNetworkService,
+        profile.azure_default_username,
+        profile.azure_default_password,
+        enableChromeSeamlessSso,
+        profile.azure_default_remember_me,
+        noDisableExtensions,
+        disableGpu
+      );
+      const roles = this._parseRolesFromSamlResponse(samlResponse);
+      const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
+        roles,
+        noPrompt,
+        profile.azure_default_role_arn,
+        profile.azure_default_duration_hours
+      );
 
-    await this._assumeRoleAsync(
-      profileName,
-      samlResponse,
-      role,
-      durationHours,
-      awsNoVerifySsl,
-      profile.region
-    );
+      const credentials = await this._assumeRoleAsync(
+        profileName,
+        samlResponse,
+        role,
+        durationHours,
+        awsNoVerifySsl,
+        profile.region,
+        !printCredentials
+      );
+
+      if (printCredentials) {
+        if (!credentials) {
+          throw new CLIError("Unable to retrieve credentials.");
+        }
+
+        originalConsoleLog(
+          [
+            `aws_access_key_id=${credentials.aws_access_key_id}`,
+            `aws_secret_access_key=${credentials.aws_secret_access_key}`,
+            `aws_session_token=${credentials.aws_session_token}`,
+            `aws_expiration=${credentials.aws_expiration}`,
+          ].join("\n")
+        );
+      }
+    } finally {
+      console.log = originalConsoleLog;
+    }
   },
 
   async loginAll(
@@ -571,6 +599,10 @@ export const login = {
     return roles;
   },
 
+  _getVerificationCodeFromEnv(): string | undefined {
+    return getVerificationCodeFromEnv();
+  },
+
   /**
    * Ask the user for the role they want to use.
    * @param {Array.<{roleArn: string, principalArn: string}>} roles - The roles to pick from
@@ -684,8 +716,9 @@ export const login = {
     role: Role,
     durationHours: number,
     awsNoVerifySsl: boolean,
-    region: string
-  ): Promise<void> {
+    region: string,
+    writeProfile = true
+  ): Promise<AwsCredentials | undefined> {
     console.log(`Assuming role ${role.roleArn} in region ${region}...`);
     let stsOptions: STSClientConfig = {};
 
@@ -734,14 +767,30 @@ export const login = {
 
     if (!res.Credentials) {
       debug("Unable to get security credentials from AWS");
-      return;
+      return undefined;
     }
 
-    await awsConfig.setProfileCredentialsAsync(profileName, {
-      aws_access_key_id: res.Credentials.AccessKeyId ?? "",
-      aws_secret_access_key: res.Credentials.SecretAccessKey ?? "",
-      aws_session_token: res.Credentials.SessionToken ?? "",
-      aws_expiration: res.Credentials.Expiration?.toISOString() ?? "",
-    });
+    if (
+      !res.Credentials.AccessKeyId ||
+      !res.Credentials.SecretAccessKey ||
+      !res.Credentials.SessionToken ||
+      !res.Credentials.Expiration
+    ) {
+      debug("Received incomplete security credentials from AWS");
+      throw new CLIError("Unable to get complete security credentials from AWS");
+    }
+
+    const credentials: AwsCredentials = {
+      aws_access_key_id: res.Credentials.AccessKeyId,
+      aws_secret_access_key: res.Credentials.SecretAccessKey,
+      aws_session_token: res.Credentials.SessionToken,
+      aws_expiration: res.Credentials.Expiration.toISOString(),
+    };
+
+    if (writeProfile) {
+      await awsConfig.setProfileCredentialsAsync(profileName, credentials);
+    }
+
+    return credentials;
   },
 };

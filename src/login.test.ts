@@ -248,6 +248,26 @@ describe("login", () => {
     });
   });
 
+  describe("_getVerificationCodeFromEnv", () => {
+    const originalEnv = process.env;
+
+    beforeEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+
+    it("should read verification code from environment variables", () => {
+      process.env.AZURE_VERIFICATION_CODE = "123456";
+
+      const result = login._getVerificationCodeFromEnv();
+
+      expect(result).toBe("123456");
+    });
+  });
+
   describe("_createLoginUrlAsync", () => {
     it("should create a valid Azure login URL", async () => {
       const appIdUri = "https://app.example.com";
@@ -1467,7 +1487,7 @@ describe("login", () => {
       expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
     });
 
-    it("should handle credentials with missing optional fields", async () => {
+    it("should throw CLIError when credentials have missing fields", async () => {
       mockSend.mockResolvedValue({
         Credentials: {
           AccessKeyId: undefined,
@@ -1477,7 +1497,23 @@ describe("login", () => {
         },
       });
 
-      await login._assumeRoleAsync(
+      await expect(
+        login._assumeRoleAsync(
+          "test-profile",
+          "base64-assertion",
+          {
+            roleArn: "arn:aws:iam::123456789012:role/TestRole",
+            principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+          },
+          1,
+          false,
+          "us-east-1"
+        )
+      ).rejects.toThrow("Unable to get complete security credentials from AWS");
+    });
+
+    it("should return credentials without writing when writeProfile is false", async () => {
+      const result = await login._assumeRoleAsync(
         "test-profile",
         "base64-assertion",
         {
@@ -1486,18 +1522,16 @@ describe("login", () => {
         },
         1,
         false,
-        "us-east-1"
+        "us-east-1",
+        false
       );
 
-      expect(awsConfig.setProfileCredentialsAsync).toHaveBeenCalledWith(
-        "test-profile",
-        {
-          aws_access_key_id: "",
-          aws_secret_access_key: "",
-          aws_session_token: "",
-          aws_expiration: "",
-        }
-      );
+      expect(result).toMatchObject({
+        aws_access_key_id: "AKIAIOSFODNN7EXAMPLE",
+        aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        aws_session_token: "session-token",
+      });
+      expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
     });
   });
 

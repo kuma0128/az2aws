@@ -6,6 +6,9 @@ import { CLIError } from "./CLIError";
 
 const debug = _debug("az2aws");
 
+export const getVerificationCodeFromEnv = (): string | undefined =>
+  process.env.azure_verification_code || process.env.AZURE_VERIFICATION_CODE;
+
 export type StateHandler = (
   page: Page,
   selected: ElementHandle,
@@ -346,12 +349,19 @@ export const states: State[] = [
         console.log(descriptionMessage);
       }
 
-      const { verificationCode } = await inquirer.prompt([
-        {
-          name: "verificationCode",
-          message: "Verification Code:",
-        } as Question,
-      ]);
+      let verificationCode: string;
+      const envCode = getVerificationCodeFromEnv();
+      if (envCode) {
+        debug("Using verification code from environment");
+        verificationCode = envCode;
+      } else {
+        ({ verificationCode } = await inquirer.prompt([
+          {
+            name: "verificationCode",
+            message: "Verification Code:",
+          } as Question,
+        ]));
+      }
 
       debug("Focusing on verification code input");
       await page.focus(`input[name="otc"]`);
