@@ -571,6 +571,10 @@ export const login = {
     return roles;
   },
 
+  _generateTotpFromSecret(secret: string, epoch?: number): string {
+    return generateTotpFromSecret(secret, epoch);
+  },
+
   /**
    * Ask the user for the role they want to use.
    * @param {Array.<{roleArn: string, principalArn: string}>} roles - The roles to pick from

@@ -3,8 +3,22 @@ import inquirer, { Question } from "inquirer";
 import { Page, ElementHandle } from "puppeteer";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
+import { authenticator } from "otplib";
 
 const debug = _debug("az2aws");
+
+const getTfaSecret = (): string | undefined =>
+  process.env.azure_default_tfa_secret || process.env.AZURE_DEFAULT_TFA_SECRET;
+
+const generateTotpFromSecret = (secret: string, epoch?: number): string => {
+  const previousOptions = { ...authenticator.options };
+  if (typeof epoch === "number") {
+    authenticator.options = { ...authenticator.options, epoch };
+  }
+  const code = authenticator.generate(secret);
+  authenticator.options = previousOptions;
+  return code;
+};
 
 export type StateHandler = (
   page: Page,
@@ -346,12 +360,19 @@ export const states: State[] = [
         console.log(descriptionMessage);
       }
 
-      const { verificationCode } = await inquirer.prompt([
-        {
-          name: "verificationCode",
-          message: "Verification Code:",
-        } as Question,
-      ]);
+      let verificationCode;
+      const tfaSecret = getTfaSecret();
+      if (tfaSecret) {
+        debug("Using TOTP secret from environment");
+        verificationCode = generateTotpFromSecret(tfaSecret);
+      } else {
+        ({ verificationCode } = await inquirer.prompt([
+          {
+            name: "verificationCode",
+            message: "Verification Code:",
+          } as Question,
+        ]));
+      }
 
       debug("Focusing on verification code input");
       await page.focus(`input[name="otc"]`);
