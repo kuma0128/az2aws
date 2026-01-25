@@ -100,6 +100,7 @@ https://snapcraft.io/az2aws
 | `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
 | `--no-disable-extensions` | Keep browser extensions enabled |
 | `--disable-gpu` | Disable GPU acceleration |
+| `--credential-process` | Output credentials for AWS CLI credential_process |
 | `--version (-v)` | Show version number |
 
 ## Usage

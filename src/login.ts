@@ -8,7 +8,7 @@ import puppeteer, { Browser, HTTPRequest } from "puppeteer";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
-import { awsConfig, ProfileConfig } from "./awsConfig";
+import { awsConfig, ProfileConfig, ProfileCredentials } from "./awsConfig";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { paths } from "./paths";
 import mkdirp from "mkdirp";
@@ -41,6 +41,8 @@ interface Role {
   principalArn: string;
 }
 
+type AwsCredentials = ProfileCredentials;
+
 export const login = {
   async loginAsync(
     profileName: string,
@@ -51,8 +53,17 @@ export const login = {
     awsNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    credentialProcess = false
   ): Promise<void> {
+    const originalConsoleLog = console.log;
+    const effectiveNoPrompt = credentialProcess ? true : noPrompt;
+
+    try {
+    if (credentialProcess) {
+      console.log = (...args: unknown[]) => console.error(...args);
+    }
+
     let headless, cliProxy;
     if (mode === "cli") {
       headless = true;
@@ -98,7 +109,7 @@ export const login = {
       headless,
       disableSandbox,
       cliProxy,
-      noPrompt,
+      effectiveNoPrompt,
       enableChromeNetworkService,
       profile.azure_default_username,
       profile.azure_default_password,
@@ -110,19 +121,39 @@ export const login = {
     const roles = this._parseRolesFromSamlResponse(samlResponse);
     const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
       roles,
-      noPrompt,
+      effectiveNoPrompt,
       profile.azure_default_role_arn,
       profile.azure_default_duration_hours
     );
 
-    await this._assumeRoleAsync(
+    const credentials = await this._assumeRoleAsync(
       profileName,
       samlResponse,
       role,
       durationHours,
       awsNoVerifySsl,
-      profile.region
+      profile.region,
+      !credentialProcess
     );
+
+    if (credentialProcess) {
+      if (!credentials) {
+        throw new CLIError("Unable to retrieve credentials.");
+      }
+
+      originalConsoleLog(
+        JSON.stringify({
+          Version: 1,
+          AccessKeyId: credentials.aws_access_key_id,
+          SecretAccessKey: credentials.aws_secret_access_key,
+          SessionToken: credentials.aws_session_token,
+          Expiration: credentials.aws_expiration,
+        })
+      );
+    }
+    } finally {
+      console.log = originalConsoleLog;
+    }
   },
 
   async loginAll(
@@ -684,8 +715,9 @@ export const login = {
     role: Role,
     durationHours: number,
     awsNoVerifySsl: boolean,
-    region: string
-  ): Promise<void> {
+    region: string,
+    writeProfile = true
+  ): Promise<AwsCredentials | undefined> {
     console.log(`Assuming role ${role.roleArn} in region ${region}...`);
     let stsOptions: STSClientConfig = {};
 
@@ -734,14 +766,33 @@ export const login = {
 
     if (!res.Credentials) {
       debug("Unable to get security credentials from AWS");
-      return;
+      return undefined;
     }
 
-    await awsConfig.setProfileCredentialsAsync(profileName, {
-      aws_access_key_id: res.Credentials.AccessKeyId ?? "",
-      aws_secret_access_key: res.Credentials.SecretAccessKey ?? "",
-      aws_session_token: res.Credentials.SessionToken ?? "",
-      aws_expiration: res.Credentials.Expiration?.toISOString() ?? "",
-    });
+    if (
+      !res.Credentials.AccessKeyId ||
+      !res.Credentials.SecretAccessKey ||
+      !res.Credentials.SessionToken ||
+      !res.Credentials.Expiration
+    ) {
+      debug("Received incomplete credentials from AWS");
+      throw new CLIError(
+        "AWS returned incomplete credentials. One or more required fields " +
+          "(AccessKeyId, SecretAccessKey, SessionToken, Expiration) are missing."
+      );
+    }
+
+    const credentials: AwsCredentials = {
+      aws_access_key_id: res.Credentials.AccessKeyId,
+      aws_secret_access_key: res.Credentials.SecretAccessKey,
+      aws_session_token: res.Credentials.SessionToken,
+      aws_expiration: res.Credentials.Expiration.toISOString(),
+    };
+
+    if (writeProfile) {
+      await awsConfig.setProfileCredentialsAsync(profileName, credentials);
+    }
+
+    return credentials;
   },
 };

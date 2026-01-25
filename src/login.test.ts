@@ -1398,6 +1398,28 @@ describe("login", () => {
       expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
     });
 
+    it("should return credentials without writing when writeProfile is false", async () => {
+      const result = await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        false,
+        "us-east-1",
+        false
+      );
+
+      expect(result).toMatchObject({
+        aws_access_key_id: "AKIAIOSFODNN7EXAMPLE",
+        aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        aws_session_token: "session-token",
+      });
+      expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
     it("should save credentials with correct values", async () => {
       await login._assumeRoleAsync(
         "test-profile",
@@ -1467,7 +1489,7 @@ describe("login", () => {
       expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
     });
 
-    it("should handle credentials with missing optional fields", async () => {
+    it("should throw CLIError when credentials have missing required fields", async () => {
       mockSend.mockResolvedValue({
         Credentials: {
           AccessKeyId: undefined,
@@ -1477,6 +1499,24 @@ describe("login", () => {
         },
       });
 
+      await expect(
+        login._assumeRoleAsync(
+          "test-profile",
+          "base64-assertion",
+          {
+            roleArn: "arn:aws:iam::123456789012:role/TestRole",
+            principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+          },
+          1,
+          false,
+          "us-east-1"
+        )
+      ).rejects.toThrow("AWS returned incomplete credentials");
+
+      expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
+    it("should handle credentials with all fields present", async () => {
       await login._assumeRoleAsync(
         "test-profile",
         "base64-assertion",
@@ -1492,10 +1532,10 @@ describe("login", () => {
       expect(awsConfig.setProfileCredentialsAsync).toHaveBeenCalledWith(
         "test-profile",
         {
-          aws_access_key_id: "",
-          aws_secret_access_key: "",
-          aws_session_token: "",
-          aws_expiration: "",
+          aws_access_key_id: "AKIAIOSFODNN7EXAMPLE",
+          aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          aws_session_token: "session-token",
+          aws_expiration: "2024-01-01T00:00:00.000Z",
         }
       );
     });

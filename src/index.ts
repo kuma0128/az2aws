@@ -6,6 +6,7 @@ process.on("SIGTERM", () => process.exit(1));
 import { Command } from "commander";
 import { configureProfileAsync } from "./configureProfileAsync";
 import { login } from "./login";
+import { CLIError } from "./CLIError";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { version } = require("../package.json") as { version: string };
@@ -56,6 +57,10 @@ program
     "--disable-gpu",
     "Tell Puppeteer to pass the --disable-gpu flag to Chromium"
   )
+  .option(
+    "--credential-process",
+    "Output credentials in JSON format for AWS CLI credential_process"
+  )
   .parse(process.argv);
 
 const options = program.opts();
@@ -73,9 +78,16 @@ const enableChromeSeamlessSso = !!options.enableChromeSeamlessSso;
 const forceRefresh = !!options.forceRefresh;
 const noDisableExtensions = !options.disableExtensions;
 const disableGpu = !!options.disableGpu;
+const credentialProcess = !!options.credentialProcess;
 
 Promise.resolve()
   .then(() => {
+    if (options.allProfiles && credentialProcess) {
+      throw new CLIError(
+        "--credential-process cannot be used with --all-profiles."
+      );
+    }
+
     if (options.allProfiles) {
       return login.loginAll(
         mode,
@@ -100,7 +112,8 @@ Promise.resolve()
       awsNoVerifySsl,
       enableChromeSeamlessSso,
       noDisableExtensions,
-      disableGpu
+      disableGpu,
+      credentialProcess
     );
   })
   .catch((err: Error) => {
