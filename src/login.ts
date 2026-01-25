@@ -447,6 +447,7 @@ export const login = {
     noPrompt: boolean,
     enableChromeNetworkService: boolean,
     awsNoVerifySsl: boolean,
+    browserNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     noDisableExtensions: boolean,
     disableGpu: boolean
@@ -490,6 +491,7 @@ export const login = {
       enableChromeNetworkService,
       profile.azure_default_username,
       profile.azure_default_password,
+      browserNoVerifySsl,
       enableChromeSeamlessSso,
       profile.azure_default_remember_me,
       noDisableExtensions,
@@ -519,6 +521,7 @@ export const login = {
     noPrompt: boolean,
     enableChromeNetworkService: boolean,
     awsNoVerifySsl: boolean,
+    browserNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     forceRefresh: boolean,
     noDisableExtensions: boolean,
@@ -548,6 +551,7 @@ export const login = {
         noPrompt,
         enableChromeNetworkService,
         awsNoVerifySsl,
+        browserNoVerifySsl,
         enableChromeSeamlessSso,
         noDisableExtensions,
         disableGpu
@@ -681,6 +685,7 @@ export const login = {
     enableChromeNetworkService: boolean,
     defaultUsername: string,
     defaultPassword: string | undefined,
+    ignoreBrowserSslErrors: boolean,
     enableChromeSeamlessSso: boolean,
     rememberMe: boolean,
     noDisableExtensions: boolean,
@@ -729,15 +734,25 @@ export const login = {
         args.push("--disable-gpu");
       }
 
+      if (ignoreBrowserSslErrors) {
+        console.warn(
+          "WARNING: Browser SSL certificate verification is disabled. " +
+            "This makes the connection vulnerable to MITM attacks."
+        );
+        args.push("--ignore-certificate-errors");
+      }
+
       const launchParams: {
         headless: boolean;
         args: string[];
         ignoreDefaultArgs: string[];
+        ignoreHTTPSErrors: boolean;
         executablePath?: string;
       } = {
         headless,
         args,
         ignoreDefaultArgs,
+        ignoreHTTPSErrors: ignoreBrowserSslErrors,
       };
 
       if (paths.chromeBin) {

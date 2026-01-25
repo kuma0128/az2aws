@@ -97,6 +97,7 @@ https://snapcraft.io/az2aws
 | `--no-prompt` | Skip prompts, use defaults |
 | `--enable-chrome-network-service` | Enable Network Service (for 3XX redirects) |
 | `--no-verify-ssl` | Disable AWS SSL verification |
+| `--no-verify-ssl-browser` | Disable Chromium SSL verification |
 | `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
 | `--no-disable-extensions` | Keep browser extensions enabled |
 | `--disable-gpu` | Disable GPU acceleration |

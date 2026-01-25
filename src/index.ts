@@ -46,6 +46,10 @@ program
     "Disable SSL Peer Verification for connections to AWS"
   )
   .option(
+    "--no-verify-ssl-browser",
+    "Disable SSL Peer Verification for Chromium"
+  )
+  .option(
     "--enable-chrome-seamless-sso",
     "Enable Chromium's pass-through authentication with Azure Active Directory Seamless Single Sign-On"
   )
@@ -70,6 +74,7 @@ const disableSandbox = !options.sandbox;
 const noPrompt = !options.prompt;
 const enableChromeNetworkService = !!options.enableChromeNetworkService;
 const awsNoVerifySsl = !options.verifySsl;
+const browserNoVerifySsl = !options.verifySslBrowser;
 const enableChromeSeamlessSso = !!options.enableChromeSeamlessSso;
 const forceRefresh = !!options.forceRefresh;
 const noDisableExtensions = !options.disableExtensions;
@@ -84,6 +89,7 @@ Promise.resolve()
         noPrompt,
         enableChromeNetworkService,
         awsNoVerifySsl,
+        browserNoVerifySsl,
         enableChromeSeamlessSso,
         forceRefresh,
         noDisableExtensions,
@@ -99,6 +105,7 @@ Promise.resolve()
       noPrompt,
       enableChromeNetworkService,
       awsNoVerifySsl,
+      browserNoVerifySsl,
       enableChromeSeamlessSso,
       noDisableExtensions,
       disableGpu
