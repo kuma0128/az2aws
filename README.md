@@ -174,7 +174,7 @@ You'll be prompted for username, password, and MFA if required. After login, use
 **Tips:**
 - Set `AWS_PROFILE` env var instead of using `--profile`
 - Use `--mode gui --disable-gpu` on VMs or if rendering fails
-- Set `https_proxy` env var for corporate proxy
+- Set `https_proxy` or `http_proxy` env var for corporate proxy
 
 ## Automation
 

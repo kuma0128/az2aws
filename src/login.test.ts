@@ -496,6 +496,9 @@ describe("login", () => {
       vi.clearAllMocks();
       process.env = { ...originalEnv };
       delete process.env.https_proxy;
+      delete process.env.HTTPS_PROXY;
+      delete process.env.http_proxy;
+      delete process.env.HTTP_PROXY;
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
       mockSend.mockResolvedValue({
@@ -550,6 +553,27 @@ describe("login", () => {
 
       expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
         "http://proxy.example.com:8080",
+        {}
+      );
+    });
+
+    it("should use http_proxy when https_proxy is not set", async () => {
+      process.env.http_proxy = "http://proxy.example.com:8081";
+
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        false,
+        "us-east-1"
+      );
+
+      expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
+        "http://proxy.example.com:8081",
         {}
       );
     });
