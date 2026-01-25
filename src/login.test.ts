@@ -104,6 +104,8 @@ describe("login", () => {
       delete process.env.AZURE_DEFAULT_ROLE_ARN;
       delete process.env.azure_default_duration_hours;
       delete process.env.AZURE_DEFAULT_DURATION_HOURS;
+      delete process.env.assertion_consumer_service_url;
+      delete process.env.ASSERTION_CONSUMER_SERVICE_URL;
 
       const result = login._loadProfileFromEnv();
       expect(result).toEqual({});
@@ -142,6 +144,8 @@ describe("login", () => {
       process.env.AZURE_DEFAULT_PASSWORD = "secret";
       process.env.AZURE_DEFAULT_ROLE_ARN = "arn:aws:iam::123456789:role/Test";
       process.env.AZURE_DEFAULT_DURATION_HOURS = "8";
+      process.env.ASSERTION_CONSUMER_SERVICE_URL =
+        "https://example.com/custom-acs";
 
       const result = login._loadProfileFromEnv();
       expect(result.azure_tenant_id).toBe("tenant-id");
@@ -152,6 +156,9 @@ describe("login", () => {
         "arn:aws:iam::123456789:role/Test"
       );
       expect(result.azure_default_duration_hours).toBe("8");
+      expect(result.assertion_consumer_service_url).toBe(
+        "https://example.com/custom-acs"
+      );
     });
   });
 
@@ -882,7 +889,7 @@ describe("login", () => {
       );
 
       expect(console.log).toHaveBeenCalledWith(
-        "Using AWS SAML endpoint",
+        "Using SAML Assertion Consumer Service URL",
         "https://signin.amazonaws.cn/saml"
       );
     });
@@ -911,7 +918,7 @@ describe("login", () => {
       );
 
       expect(console.log).toHaveBeenCalledWith(
-        "Using AWS SAML endpoint",
+        "Using SAML Assertion Consumer Service URL",
         "https://signin.amazonaws-us-gov.com/saml"
       );
     });
@@ -940,7 +947,7 @@ describe("login", () => {
       );
 
       expect(console.log).toHaveBeenCalledWith(
-        "Using AWS SAML endpoint",
+        "Using SAML Assertion Consumer Service URL",
         "https://signin.aws.amazon.com/saml"
       );
     });

@@ -1,5 +1,5 @@
 import inquirer, { Question } from "inquirer";
-import { awsConfig } from "./awsConfig";
+import { awsConfig, ProfileConfig } from "./awsConfig";
 
 export async function configureProfileAsync(
   profileName: string
@@ -60,11 +60,28 @@ export async function configureProfileAsync(
       message: "AWS Region:",
       default: profile && profile.region,
     },
+    {
+      name: "assertionConsumerServiceUrl",
+      message: "Assertion Consumer Service URL (optional):",
+      default: profile && profile.assertion_consumer_service_url,
+      validate: (input): boolean | string => {
+        if (!input) return true;
+        try {
+          const url = new URL(input);
+          if (url.protocol !== "https:" && url.protocol !== "http:") {
+            return "Assertion Consumer Service URL must start with http:// or https://";
+          }
+        } catch {
+          return "Assertion Consumer Service URL must be a valid URL";
+        }
+        return true;
+      },
+    },
   ];
 
   const answers = await inquirer.prompt(questions);
 
-  await awsConfig.setProfileConfigValuesAsync(profileName, {
+  const configValues: ProfileConfig = {
     azure_tenant_id: answers.tenantId as string,
     azure_app_id_uri: answers.appIdUri as string,
     azure_default_username: answers.username as string,
@@ -72,7 +89,16 @@ export async function configureProfileAsync(
     azure_default_duration_hours: answers.defaultDurationHours as string,
     azure_default_remember_me: (answers.rememberMe as string) === "true",
     region: answers.region as string,
-  });
+  };
+  const assertionConsumerServiceUrl = answers.assertionConsumerServiceUrl as
+    | string
+    | undefined;
+  if (assertionConsumerServiceUrl) {
+    configValues.assertion_consumer_service_url =
+      assertionConsumerServiceUrl;
+  }
+
+  await awsConfig.setProfileConfigValuesAsync(profileName, configValues);
 
   console.log("Profile saved.");
 }

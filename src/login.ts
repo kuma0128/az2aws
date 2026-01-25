@@ -36,6 +36,27 @@ const getProxyUrl = (): string | undefined =>
   process.env.http_proxy ||
   process.env.HTTP_PROXY;
 
+const validateAssertionConsumerServiceURL = (value: string): void => {
+  if (/[\"<>]/.test(value)) {
+    throw new CLIError(
+      "Assertion Consumer Service URL contains invalid characters."
+    );
+  }
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new CLIError("Assertion Consumer Service URL must be a valid URL.");
+  }
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new CLIError(
+      "Assertion Consumer Service URL must start with http:// or https://."
+    );
+  }
+};
+
 interface Role {
   roleArn: string;
   principalArn: string;
@@ -78,15 +99,28 @@ export const login = {
           "this GovCloud region (us-gov-west-1 or us-gov-east-1)."
       );
     }
-    let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
-    if (profile.region && profile.region.startsWith("us-gov")) {
-      assertionConsumerServiceURL = AWS_GOV_SAML_ENDPOINT;
-    }
-    if (profile.region && profile.region.startsWith("cn-")) {
-      assertionConsumerServiceURL = AWS_CN_SAML_ENDPOINT;
+    let assertionConsumerServiceURL =
+      profile.assertion_consumer_service_url || AWS_SAML_ENDPOINT;
+    if (!profile.assertion_consumer_service_url) {
+      if (profile.region && profile.region.startsWith("us-gov")) {
+        assertionConsumerServiceURL = AWS_GOV_SAML_ENDPOINT;
+      }
+      if (profile.region && profile.region.startsWith("cn-")) {
+        assertionConsumerServiceURL = AWS_CN_SAML_ENDPOINT;
+      }
+    } else {
+      validateAssertionConsumerServiceURL(assertionConsumerServiceURL);
+      console.warn(
+        "WARNING: Using custom Assertion Consumer Service URL. " +
+          "Ensure this URL is trusted. Misconfiguration may expose your " +
+          "SAML assertion to unintended recipients."
+      );
     }
 
-    console.log("Using AWS SAML endpoint", assertionConsumerServiceURL);
+    console.log(
+      "Using SAML Assertion Consumer Service URL",
+      assertionConsumerServiceURL
+    );
 
     const loginUrl = await this._createLoginUrlAsync(
       profile.azure_app_id_uri,
@@ -177,6 +211,7 @@ export const login = {
       "azure_default_password",
       "azure_default_role_arn",
       "azure_default_duration_hours",
+      "assertion_consumer_service_url",
     ];
     for (let i = 0; i < options.length; i++) {
       const opt = options[i];
