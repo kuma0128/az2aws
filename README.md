@@ -100,6 +100,7 @@ https://snapcraft.io/az2aws
 | `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
 | `--no-disable-extensions` | Keep browser extensions enabled |
 | `--disable-gpu` | Disable GPU acceleration |
+| `--chromium-executable <path>` | Override Chromium executable path |
 | `--version (-v)` | Show version number |
 
 ## Usage
@@ -146,6 +147,7 @@ To avoid storing passwords in bash history, use a leading space:
 Use your own Chrome installation by setting these environment variables:
 
 - `BROWSER_CHROME_BIN` - Path to Chrome executable
+- `CHROME_BIN` - Alternate env var for Chrome executable
 - `BROWSER_USER_DATA_DIR` - Chrome user data directory
 - `BROWSER_PROFILE_DIR` - Chrome profile name (e.g., "Default")
 

@@ -18,7 +18,7 @@ export const paths: {
   credentials:
     process.env.AWS_SHARED_CREDENTIALS_FILE || path.join(awsDir, "credentials"),
   chromium: path.join(awsDir, "chromium"),
-  chromeBin: process.env.BROWSER_CHROME_BIN,
+  chromeBin: process.env.BROWSER_CHROME_BIN || process.env.CHROME_BIN,
   userDataDir: process.env.BROWSER_USER_DATA_DIR,
   profileDir: process.env.BROWSER_PROFILE_DIR,
 };

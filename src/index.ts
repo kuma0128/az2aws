@@ -6,6 +6,7 @@ process.on("SIGTERM", () => process.exit(1));
 import { Command } from "commander";
 import { configureProfileAsync } from "./configureProfileAsync";
 import { login } from "./login";
+import { paths } from "./paths";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { version } = require("../package.json") as { version: string };
@@ -57,6 +58,10 @@ program
     "--disable-gpu",
     "Tell Puppeteer to pass the --disable-gpu flag to Chromium"
   )
+  .option(
+    "--chromium-executable <path>",
+    "Specify a custom Chromium executable path"
+  )
   .parse(process.argv);
 
 const options = program.opts();
@@ -74,6 +79,11 @@ const enableChromeSeamlessSso = !!options.enableChromeSeamlessSso;
 const forceRefresh = !!options.forceRefresh;
 const noDisableExtensions = !options.disableExtensions;
 const disableGpu = !!options.disableGpu;
+const chromiumExecutable = options.chromiumExecutable as string | undefined;
+
+if (chromiumExecutable) {
+  paths.chromeBin = chromiumExecutable;
+}
 
 Promise.resolve()
   .then(() => {
