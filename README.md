@@ -141,6 +141,9 @@ To avoid storing passwords in bash history, use a leading space:
     HISTCONTROL=ignoreboth
      export AZURE_DEFAULT_PASSWORD=mypassword
 
+If no profile is configured, you can still run by providing at least
+`AZURE_TENANT_ID` and `AZURE_APP_ID_URI` via environment variables.
+
 #### Use an Existing Chrome Install and Profile
 
 Use your own Chrome installation by setting these environment variables:

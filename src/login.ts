@@ -588,13 +588,30 @@ export const login = {
   // Load the profile
   async _loadProfileAsync(profileName: string): Promise<ProfileConfig> {
     const profile = await awsConfig.getProfileConfigAsync(profileName);
-
-    if (!profile)
-      throw new CLIError(
-        `Unknown profile '${profileName}'. You must configure it first with --configure.`
-      );
-
     const env = this._loadProfileFromEnv();
+
+    if (!profile) {
+      if (!env.azure_tenant_id || !env.azure_app_id_uri) {
+        throw new CLIError(
+          `Unknown profile '${profileName}'. You must configure it first with --configure.`
+        );
+      }
+
+      console.log(
+        `Logging in with environment variables (no profile '${profileName}' found)...`
+      );
+      return {
+        azure_tenant_id: env.azure_tenant_id,
+        azure_app_id_uri: env.azure_app_id_uri,
+        azure_default_username: env.azure_default_username || "",
+        azure_default_password: env.azure_default_password,
+        azure_default_role_arn: env.azure_default_role_arn || "",
+        azure_default_duration_hours: env.azure_default_duration_hours || "",
+        azure_default_remember_me: false,
+        region: "",
+      };
+    }
+
     for (const prop in env) {
       if (env[prop]) {
         profile[prop] = env[prop] === null ? profile[prop] : env[prop];

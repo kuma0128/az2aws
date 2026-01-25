@@ -432,6 +432,21 @@ describe("login", () => {
       );
     });
 
+    it("should allow env-only configuration when profile is missing", async () => {
+      process.env.AZURE_TENANT_ID = "env-tenant";
+      process.env.AZURE_APP_ID_URI = "env-app";
+      process.env.AZURE_DEFAULT_USERNAME = "env-user@example.com";
+
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+
+      const result = await login._loadProfileAsync("missing");
+
+      expect(result.azure_tenant_id).toBe("env-tenant");
+      expect(result.azure_app_id_uri).toBe("env-app");
+      expect(result.azure_default_username).toBe("env-user@example.com");
+      expect(result.azure_default_remember_me).toBe(false);
+    });
+
     it("should throw CLIError when profile is missing required fields", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
         azure_tenant_id: "",
