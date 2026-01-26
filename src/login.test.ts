@@ -430,7 +430,7 @@ describe("login", () => {
       expect(inquirer.prompt).not.toHaveBeenCalled();
     });
 
-    it("should throw when noPrompt default role is not present", async () => {
+    it("should select the only role even if default role is not present", async () => {
       const roles = [
         {
           roleArn: "arn:aws:iam::123456789012:role/Role1",
@@ -438,24 +438,14 @@ describe("login", () => {
         },
       ];
 
-      await expect(
-        login._askUserForRoleAndDurationAsync(
-          roles,
-          true,
-          "arn:aws:iam::123456789012:role/MissingRole",
-          "1"
-        )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        login._askUserForRoleAndDurationAsync(
-          roles,
-          true,
-          "arn:aws:iam::123456789012:role/MissingRole",
-          "1"
-        )
-      ).rejects.toThrow(
-        "Default role ARN 'arn:aws:iam::123456789012:role/MissingRole' was not found in the SAML response."
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "arn:aws:iam::123456789012:role/MissingRole",
+        "1"
       );
+
+      expect(result.role.roleArn).toBe("arn:aws:iam::123456789012:role/Role1");
       expect(inquirer.prompt).not.toHaveBeenCalled();
     });
 
