@@ -627,6 +627,39 @@ describe("login", () => {
       expect(result.role.roleArn).toBe("arn:aws:iam::123456789012:role/Role2");
       expect(result.durationHours).toBe(8);
     });
+
+    it("should default the prompt selection to the first matching role", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role1",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider1",
+        },
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role2",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider2",
+        },
+      ];
+
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        role: "arn:aws:iam::123456789012:role/Role2",
+        durationHours: "2",
+      });
+
+      await login._askUserForRoleAndDurationAsync(
+        roles,
+        false,
+        "arn:aws:iam::123456789012:role/Missing, arn:aws:iam::123456789012:role/Role2",
+        "2"
+      );
+
+      const questions = vi.mocked(inquirer.prompt).mock.calls[0][0];
+      const roleQuestion = (questions as { name: string; default?: string }[]).find(
+        (question) => question.name === "role"
+      );
+      expect(roleQuestion?.default).toBe(
+        "arn:aws:iam::123456789012:role/Role2"
+      );
+    });
   });
 
   describe("_loadProfileAsync", () => {
