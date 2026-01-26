@@ -122,7 +122,8 @@ Set the `region` in your ~/.aws/config to use non-standard AWS partitions:
 - **China**: cn-north-1, cn-northwest-1
 
 For GovCloud, make sure your AWS CLI default region is set to a GovCloud
-region; otherwise STS calls may target the standard partition.
+region if you do not set a profile region; otherwise STS calls may target the
+standard partition.
 
 #### Stay Logged In
 

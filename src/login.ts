@@ -466,11 +466,16 @@ export const login = {
     }
 
     const profile = await this._loadProfileAsync(profileName);
-    console.log(`Using AWS region ${profile.region || "default"}`);
+    console.log(
+      `Using AWS region ${
+        profile.region || "(from AWS SDK defaults)"
+      }`
+    );
     if (profile.region && profile.region.startsWith("us-gov")) {
       console.warn(
-        "GovCloud detected. Ensure your AWS CLI default region is set " +
-          "to a GovCloud region (us-gov-west-1 or us-gov-east-1)."
+        "GovCloud region detected in profile. Note: Other AWS CLI operations " +
+          "will use your AWS CLI default region. If needed, set it to match " +
+          "this GovCloud region (us-gov-west-1 or us-gov-east-1)."
       );
     }
     let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
