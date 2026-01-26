@@ -10,14 +10,22 @@ const debug = _debug("az2aws");
 const getTfaSecret = (): string | undefined =>
   process.env.azure_default_tfa_secret || process.env.AZURE_DEFAULT_TFA_SECRET;
 
-const generateTotpFromSecret = (secret: string, epoch?: number): string => {
+export const generateTotpFromSecret = (secret: string, epoch?: number): string => {
   const previousOptions = { ...authenticator.options };
-  if (typeof epoch === "number") {
-    authenticator.options = { ...authenticator.options, epoch };
+  try {
+    if (typeof epoch === "number") {
+      authenticator.options = { ...authenticator.options, epoch };
+    }
+    return authenticator.generate(secret);
+  } finally {
+    authenticator.options = previousOptions;
   }
-  const code = authenticator.generate(secret);
-  authenticator.options = previousOptions;
-  return code;
+};
+
+export const getTotpFromEnv = (): string | undefined => {
+  const tfaSecret = getTfaSecret();
+  if (!tfaSecret) return undefined;
+  return generateTotpFromSecret(tfaSecret);
 };
 
 export type StateHandler = (
@@ -361,10 +369,10 @@ export const states: State[] = [
       }
 
       let verificationCode;
-      const tfaSecret = getTfaSecret();
-      if (tfaSecret) {
+      const envTotp = getTotpFromEnv();
+      if (envTotp) {
         debug("Using TOTP secret from environment");
-        verificationCode = generateTotpFromSecret(tfaSecret);
+        verificationCode = envTotp;
       } else {
         ({ verificationCode } = await inquirer.prompt([
           {

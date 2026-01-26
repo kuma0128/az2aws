@@ -263,6 +263,30 @@ describe("login", () => {
     });
   });
 
+  describe("_getTotpFromEnv", () => {
+    const originalEnv = process.env;
+
+    beforeEach(() => {
+      process.env = { ...originalEnv };
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(0));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      process.env = originalEnv;
+    });
+
+    it("should return a generated TOTP when env secret is set", () => {
+      const secret = "JBSWY3DPEHPK3PXP";
+      process.env.AZURE_DEFAULT_TFA_SECRET = secret;
+
+      const result = login._getTotpFromEnv();
+
+      expect(result).toBe(login._generateTotpFromSecret(secret, 0));
+    });
+  });
+
   describe("_createLoginUrlAsync", () => {
     it("should create a valid Azure login URL", async () => {
       const appIdUri = "https://app.example.com";

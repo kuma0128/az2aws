@@ -15,7 +15,7 @@ import mkdirp from "mkdirp";
 import fs from "fs/promises";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
-import { states } from "./loginStates";
+import { states, generateTotpFromSecret, getTotpFromEnv } from "./loginStates";
 
 const debug = _debug("az2aws");
 
@@ -573,6 +573,10 @@ export const login = {
 
   _generateTotpFromSecret(secret: string, epoch?: number): string {
     return generateTotpFromSecret(secret, epoch);
+  },
+
+  _getTotpFromEnv(): string | undefined {
+    return getTotpFromEnv();
   },
 
   /**
