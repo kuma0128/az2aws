@@ -669,6 +669,7 @@ export const login = {
    * @param {bool} [enableChromeNetworkService] - Enable chrome network service.
    * @param {string} [defaultUsername] - The default username
    * @param {string} [defaultPassword] - The default password
+   * @param {bool} [browserNoVerifySsl] - Disable SSL certificate verification in the browser
    * @param {bool} [enableChromeSeamlessSso] - chrome seamless SSO
    * @param {bool} [rememberMe] - Enable remembering the session
    * @param {bool} [noDisableExtensions] - True to prevent Puppeteer from disabling Chromium extensions
@@ -685,7 +686,7 @@ export const login = {
     enableChromeNetworkService: boolean,
     defaultUsername: string,
     defaultPassword: string | undefined,
-    ignoreBrowserSslErrors: boolean,
+    browserNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     rememberMe: boolean,
     noDisableExtensions: boolean,
@@ -734,7 +735,7 @@ export const login = {
         args.push("--disable-gpu");
       }
 
-      if (ignoreBrowserSslErrors) {
+      if (browserNoVerifySsl) {
         console.warn(
           "WARNING: Browser SSL certificate verification is disabled. " +
             "This makes the connection vulnerable to MITM attacks."
@@ -752,7 +753,7 @@ export const login = {
         headless,
         args,
         ignoreDefaultArgs,
-        ignoreHTTPSErrors: ignoreBrowserSslErrors,
+        ignoreHTTPSErrors: browserNoVerifySsl,
       };
 
       if (paths.chromeBin) {
