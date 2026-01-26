@@ -158,6 +158,12 @@ and exits with code 0, its stdout is used:
 - `~/.aws/.aws-azure-login.password.sh` - Password
 - `~/.aws/.aws-azure-login.static-challenge.sh` - MFA code
 
+Notes:
+- Hooks take precedence over environment variables and prompts.
+- Scripts must be executable and exit with code 0; non-zero exits are treated as failures.
+- Trailing newlines are removed from stdout; leading/trailing spaces are preserved.
+- Hook scripts are Unix/macOS-only (paths end in `.sh`).
+
 #### Use an Existing Chrome Install and Profile
 
 Use your own Chrome installation by setting these environment variables:
