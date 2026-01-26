@@ -578,6 +578,71 @@ describe("login", () => {
       );
     });
 
+    it("should prefer https_proxy over http_proxy", async () => {
+      process.env.https_proxy = "http://proxy.example.com:8080";
+      process.env.http_proxy = "http://proxy.example.com:8081";
+
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        false,
+        "us-east-1"
+      );
+
+      expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
+        "http://proxy.example.com:8080",
+        {}
+      );
+    });
+
+    it("should use HTTPS_PROXY when lowercase is not set", async () => {
+      process.env.HTTPS_PROXY = "http://proxy.example.com:8082";
+
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        false,
+        "us-east-1"
+      );
+
+      expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
+        "http://proxy.example.com:8082",
+        {}
+      );
+    });
+
+    it("should prefer https_proxy over HTTPS_PROXY", async () => {
+      process.env.https_proxy = "http://proxy.example.com:8080";
+      process.env.HTTPS_PROXY = "http://proxy.example.com:8083";
+
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        false,
+        "us-east-1"
+      );
+
+      expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
+        "http://proxy.example.com:8080",
+        {}
+      );
+    });
+
     it("should not use HttpsProxyAgent when proxy is not set", async () => {
       await login._assumeRoleAsync(
         "test-profile",
