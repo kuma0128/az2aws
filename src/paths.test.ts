@@ -69,6 +69,13 @@ describe("paths", () => {
     expect(paths.chromeBin).toBe("/opt/chrome");
   });
 
+  it("should prefer BROWSER_CHROME_BIN over CHROME_BIN", async () => {
+    process.env.BROWSER_CHROME_BIN = "/usr/bin/chrome";
+    process.env.CHROME_BIN = "/opt/chrome";
+    const { paths } = await import("./paths");
+    expect(paths.chromeBin).toBe("/usr/bin/chrome");
+  });
+
   it("should read BROWSER_USER_DATA_DIR from environment", async () => {
     process.env.BROWSER_USER_DATA_DIR = "/home/user/.config/chrome";
     const { paths } = await import("./paths");

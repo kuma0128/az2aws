@@ -151,6 +151,9 @@ Use your own Chrome installation by setting these environment variables:
 - `BROWSER_USER_DATA_DIR` - Chrome user data directory
 - `BROWSER_PROFILE_DIR` - Chrome profile name (e.g., "Default")
 
+Chrome/Chromium executable precedence: `--chromium-executable` (highest),
+then `BROWSER_CHROME_BIN`, then `CHROME_BIN`.
+
 Example:
 
     # macOS
