@@ -1283,7 +1283,9 @@ describe("login", () => {
 
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
-          args: expect.arrayContaining(["--user-data-dir=/custom/user/data/dir"]),
+          args: expect.arrayContaining([
+            "--user-data-dir=/custom/user/data/dir",
+          ]),
         })
       );
     });
@@ -1317,7 +1319,9 @@ describe("login", () => {
       expect(mockMkdirp).toHaveBeenCalledWith("/default/chromium/path");
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
-          args: expect.arrayContaining(["--user-data-dir=/default/chromium/path"]),
+          args: expect.arrayContaining([
+            "--user-data-dir=/default/chromium/path",
+          ]),
         })
       );
     });
@@ -1647,7 +1651,9 @@ describe("login", () => {
       };
     };
 
-    const createMockBrowser = (mockPage: ReturnType<typeof createMockPage>) => ({
+    const createMockBrowser = (
+      mockPage: ReturnType<typeof createMockPage>
+    ) => ({
       pages: vi.fn().mockResolvedValue([mockPage]),
       close: vi.fn().mockResolvedValue(undefined),
     });

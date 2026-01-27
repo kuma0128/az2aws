@@ -63,7 +63,8 @@ describe("loginStates", () => {
   });
 
   describe("username input handler", () => {
-    const getUsernameState = () => states.find((s) => s.name === "username input")!;
+    const getUsernameState = () =>
+      states.find((s) => s.name === "username input")!;
 
     it("should use defaultUsername when noPrompt is true and defaultUsername is provided", async () => {
       const mockPage = createMockPage();
@@ -79,13 +80,17 @@ describe("loginStates", () => {
       );
 
       expect(inquirer.prompt).not.toHaveBeenCalled();
-      expect(mockPage.keyboard.type).toHaveBeenCalledWith("default@example.com");
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith(
+        "default@example.com"
+      );
     });
 
     it("should prompt for username when noPrompt is false", async () => {
       const mockPage = createMockPage();
       mockPage.$.mockResolvedValue(null);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ username: "user@example.com" });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        username: "user@example.com",
+      });
 
       await getUsernameState().handler(
         mockPage as never,
@@ -103,7 +108,9 @@ describe("loginStates", () => {
     it("should prompt for username when noPrompt is true but defaultUsername is empty", async () => {
       const mockPage = createMockPage();
       mockPage.$.mockResolvedValue(null);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ username: "prompted@example.com" });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        username: "prompted@example.com",
+      });
 
       await getUsernameState().handler(
         mockPage as never,
@@ -115,7 +122,9 @@ describe("loginStates", () => {
       );
 
       expect(inquirer.prompt).toHaveBeenCalled();
-      expect(mockPage.keyboard.type).toHaveBeenCalledWith("prompted@example.com");
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith(
+        "prompted@example.com"
+      );
     });
 
     it("should display error message when present", async () => {
@@ -123,7 +132,9 @@ describe("loginStates", () => {
       const mockError = {};
       mockPage.$.mockResolvedValue(mockError);
       mockPage.evaluate.mockResolvedValue("Error message");
-      vi.mocked(inquirer.prompt).mockResolvedValue({ username: "user@example.com" });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        username: "user@example.com",
+      });
 
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -142,7 +153,8 @@ describe("loginStates", () => {
   });
 
   describe("password input handler", () => {
-    const getPasswordState = () => states.find((s) => s.name === "password input")!;
+    const getPasswordState = () =>
+      states.find((s) => s.name === "password input")!;
 
     it("should use defaultPassword when noPrompt is true and no error", async () => {
       const mockPage = createMockPage();
@@ -188,7 +200,9 @@ describe("loginStates", () => {
     it("should prompt for password when noPrompt is false", async () => {
       const mockPage = createMockPage();
       mockPage.$.mockResolvedValue(null);
-      vi.mocked(inquirer.prompt).mockResolvedValue({ password: "userPassword" });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        password: "userPassword",
+      });
 
       await getPasswordState().handler(
         mockPage as never,
@@ -270,7 +284,9 @@ describe("loginStates", () => {
         if (el === mockMsaTile) return Promise.resolve("Personal Account");
         return Promise.resolve("");
       });
-      vi.mocked(inquirer.prompt).mockResolvedValue({ account: "Personal Account" });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        account: "Personal Account",
+      });
 
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -290,7 +306,8 @@ describe("loginStates", () => {
   });
 
   describe("Remember me handler", () => {
-    const getRememberMeState = () => states.find((s) => s.name === "Remember me")!;
+    const getRememberMeState = () =>
+      states.find((s) => s.name === "Remember me")!;
 
     it("should click yes button when rememberMe is true", async () => {
       const mockPage = createMockPage();
@@ -324,7 +341,8 @@ describe("loginStates", () => {
   });
 
   describe("passwordless handler", () => {
-    const getPasswordlessState = () => states.find((s) => s.name === "passwordless")!;
+    const getPasswordlessState = () =>
+      states.find((s) => s.name === "passwordless")!;
 
     it("should click send notification and display auth code", async () => {
       const mockPage = createMockPage();
@@ -453,12 +471,15 @@ describe("loginStates", () => {
   });
 
   describe("TFA failed handler", () => {
-    const getTfaFailedState = () => states.find((s) => s.name === "TFA failed")!;
+    const getTfaFailedState = () =>
+      states.find((s) => s.name === "TFA failed")!;
 
     it("should throw CLIError with description message", async () => {
       const mockPage = createMockPage();
       const mockElement = {};
-      mockPage.evaluate.mockResolvedValue("Authentication failed. Please try again.");
+      mockPage.evaluate.mockResolvedValue(
+        "Authentication failed. Please try again."
+      );
 
       await expect(
         getTfaFailedState().handler(
@@ -516,12 +537,15 @@ describe("loginStates", () => {
   });
 
   describe("TFA code input handler", () => {
-    const getTfaCodeInputState = () => states.find((s) => s.name === "TFA code input")!;
+    const getTfaCodeInputState = () =>
+      states.find((s) => s.name === "TFA code input")!;
 
     it("should prompt for verification code and submit", async () => {
       const mockPage = createMockPage();
       mockPage.$.mockResolvedValue(null); // No error
-      vi.mocked(inquirer.prompt).mockResolvedValue({ verificationCode: "123456" });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        verificationCode: "123456",
+      });
 
       await getTfaCodeInputState().handler(
         mockPage as never,
@@ -542,7 +566,9 @@ describe("loginStates", () => {
       const mockError = {};
       mockPage.$.mockResolvedValue(mockError);
       mockPage.evaluate.mockResolvedValue("Invalid code");
-      vi.mocked(inquirer.prompt).mockResolvedValue({ verificationCode: "654321" });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        verificationCode: "654321",
+      });
 
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 

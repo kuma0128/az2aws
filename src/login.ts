@@ -5,7 +5,7 @@ import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
 import { load } from "cheerio";
 import { v4 } from "uuid";
-import puppeteer, { Page, Browser, HTTPRequest } from "puppeteer";
+import puppeteer, { Browser, HTTPRequest } from "puppeteer";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
