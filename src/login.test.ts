@@ -17,11 +17,14 @@ vi.mock("./awsConfig", () => ({
   },
 }));
 
-const { mockSend, mockHttpsProxyAgent } = vi.hoisted(() => {
-  const mockSend = vi.fn();
-  const mockHttpsProxyAgent = vi.fn();
-  return { mockSend, mockHttpsProxyAgent };
-});
+const { mockSend, mockHttpsProxyAgent, mockPuppeteerLaunch, mockMkdirp } =
+  vi.hoisted(() => {
+    const mockSend = vi.fn();
+    const mockHttpsProxyAgent = vi.fn();
+    const mockPuppeteerLaunch = vi.fn();
+    const mockMkdirp = vi.fn();
+    return { mockSend, mockHttpsProxyAgent, mockPuppeteerLaunch, mockMkdirp };
+  });
 
 vi.mock("@aws-sdk/client-sts", () => {
   return {
@@ -35,8 +38,19 @@ vi.mock("https-proxy-agent", () => ({
   HttpsProxyAgent: mockHttpsProxyAgent,
 }));
 
+vi.mock("puppeteer", () => ({
+  default: {
+    launch: mockPuppeteerLaunch,
+  },
+}));
+
+vi.mock("mkdirp", () => ({
+  default: mockMkdirp,
+}));
+
 import inquirer from "inquirer";
 import { awsConfig } from "./awsConfig";
+import { paths } from "./paths";
 
 describe("login", () => {
   describe("_loadProfileFromEnv", () => {
@@ -1208,6 +1222,563 @@ describe("login", () => {
           aws_expiration: "",
         }
       );
+    });
+  });
+
+  describe("_performLoginAsync launch arguments", () => {
+    const originalPaths = { ...paths };
+    const originalEnv = process.env;
+
+    // Store launch args for verification, then throw to exit early
+    let capturedLaunchArgs: unknown = null;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      process.env = { ...originalEnv };
+      delete process.env.https_proxy;
+      capturedLaunchArgs = null;
+      // Reset paths
+      Object.keys(paths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+
+      // Mock puppeteer.launch to capture args and throw immediately
+      mockPuppeteerLaunch.mockImplementation((args: unknown) => {
+        capturedLaunchArgs = args;
+        throw new Error("Mock launch error for testing");
+      });
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+      Object.keys(originalPaths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+    });
+
+    it("should include --user-data-dir when rememberMe=true and userDataDir is set", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = "/custom/user/data/dir";
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true, // headless
+          false, // disableSandbox
+          false, // cliProxy
+          false, // noPrompt
+          false, // enableChromeNetworkService
+          "", // defaultUsername
+          undefined, // defaultPassword
+          false, // enableChromeSeamlessSso
+          true, // rememberMe
+          false, // noDisableExtensions
+          false // disableGpu
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining([
+            "--user-data-dir=/custom/user/data/dir",
+          ]),
+        })
+      );
+    });
+
+    it("should call mkdirp and use chromium path when rememberMe=true and userDataDir is not set", async () => {
+      mockMkdirp.mockResolvedValue(undefined);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromium = "/default/chromium/path";
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(mockMkdirp).toHaveBeenCalledWith("/default/chromium/path");
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining([
+            "--user-data-dir=/default/chromium/path",
+          ]),
+        })
+      );
+    });
+
+    it("should include --profile-directory when rememberMe=true and profileDir is set", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = "/user/data";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).profileDir = "CustomProfile";
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining([
+            "--user-data-dir=/user/data",
+            "--profile-directory=CustomProfile",
+          ]),
+        })
+      );
+    });
+
+    it("should include auth whitelist args when enableChromeSeamlessSso=true", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          true, // enableChromeSeamlessSso
+          false,
+          false,
+          false
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining([
+            "--auth-server-whitelist=autologon.microsoftazuread-sso.com",
+            "--auth-negotiate-delegate-whitelist=autologon.microsoftazuread-sso.com",
+          ]),
+        })
+      );
+    });
+
+    it("should include --disable-gpu when disableGpu=true", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          true // disableGpu
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining(["--disable-gpu"]),
+        })
+      );
+    });
+
+    it("should include --proxy-server when https_proxy env is set", async () => {
+      process.env.https_proxy = "http://proxy.example.com:8080";
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining([
+            "--proxy-server=http://proxy.example.com:8080",
+          ]),
+        })
+      );
+    });
+
+    it("should include --no-sandbox when disableSandbox=true", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          true, // disableSandbox
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining(["--no-sandbox"]),
+        })
+      );
+    });
+
+    it("should include --enable-features=NetworkService when enableChromeNetworkService=true", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          true, // enableChromeNetworkService
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining(["--enable-features=NetworkService"]),
+        })
+      );
+    });
+
+    it("should set ignoreDefaultArgs with --disable-extensions when noDisableExtensions=true", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          true, // noDisableExtensions
+          false
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          ignoreDefaultArgs: ["--disable-extensions"],
+        })
+      );
+    });
+
+    it("should set ignoreDefaultArgs to empty array when noDisableExtensions=false", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false, // noDisableExtensions
+          false
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          ignoreDefaultArgs: [],
+        })
+      );
+    });
+
+    it("should use executablePath when chromeBin is set", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = "/custom/chrome/bin";
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          executablePath: "/custom/chrome/bin",
+        })
+      );
+    });
+
+    it("should include --app and --window-size when headless=false", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false, // headless=false
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining([
+            "--app=https://login.example.com",
+            "--window-size=425,550",
+          ]),
+        })
+      );
+    });
+  });
+
+  describe("_performLoginAsync SAML error handling", () => {
+    const originalPaths = { ...paths };
+
+    const createMockPage = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let requestHandler: ((req: any) => void) | null = null;
+      let resolveRequestInterception: (() => void) | null = null;
+      const requestInterceptionReady = new Promise<void>((resolve) => {
+        resolveRequestInterception = resolve;
+      });
+
+      return {
+        setExtraHTTPHeaders: vi.fn().mockResolvedValue(undefined),
+        setViewport: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn().mockImplementation((event: string, handler: unknown) => {
+          if (event === "request") {
+            requestHandler = handler as typeof requestHandler;
+          }
+        }),
+        setRequestInterception: vi.fn().mockImplementation(() => {
+          // Signal that request interception is set up and handler is ready
+          if (resolveRequestInterception) resolveRequestInterception();
+          return Promise.resolve();
+        }),
+        goto: vi.fn().mockResolvedValue(undefined),
+        waitForNavigation: vi.fn().mockResolvedValue(undefined),
+        $: vi.fn().mockResolvedValue(null),
+        screenshot: vi.fn().mockResolvedValue(undefined),
+        getRequestHandler: () => requestHandler,
+        waitForRequestInterception: () => requestInterceptionReady,
+      };
+    };
+
+    const createMockBrowser = (
+      mockPage: ReturnType<typeof createMockPage>
+    ) => ({
+      pages: vi.fn().mockResolvedValue([mockPage]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      Object.keys(paths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+    });
+
+    afterEach(() => {
+      Object.keys(originalPaths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+    });
+
+    it("should throw error when SAMLResponse is not found in postData", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false, // cliProxy=false, so it waits for samlResponsePromise
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false
+      );
+
+      // Wait for the request handler to be set up
+      await mockPage.waitForRequestInterception();
+
+      // Simulate a request to SAML endpoint with empty SAMLResponse
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "OtherData=value", // No SAMLResponse
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      await expect(promise).rejects.toThrow("SAML response not found");
+    });
+
+    it("should throw error when SAMLResponse is an array", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        // SAMLResponse appearing multiple times creates an array
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=value1&SAMLResponse=value2",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      await expect(promise).rejects.toThrow("SAML can't be an array");
+    });
+
+    it("should throw error when postData is undefined", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => undefined,
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      await expect(promise).rejects.toThrow("SAML response not found");
     });
   });
 });

@@ -34,8 +34,7 @@ program
   )
   .option(
     "--no-prompt",
-    "Do not prompt for input and accept the default choice",
-    false
+    "Do not prompt for input and accept the default choice"
   )
   .option(
     "--enable-chrome-network-service",
