@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { login } from "./login";
 import { CLIError } from "./CLIError";
-import { authenticator } from "otplib";
+import { generateSync } from "otplib";
 
 vi.mock("inquirer", () => ({
   default: {
@@ -251,11 +251,9 @@ describe("login", () => {
 
   describe("_generateTotpFromSecret", () => {
     it("should generate a TOTP code for a fixed epoch", () => {
-      const secret = "JBSWY3DPEHPK3PXP";
-      const previousOptions = { ...authenticator.options };
-      authenticator.options = { ...authenticator.options, epoch: 0 };
-      const expected = authenticator.generate(secret);
-      authenticator.options = previousOptions;
+      // Use a 20-byte secret (160 bits) to meet otplib v13 minimum requirements
+      const secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+      const expected = generateSync({ secret, epoch: 0 });
 
       const result = login._generateTotpFromSecret(secret, 0);
 
@@ -278,7 +276,8 @@ describe("login", () => {
     });
 
     it("should return a generated TOTP when env secret is set", () => {
-      const secret = "JBSWY3DPEHPK3PXP";
+      // Use a 20-byte secret (160 bits) to meet otplib v13 minimum requirements
+      const secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
       process.env.AZURE_DEFAULT_TFA_SECRET = secret;
 
       const result = login._getTotpFromEnv();

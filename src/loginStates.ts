@@ -3,7 +3,7 @@ import inquirer, { Question } from "inquirer";
 import { Page, ElementHandle } from "puppeteer";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
-import { authenticator } from "otplib";
+import { generateSync } from "otplib";
 
 const debug = _debug("az2aws");
 
@@ -11,15 +11,11 @@ const getTfaSecret = (): string | undefined =>
   process.env.azure_default_tfa_secret || process.env.AZURE_DEFAULT_TFA_SECRET;
 
 export const generateTotpFromSecret = (secret: string, epoch?: number): string => {
-  const previousOptions = { ...authenticator.options };
-  try {
-    if (typeof epoch === "number") {
-      authenticator.options = { ...authenticator.options, epoch };
-    }
-    return authenticator.generate(secret);
-  } finally {
-    authenticator.options = previousOptions;
+  const options: { secret: string; epoch?: number } = { secret };
+  if (typeof epoch === "number") {
+    options.epoch = epoch;
   }
+  return generateSync(options);
 };
 
 export const getTotpFromEnv = (): string | undefined => {
