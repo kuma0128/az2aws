@@ -550,6 +550,89 @@ describe("login", () => {
     });
   });
 
+  describe("loginAsync region logging", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+      ]);
+      vi.spyOn(login, "_askUserForRoleAndDurationAsync").mockResolvedValue({
+        role: {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        durationHours: 1,
+      });
+      vi.spyOn(login, "_assumeRoleAsync").mockResolvedValue(undefined);
+    });
+
+    it("should log region defaults when region is not set", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "",
+      });
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+
+      expect(console.log).toHaveBeenCalledWith(
+        "Using AWS region (from AWS SDK defaults)"
+      );
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    it("should warn when GovCloud region is set", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-gov-west-1",
+      });
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+
+      expect(console.log).toHaveBeenCalledWith(
+        "Using AWS region us-gov-west-1"
+      );
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining("GovCloud region detected in profile")
+      );
+    });
+  });
+
   describe("_assumeRoleAsync", () => {
     const originalEnv = process.env;
 
