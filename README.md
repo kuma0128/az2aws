@@ -140,6 +140,10 @@ You can set defaults via environment variables (use with `--no-prompt`):
 - `AZURE_DEFAULT_USERNAME` / `AZURE_DEFAULT_PASSWORD` - Credentials
 - `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` - AWS role settings
 
+When using `--no-prompt` with multiple available roles, you must set
+`AZURE_DEFAULT_ROLE_ARN` (or configure `azure_default_role_arn`) so the CLI can
+select a role without prompting.
+
 To avoid storing passwords in bash history, use a leading space:
 
     HISTCONTROL=ignoreboth
@@ -179,6 +183,18 @@ You'll be prompted for username, password, and MFA if required. After login, use
 - Set `AWS_PROFILE` env var instead of using `--profile`
 - Use `--mode gui --disable-gpu` on VMs or if rendering fails
 - Set `https_proxy` env var for corporate proxy
+
+#### Troubleshooting
+
+If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
+Try:
+ `--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
+
+If you see "Unable to recognize page state!", Azure's login pages may have
+changed. Try:
+
+- `--mode gui` or `--mode debug`
+- Filing an issue with the screenshot (`az2aws-unrecognized-state.png`) to help maintainers update selectors
 
 ## Automation
 
