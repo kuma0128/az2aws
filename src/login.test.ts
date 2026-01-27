@@ -572,6 +572,10 @@ describe("login", () => {
       vi.spyOn(login, "_assumeRoleAsync").mockResolvedValue(undefined);
     });
 
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
     it("should log region defaults when region is not set", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
         azure_tenant_id: "tenant",
