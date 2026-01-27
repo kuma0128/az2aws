@@ -176,6 +176,14 @@ You'll be prompted for username, password, and MFA if required. After login, use
 - Use `--mode gui --disable-gpu` on VMs or if rendering fails
 - Set `https_proxy` env var for corporate proxy
 
+#### Troubleshooting
+
+If you see "Unable to recognize page state!", Azure's login pages may have
+changed. Try:
+
+- `--mode gui` or `--mode debug`
+- Filing an issue with the screenshot (`az2aws-unrecognized-state.png`) to help maintainers update selectors
+
 ## Automation
 
 Renew all profiles at once:
