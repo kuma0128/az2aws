@@ -178,6 +178,10 @@ You'll be prompted for username, password, and MFA if required. After login, use
 
 #### Troubleshooting
 
+If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
+Try:
+ `--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
+
 If you see "Unable to recognize page state!", Azure's login pages may have
 changed. Try:
 
