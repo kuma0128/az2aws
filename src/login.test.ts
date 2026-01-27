@@ -635,6 +635,33 @@ describe("login", () => {
         expect.stringContaining("GovCloud region detected in profile")
       );
     });
+
+    it("should log standard region without warning", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+      });
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+
+      expect(console.log).toHaveBeenCalledWith("Using AWS region us-east-1");
+      expect(console.warn).not.toHaveBeenCalled();
+    });
   });
 
   describe("_assumeRoleAsync", () => {
