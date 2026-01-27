@@ -406,6 +406,67 @@ describe("login", () => {
       expect(result.durationHours).toBe(12);
       expect(inquirer.prompt).not.toHaveBeenCalled();
     });
+
+    it("should throw when noPrompt is true and multiple roles have no default", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role1",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider1",
+        },
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role2",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider2",
+        },
+      ];
+
+      await expect(
+        login._askUserForRoleAndDurationAsync(roles, true, "", "1")
+      ).rejects.toThrow(CLIError);
+      await expect(
+        login._askUserForRoleAndDurationAsync(roles, true, "", "1")
+      ).rejects.toThrow(
+        "--no-prompt requires azure_default_role_arn when multiple roles are available."
+      );
+      expect(inquirer.prompt).not.toHaveBeenCalled();
+    });
+
+    it("should select the only role even if default role is not present", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role1",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider1",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "arn:aws:iam::123456789012:role/MissingRole",
+        "1"
+      );
+
+      expect(result.role.roleArn).toBe("arn:aws:iam::123456789012:role/Role1");
+      expect(inquirer.prompt).not.toHaveBeenCalled();
+    });
+
+    it("should default duration to 1 hour when noPrompt and no default duration", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        ""
+      );
+
+      expect(result.durationHours).toBe(1);
+      expect(inquirer.prompt).not.toHaveBeenCalled();
+    });
   });
 
   describe("_loadProfileAsync", () => {
