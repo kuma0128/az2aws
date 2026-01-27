@@ -12,6 +12,8 @@ vi.mock("./awsConfig", () => ({
   awsConfig: {
     getProfileConfigAsync: vi.fn(),
     setProfileCredentialsAsync: vi.fn(),
+    getAllProfileNames: vi.fn(),
+    isProfileAboutToExpireAsync: vi.fn(),
   },
 }));
 
@@ -550,6 +552,471 @@ describe("login", () => {
     });
   });
 
+  describe("loginAsync region logging", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+      ]);
+      vi.spyOn(login, "_askUserForRoleAndDurationAsync").mockResolvedValue({
+        role: {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        durationHours: 1,
+      });
+      vi.spyOn(login, "_assumeRoleAsync").mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should log region defaults when region is not set", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "",
+      });
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+
+      expect(console.log).toHaveBeenCalledWith(
+        "Using AWS region (from AWS SDK defaults)"
+      );
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    it("should warn when GovCloud region is set", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-gov-west-1",
+      });
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+
+      expect(console.log).toHaveBeenCalledWith(
+        "Using AWS region us-gov-west-1"
+      );
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining("GovCloud region detected in profile")
+      );
+    });
+
+    it("should log standard region without warning", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+      });
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+
+      expect(console.log).toHaveBeenCalledWith("Using AWS region us-east-1");
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("loginAsync mode handling", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+      ]);
+      vi.spyOn(login, "_askUserForRoleAndDurationAsync").mockResolvedValue({
+        role: {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        durationHours: 1,
+      });
+      vi.spyOn(login, "_assumeRoleAsync").mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should throw CLIError for invalid mode", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+      });
+
+      await expect(
+        login.loginAsync(
+          "default",
+          "invalid-mode",
+          true,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false
+        )
+      ).rejects.toThrow(CLIError);
+      await expect(
+        login.loginAsync(
+          "default",
+          "invalid-mode",
+          true,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false
+        )
+      ).rejects.toThrow("Invalid mode");
+    });
+
+    it("should use China SAML endpoint for cn- region", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "cn-north-1",
+      });
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+
+      expect(console.log).toHaveBeenCalledWith(
+        "Using AWS SAML endpoint",
+        "https://signin.amazonaws.cn/saml"
+      );
+    });
+
+    it("should use GovCloud SAML endpoint for us-gov- region", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-gov-east-1",
+      });
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+
+      expect(console.log).toHaveBeenCalledWith(
+        "Using AWS SAML endpoint",
+        "https://signin.amazonaws-us-gov.com/saml"
+      );
+    });
+
+    it("should use standard SAML endpoint for standard regions", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "ap-northeast-1",
+      });
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+
+      expect(console.log).toHaveBeenCalledWith(
+        "Using AWS SAML endpoint",
+        "https://signin.aws.amazon.com/saml"
+      );
+    });
+  });
+
+  describe("loginAll", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should return early when profiles is undefined", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(undefined);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+
+      expect(loginAsyncSpy).not.toHaveBeenCalled();
+    });
+
+    it("should iterate over all profiles with forceRefresh=true and skip expiration check", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([
+        "profile1",
+        "profile2",
+      ]);
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(false);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        true, // forceRefresh
+        false,
+        false
+      );
+
+      // When forceRefresh is true, isProfileAboutToExpireAsync should not be called
+      expect(awsConfig.isProfileAboutToExpireAsync).not.toHaveBeenCalled();
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(2);
+      expect(loginAsyncSpy).toHaveBeenCalledWith(
+        "profile1",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+      expect(loginAsyncSpy).toHaveBeenCalledWith(
+        "profile2",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+    });
+
+    it("should skip profiles that are not about to expire when forceRefresh=false", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([
+        "profile1",
+        "profile2",
+        "profile3",
+      ]);
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync)
+        .mockResolvedValueOnce(true) // profile1 is about to expire
+        .mockResolvedValueOnce(false) // profile2 is not
+        .mockResolvedValueOnce(true); // profile3 is about to expire
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false, // forceRefresh
+        false,
+        false
+      );
+
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(2);
+      expect(loginAsyncSpy).toHaveBeenCalledWith(
+        "profile1",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+      expect(loginAsyncSpy).toHaveBeenCalledWith(
+        "profile3",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      );
+    });
+
+    it("should not call loginAsync when all profiles are not about to expire", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([
+        "profile1",
+        "profile2",
+      ]);
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(false);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false, // forceRefresh
+        false,
+        false
+      );
+
+      expect(loginAsyncSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("_askUserForRoleAndDurationAsync error cases", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should throw CLIError when defaultRoleArn is not found in roles", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role1",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider1",
+        },
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role2",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider2",
+        },
+      ];
+
+      await expect(
+        login._askUserForRoleAndDurationAsync(
+          roles,
+          true,
+          "arn:aws:iam::123456789012:role/NonExistentRole",
+          "1"
+        )
+      ).rejects.toThrow(CLIError);
+      await expect(
+        login._askUserForRoleAndDurationAsync(
+          roles,
+          true,
+          "arn:aws:iam::123456789012:role/NonExistentRole",
+          "1"
+        )
+      ).rejects.toThrow("was not found in the SAML response");
+    });
+  });
+
   describe("_assumeRoleAsync", () => {
     const originalEnv = process.env;
 
@@ -571,6 +1038,7 @@ describe("login", () => {
 
     afterEach(() => {
       process.env = originalEnv;
+      vi.restoreAllMocks();
     });
 
     it("should use HttpsProxyAgent with rejectUnauthorized:false when both proxy and noVerifySsl are set", async () => {
@@ -646,6 +1114,99 @@ describe("login", () => {
 
       expect(console.warn).toHaveBeenCalledWith(
         expect.stringContaining("SSL certificate verification is disabled")
+      );
+    });
+
+    it("should not use HttpsProxyAgent when noVerifySsl is true without proxy", async () => {
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        true, // awsNoVerifySsl
+        "us-east-1"
+      );
+
+      // When noVerifySsl is true without proxy, it uses https.Agent instead of HttpsProxyAgent
+      expect(mockHttpsProxyAgent).not.toHaveBeenCalled();
+      expect(awsConfig.setProfileCredentialsAsync).toHaveBeenCalled();
+    });
+
+    it("should return early when Credentials is not returned", async () => {
+      mockSend.mockResolvedValue({});
+
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        false,
+        "us-east-1"
+      );
+
+      expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
+    it("should save credentials with correct values", async () => {
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        2,
+        false,
+        "us-east-1"
+      );
+
+      expect(awsConfig.setProfileCredentialsAsync).toHaveBeenCalledWith(
+        "test-profile",
+        {
+          aws_access_key_id: "AKIAIOSFODNN7EXAMPLE",
+          aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          aws_session_token: "session-token",
+          aws_expiration: "2024-01-01T00:00:00.000Z",
+        }
+      );
+    });
+
+    it("should handle credentials with missing optional fields", async () => {
+      mockSend.mockResolvedValue({
+        Credentials: {
+          AccessKeyId: undefined,
+          SecretAccessKey: undefined,
+          SessionToken: undefined,
+          Expiration: undefined,
+        },
+      });
+
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        false,
+        "us-east-1"
+      );
+
+      expect(awsConfig.setProfileCredentialsAsync).toHaveBeenCalledWith(
+        "test-profile",
+        {
+          aws_access_key_id: "",
+          aws_secret_access_key: "",
+          aws_session_token: "",
+          aws_expiration: "",
+        }
       );
     });
   });

@@ -1153,3 +1153,17 @@ describe("login._parseRolesFromSamlResponse", () => {
   it("should handle UTF-8 encoded content", () => {});
 });
 ```
+
+---
+
+### [RESOLVED] Issue #68: Prettier formatting issues in login files
+
+**Labels:** `code-quality`, `priority: low`
+
+**Description:**
+Prettier detected code style issues in `src/login.ts` and `src/login.test.ts` that caused `yarn lint` to fail.
+
+**Location:** `src/login.ts`, `src/login.test.ts`
+
+**Resolution:**
+Fixed by running `yarn prettier --write` on the affected files.
