@@ -1086,10 +1086,7 @@ export const login = {
       stsOptions = {
         ...stsOptions,
         requestHandler: new NodeHttpHandler({
-          httpsAgent: new HttpsProxyAgent(
-            proxyUrl,
-            proxyOptions
-          ),
+          httpsAgent: new HttpsProxyAgent(proxyUrl, proxyOptions),
         }),
       };
     } else if (awsNoVerifySsl) {
