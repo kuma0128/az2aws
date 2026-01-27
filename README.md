@@ -182,7 +182,7 @@ If you see "Unable to recognize page state!", Azure's login pages may have
 changed. Try:
 
 - `--mode gui` or `--mode debug`
-- Updating selectors by filing an issue with the screenshot (`az2aws-unrecognized-state.png`)
+- Filing an issue with the screenshot (`az2aws-unrecognized-state.png`) to help maintainers update selectors
 
 ## Automation
 
