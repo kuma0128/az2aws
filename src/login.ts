@@ -472,6 +472,16 @@ export const login = {
     }
 
     const profile = await this._loadProfileAsync(profileName);
+    console.log(
+      `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`
+    );
+    if (profile.region && profile.region.startsWith("us-gov")) {
+      console.warn(
+        "GovCloud region detected in profile. Note: Other AWS CLI operations " +
+          "will use your AWS CLI default region. If needed, set it to match " +
+          "this GovCloud region (us-gov-west-1 or us-gov-east-1)."
+      );
+    }
     let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
     if (profile.region && profile.region.startsWith("us-gov")) {
       assertionConsumerServiceURL = AWS_GOV_SAML_ENDPOINT;
@@ -963,7 +973,13 @@ export const login = {
     durationHours: number;
   }> {
     let role;
-    let durationHours = parseInt(defaultDurationHours, 10) || 1;
+    let durationHours = 1;
+    if (defaultDurationHours) {
+      const parsedDuration = parseInt(defaultDurationHours, 10);
+      if (!Number.isNaN(parsedDuration) && parsedDuration > 0) {
+        durationHours = parsedDuration;
+      }
+    }
     const questions: QuestionCollection[] = [];
     if (roles.length === 0) {
       throw new CLIError("No roles found in SAML response.");
@@ -971,11 +987,19 @@ export const login = {
       debug("Choosing the only role in response");
       role = roles[0];
     } else {
-      if (noPrompt && defaultRoleArn) {
-        role = _.find(roles, ["roleArn", defaultRoleArn]);
-      }
+      if (noPrompt) {
+        if (!defaultRoleArn) {
+          throw new CLIError(
+            "--no-prompt requires azure_default_role_arn when multiple roles are available."
+          );
+        }
 
-      if (role) {
+        role = _.find(roles, ["roleArn", defaultRoleArn]);
+        if (!role) {
+          throw new CLIError(
+            `Default role ARN '${defaultRoleArn}' was not found in the SAML response.`
+          );
+        }
         debug("Valid role found. No need to ask.");
       } else {
         debug("Asking user to choose role");
@@ -989,8 +1013,12 @@ export const login = {
       }
     }
 
-    if (noPrompt && defaultDurationHours) {
-      debug("Default durationHours found. No need to ask.");
+    if (noPrompt) {
+      if (!defaultDurationHours) {
+        debug("No default durationHours set. Using 1 hour.");
+      } else {
+        debug("Default durationHours found. No need to ask.");
+      }
     } else {
       questions.push({
         name: "durationHours",
@@ -1000,7 +1028,7 @@ export const login = {
         validate: (input): boolean | string => {
           input = Number(input);
           if (input > 0 && input <= 12) return true;
-          return "Duration hours must be between 0 and 12";
+          return "Duration hours must be between 1 and 12";
         },
       });
     }
