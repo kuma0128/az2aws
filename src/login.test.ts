@@ -423,7 +423,7 @@ describe("login", () => {
       expect(inquirer.prompt).not.toHaveBeenCalled();
     });
 
-    it("should prompt for role selection when noPrompt is true and no default is set", async () => {
+    it("should throw when noPrompt is true and multiple roles have no default", async () => {
       const roles = [
         {
           roleArn: "arn:aws:iam::123456789012:role/Role1",
@@ -435,20 +435,15 @@ describe("login", () => {
         },
       ];
 
-      vi.mocked(inquirer.prompt).mockResolvedValue({
-        role: "arn:aws:iam::123456789012:role/Role2",
-      });
-
-      const result = await login._askUserForRoleAndDurationAsync(
-        roles,
-        true,
-        "",
-        "1"
+      await expect(
+        login._askUserForRoleAndDurationAsync(roles, true, "", "1")
+      ).rejects.toThrow(CLIError);
+      await expect(
+        login._askUserForRoleAndDurationAsync(roles, true, "", "1")
+      ).rejects.toThrow(
+        "--no-prompt requires azure_default_role_arn when multiple roles are available."
       );
-
-      expect(result.role.roleArn).toBe("arn:aws:iam::123456789012:role/Role2");
-      expect(result.durationHours).toBe(1);
-      expect(inquirer.prompt).toHaveBeenCalled();
+      expect(inquirer.prompt).not.toHaveBeenCalled();
     });
 
     it("should select the only role even if default role is not present", async () => {

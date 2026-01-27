@@ -576,7 +576,13 @@ export const login = {
       debug("Choosing the only role in response");
       role = roles[0];
     } else {
-      if (noPrompt && defaultRoleArn) {
+      if (noPrompt) {
+        if (!defaultRoleArn) {
+          throw new CLIError(
+            "--no-prompt requires azure_default_role_arn when multiple roles are available."
+          );
+        }
+
         role = _.find(roles, ["roleArn", defaultRoleArn]);
         if (!role) {
           throw new CLIError(

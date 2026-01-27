@@ -323,6 +323,135 @@ describe("loginStates", () => {
     });
   });
 
+  describe("passwordless handler", () => {
+    const getPasswordlessState = () => states.find((s) => s.name === "passwordless")!;
+
+    it("should click send notification and display auth code", async () => {
+      const mockPage = createMockPage();
+      const mockMessageElement = {};
+      const mockCodeElement = {};
+
+      mockPage.$.mockImplementation((selector: string) => {
+        if (selector === "#idDiv_RemoteNGC_PollingDescription")
+          return Promise.resolve(mockMessageElement);
+        if (selector === "#idRemoteNGC_DisplaySign")
+          return Promise.resolve(mockCodeElement);
+        return Promise.resolve(null);
+      });
+
+      mockPage.evaluate.mockImplementation((_fn: unknown, el: unknown) => {
+        if (el === mockMessageElement)
+          return Promise.resolve("Approve the sign-in request");
+        if (el === mockCodeElement) return Promise.resolve("42");
+        return Promise.resolve("");
+      });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await getPasswordlessState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        false,
+        "",
+        undefined,
+        false
+      );
+
+      expect(mockPage.click).toHaveBeenCalledWith(
+        "input[value='Send notification']"
+      );
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        "#idRemoteNGC_DisplaySign",
+        { visible: true, timeout: 60000 }
+      );
+      expect(consoleSpy).toHaveBeenCalledWith("Approve the sign-in request");
+      expect(consoleSpy).toHaveBeenCalledWith("42");
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        "#idRemoteNGC_DisplaySign",
+        { hidden: true, timeout: 60000 }
+      );
+
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe("TFA instructions handler", () => {
+    const getTfaInstructionsState = () =>
+      states.find((s) => s.name === "TFA instructions")!;
+
+    it("should display description and authentication code", async () => {
+      const mockPage = createMockPage();
+      const mockSelectedElement = {};
+      const mockAuthCodeElement = {};
+
+      mockPage.evaluate.mockImplementation((_fn: unknown, el: unknown) => {
+        if (el === mockSelectedElement)
+          return Promise.resolve("Open your Authenticator app");
+        if (el === mockAuthCodeElement) return Promise.resolve("58");
+        return Promise.resolve("");
+      });
+
+      mockPage.$.mockResolvedValue(mockAuthCodeElement);
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await getTfaInstructionsState().handler(
+        mockPage as never,
+        mockSelectedElement as never,
+        false,
+        "",
+        undefined,
+        false
+      );
+
+      expect(consoleSpy).toHaveBeenCalledWith("Open your Authenticator app");
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        "#idRichContext_DisplaySign",
+        { visible: true, timeout: 5000 }
+      );
+      expect(consoleSpy).toHaveBeenCalledWith("58");
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        "#idDiv_SAOTCAS_Description",
+        { hidden: true, timeout: 60000 }
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it("should handle missing authentication code gracefully", async () => {
+      const mockPage = createMockPage();
+      const mockSelectedElement = {};
+
+      mockPage.evaluate.mockResolvedValue("Open your Authenticator app");
+      mockPage.waitForSelector.mockImplementation((selector: string) => {
+        if (selector === "#idRichContext_DisplaySign") {
+          return Promise.reject(new Error("Timeout"));
+        }
+        return Promise.resolve(undefined);
+      });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await getTfaInstructionsState().handler(
+        mockPage as never,
+        mockSelectedElement as never,
+        false,
+        "",
+        undefined,
+        false
+      );
+
+      expect(consoleSpy).toHaveBeenCalledWith("Open your Authenticator app");
+      // Should not throw, just continue
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        "#idDiv_SAOTCAS_Description",
+        { hidden: true, timeout: 60000 }
+      );
+
+      consoleSpy.mockRestore();
+    });
+  });
+
   describe("TFA failed handler", () => {
     const getTfaFailedState = () => states.find((s) => s.name === "TFA failed")!;
 

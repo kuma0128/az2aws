@@ -222,7 +222,7 @@ export const states: State[] = [
       _selected: ElementHandle,
       noPrompt: boolean,
       _defaultUsername: string,
-      defaultPassword: string
+      defaultPassword: string | undefined
     ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
