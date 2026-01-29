@@ -524,6 +524,77 @@ describe("login", () => {
       expect(result.durationHours).toBe(1);
       expect(inquirer.prompt).not.toHaveBeenCalled();
     });
+
+    it("should default duration to 1 hour when defaultDurationHours is non-numeric", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "invalid"
+      );
+
+      expect(result.durationHours).toBe(1);
+    });
+
+    it("should default duration to 1 hour when defaultDurationHours is zero or negative", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      // Test with "0"
+      let result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "0"
+      );
+      expect(result.durationHours).toBe(1);
+
+      // Test with "-5"
+      result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "-5"
+      );
+      expect(result.durationHours).toBe(1);
+    });
+
+    it("should throw Error when inquirer returns unknown role", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role1",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider1",
+        },
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role2",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider2",
+        },
+      ];
+
+      // Inquirer returns a role ARN that doesn't exist
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        role: "arn:aws:iam::123456789012:role/NonExistentRole",
+        durationHours: "1",
+      });
+
+      const error = await login
+        ._askUserForRoleAndDurationAsync(roles, false, "", "1")
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("Unable to find role");
+    });
   });
 
   describe("_loadProfileAsync", () => {
