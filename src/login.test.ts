@@ -261,6 +261,42 @@ describe("login", () => {
       expect(url.startsWith("https://login.microsoftonline.com/")).toBe(true);
     });
 
+    it("should include appIdUri and AssertionConsumerServiceURL in decoded SAML request", async () => {
+      const appIdUri = "https://verify-app.example.com";
+      const tenantId = "verify-tenant";
+      const assertionConsumerServiceURL =
+        "https://signin.aws.amazon.com/saml";
+
+      const url = await login._createLoginUrlAsync(
+        appIdUri,
+        tenantId,
+        assertionConsumerServiceURL
+      );
+
+      // Extract and decode SAMLRequest
+      const urlObj = new URL(url);
+      const samlRequestEncoded = urlObj.searchParams.get("SAMLRequest");
+      expect(samlRequestEncoded).not.toBeNull();
+
+      const samlRequestBase64 = decodeURIComponent(samlRequestEncoded!);
+      const samlRequestBuffer = Buffer.from(samlRequestBase64, "base64");
+
+      // Inflate the deflated SAML request
+      const zlib = await import("zlib");
+      const samlRequest = await new Promise<string>((resolve, reject) => {
+        zlib.inflateRaw(samlRequestBuffer, (err, result) => {
+          if (err) reject(err);
+          else resolve(result.toString("utf8"));
+        });
+      });
+
+      // Verify SAML request contains expected values
+      expect(samlRequest).toContain(appIdUri);
+      expect(samlRequest).toContain(assertionConsumerServiceURL);
+      expect(samlRequest).toContain("samlp:AuthnRequest");
+      expect(samlRequest).toContain("Issuer");
+    });
+
     it("should work with GovCloud SAML endpoint", async () => {
       const appIdUri = "https://gov-app.example.com";
       const tenantId = "gov-tenant";
