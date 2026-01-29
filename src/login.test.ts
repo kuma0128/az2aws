@@ -48,6 +48,12 @@ vi.mock("mkdirp", () => ({
   default: mockMkdirp,
 }));
 
+vi.mock("bluebird", () => ({
+  default: {
+    delay: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 import inquirer from "inquirer";
 import { awsConfig } from "./awsConfig";
 import { paths } from "./paths";
@@ -1841,6 +1847,135 @@ describe("login", () => {
 
       await expect(promise).rejects.toThrow("SAML response not found");
       expect(mockBrowser.close).toHaveBeenCalled();
+    });
+  });
+
+  describe("_performLoginAsync cliProxy state handling", () => {
+    const originalPaths = { ...paths };
+
+    const createMockPage = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let requestHandler: ((req: any) => void) | null = null;
+      let resolveRequestInterception: (() => void) | null = null;
+      const requestInterceptionReady = new Promise<void>((resolve) => {
+        resolveRequestInterception = resolve;
+      });
+
+      return {
+        setExtraHTTPHeaders: vi.fn().mockResolvedValue(undefined),
+        setViewport: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn().mockImplementation((event: string, handler: unknown) => {
+          if (event === "request") {
+            requestHandler = handler as typeof requestHandler;
+          }
+        }),
+        setRequestInterception: vi.fn().mockImplementation(() => {
+          if (resolveRequestInterception) resolveRequestInterception();
+          return Promise.resolve();
+        }),
+        goto: vi.fn().mockResolvedValue(undefined),
+        waitForNavigation: vi.fn().mockResolvedValue(undefined),
+        $: vi.fn().mockResolvedValue(null),
+        screenshot: vi.fn().mockResolvedValue(undefined),
+        getRequestHandler: () => requestHandler,
+        waitForRequestInterception: () => requestInterceptionReady,
+      };
+    };
+
+    const createMockBrowser = (
+      mockPage: ReturnType<typeof createMockPage>
+    ) => ({
+      pages: vi.fn().mockResolvedValue([mockPage]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      Object.keys(paths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+    });
+
+    afterEach(() => {
+      Object.keys(originalPaths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+    });
+
+    it("should throw CLIError with screenshot when unrecognized page persists beyond timeout", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      // page.$ always returns null (no state recognized)
+      mockPage.$.mockResolvedValue(null);
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true, // headless
+          false,
+          true, // cliProxy=true
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toContain(
+        "Unable to recognize page state!"
+      );
+      expect(mockPage.screenshot).toHaveBeenCalledWith({
+        path: "az2aws-unrecognized-state.png",
+      });
+    });
+
+    it("should continue loop when page.$ throws an error", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      // First few calls throw error, subsequent calls return null
+      let callCount = 0;
+      mockPage.$.mockImplementation(() => {
+        callCount++;
+        if (callCount <= 3) {
+          return Promise.reject(new Error("Page not ready"));
+        }
+        return Promise.resolve(null);
+      });
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true, // cliProxy=true
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toContain(
+        "Unable to recognize page state!"
+      );
+      // Verify page.$ was called multiple times (loop continued after errors)
+      expect(mockPage.$.mock.calls.length).toBeGreaterThan(3);
     });
   });
 });
