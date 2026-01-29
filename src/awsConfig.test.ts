@@ -187,6 +187,92 @@ aws_expiration = ${futureDate.toISOString()}
       const result = await awsConfig.isProfileAboutToExpireAsync("default");
       expect(result).toBe(false);
     });
+
+    // Boundary tests for refreshLimitInMs = 11 * 60 * 1000 (11 minutes)
+    // Using fake timers to ensure deterministic boundary testing
+    describe("boundary tests with fixed time", () => {
+      const FIXED_TIME = new Date("2024-01-15T12:00:00.000Z").getTime();
+      const REFRESH_LIMIT_MS = 11 * 60 * 1000; // 11 minutes
+
+      beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(FIXED_TIME);
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it("should return false at exactly 11 minutes boundary", async () => {
+        const futureDate = new Date(FIXED_TIME + REFRESH_LIMIT_MS); // exactly 11 minutes
+        const credentialsContent = `
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+aws_expiration = ${futureDate.toISOString()}
+`;
+
+        vi.mocked(fs.readFile).mockImplementation(
+          (
+            _path: fs.PathOrFileDescriptor,
+            _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+            callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          ) => {
+            callback(null, credentialsContent);
+          }
+        );
+
+        const result = await awsConfig.isProfileAboutToExpireAsync("default");
+        // At exactly 11 minutes, timeDifference == refreshLimitInMs, so it's NOT less than limit
+        expect(result).toBe(false);
+      });
+
+      it("should return true just before 11 minutes boundary", async () => {
+        const futureDate = new Date(FIXED_TIME + REFRESH_LIMIT_MS - 1); // 11 minutes - 1ms
+        const credentialsContent = `
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+aws_expiration = ${futureDate.toISOString()}
+`;
+
+        vi.mocked(fs.readFile).mockImplementation(
+          (
+            _path: fs.PathOrFileDescriptor,
+            _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+            callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          ) => {
+            callback(null, credentialsContent);
+          }
+        );
+
+        const result = await awsConfig.isProfileAboutToExpireAsync("default");
+        expect(result).toBe(true);
+      });
+
+      it("should return false just after 11 minutes boundary", async () => {
+        const futureDate = new Date(FIXED_TIME + REFRESH_LIMIT_MS + 1); // 11 minutes + 1ms
+        const credentialsContent = `
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+aws_expiration = ${futureDate.toISOString()}
+`;
+
+        vi.mocked(fs.readFile).mockImplementation(
+          (
+            _path: fs.PathOrFileDescriptor,
+            _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+            callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          ) => {
+            callback(null, credentialsContent);
+          }
+        );
+
+        const result = await awsConfig.isProfileAboutToExpireAsync("default");
+        expect(result).toBe(false);
+      });
+    });
   });
 
   describe("getAllProfileNames", () => {
