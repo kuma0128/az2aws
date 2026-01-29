@@ -1184,6 +1184,51 @@ describe("login", () => {
       );
     });
 
+    it("should call assumeRoleWithSAML with correct parameters", async () => {
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-saml-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/MyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/MyProvider",
+        },
+        4, // 4 hours
+        false,
+        "ap-northeast-1"
+      );
+
+      expect(mockSend).toHaveBeenCalledWith({
+        PrincipalArn: "arn:aws:iam::123456789012:saml-provider/MyProvider",
+        RoleArn: "arn:aws:iam::123456789012:role/MyRole",
+        SAMLAssertion: "base64-saml-assertion",
+        DurationSeconds: 14400, // 4 * 60 * 60
+      });
+    });
+
+    it("should propagate STS error when assumeRoleWithSAML fails", async () => {
+      const stsError = new Error("Access denied");
+      mockSend.mockRejectedValue(stsError);
+
+      const error = await login
+        ._assumeRoleAsync(
+          "test-profile",
+          "base64-assertion",
+          {
+            roleArn: "arn:aws:iam::123456789012:role/TestRole",
+            principalArn:
+              "arn:aws:iam::123456789012:saml-provider/TestProvider",
+          },
+          1,
+          false,
+          "us-east-1"
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(stsError);
+      expect((error as Error).message).toBe("Access denied");
+      expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
     it("should handle credentials with missing optional fields", async () => {
       mockSend.mockResolvedValue({
         Credentials: {
