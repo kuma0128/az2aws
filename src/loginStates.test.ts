@@ -150,6 +150,43 @@ describe("loginStates", () => {
       expect(consoleSpy).toHaveBeenCalledWith("Error message");
       consoleSpy.mockRestore();
     });
+
+    it("should wait for input, focus, clear, type, and submit", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+
+      await getUsernameState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        true,
+        "test@example.com",
+        undefined,
+        false
+      );
+
+      // Should wait for username input to be visible
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        'input[name="loginfmt"]',
+        { visible: true, timeout: 60000 }
+      );
+
+      // Should focus on username input
+      expect(mockPage.focus).toHaveBeenCalledWith('input[name="loginfmt"]');
+
+      // Should clear input with 100 backspaces
+      expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
+      expect(mockPage.keyboard.press).toHaveBeenCalledTimes(100);
+
+      // Should type username
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith("test@example.com");
+
+      // Should wait for submit button and click
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        "input[type=submit]",
+        { visible: true, timeout: 60000 }
+      );
+      expect(mockPage.click).toHaveBeenCalledWith("input[type=submit]");
+    });
   });
 
   describe("password input handler", () => {
@@ -215,6 +252,54 @@ describe("loginStates", () => {
 
       expect(inquirer.prompt).toHaveBeenCalled();
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("userPassword");
+    });
+
+    it("should prompt for password when noPrompt is true but defaultPassword is empty", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        password: "promptedPassword",
+      });
+
+      await getPasswordState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        true, // noPrompt
+        "",
+        "", // empty defaultPassword
+        false
+      );
+
+      // Should still prompt because defaultPassword is empty
+      expect(inquirer.prompt).toHaveBeenCalled();
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith("promptedPassword");
+    });
+
+    it("should focus, type password, and submit form", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+
+      await getPasswordState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        true,
+        "",
+        "testPassword",
+        false
+      );
+
+      // Should focus on password input
+      expect(mockPage.focus).toHaveBeenCalledWith(
+        'input[name="Password"],input[name="passwd"]'
+      );
+
+      // Should type password
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith("testPassword");
+
+      // Should click submit
+      expect(mockPage.click).toHaveBeenCalledWith(
+        "span[class=submit],input[type=submit]"
+      );
     });
   });
 
@@ -295,6 +380,43 @@ describe("loginStates", () => {
 
       expect(inquirer.prompt).toHaveBeenCalled();
       expect(mockPage.click).toHaveBeenCalledWith("#msaTileTitle");
+      consoleSpy.mockRestore();
+    });
+
+    it("should throw Error when inquirer returns unknown account", async () => {
+      const mockPage = createMockPage();
+      const mockAadTile = {};
+      const mockMsaTile = {};
+      mockPage.$.mockImplementation((selector: string) => {
+        if (selector === "#aadTileTitle") return Promise.resolve(mockAadTile);
+        if (selector === "#msaTileTitle") return Promise.resolve(mockMsaTile);
+        return Promise.resolve(null);
+      });
+      mockPage.evaluate.mockImplementation((_fn: unknown, el: unknown) => {
+        if (el === mockAadTile) return Promise.resolve("Work Account");
+        if (el === mockMsaTile) return Promise.resolve("Personal Account");
+        return Promise.resolve("");
+      });
+      // Return an account that doesn't exist in the list
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        account: "Non-Existent Account",
+      });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      const error = await getAccountSelectionState()
+        .handler(
+          mockPage as never,
+          createMockElementHandle() as never,
+          false,
+          "",
+          undefined,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("Unable to find account");
       consoleSpy.mockRestore();
     });
   });
