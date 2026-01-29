@@ -295,13 +295,13 @@ describe("login", () => {
     });
 
     it("should throw CLIError when no roles are provided", async () => {
-      await expect(
-        login._askUserForRoleAndDurationAsync([], false, "", "1")
-      ).rejects.toThrow(CLIError);
-
-      await expect(
-        login._askUserForRoleAndDurationAsync([], false, "", "1")
-      ).rejects.toThrow("No roles found in SAML response.");
+      const error = await login
+        ._askUserForRoleAndDurationAsync([], false, "", "1")
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "No roles found in SAML response."
+      );
     });
 
     it("should return the only role when single role is provided", async () => {
@@ -435,12 +435,11 @@ describe("login", () => {
         },
       ];
 
-      await expect(
-        login._askUserForRoleAndDurationAsync(roles, true, "", "1")
-      ).rejects.toThrow(CLIError);
-      await expect(
-        login._askUserForRoleAndDurationAsync(roles, true, "", "1")
-      ).rejects.toThrow(
+      const error = await login
+        ._askUserForRoleAndDurationAsync(roles, true, "", "1")
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
         "--no-prompt requires azure_default_role_arn when multiple roles are available."
       );
       expect(inquirer.prompt).not.toHaveBeenCalled();
@@ -496,15 +495,17 @@ describe("login", () => {
 
     afterEach(() => {
       process.env = originalEnv;
+      vi.restoreAllMocks();
     });
 
     it("should throw CLIError when profile does not exist", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
 
-      await expect(login._loadProfileAsync("nonexistent")).rejects.toThrow(
-        CLIError
-      );
-      await expect(login._loadProfileAsync("nonexistent")).rejects.toThrow(
+      const error = await login
+        ._loadProfileAsync("nonexistent")
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
         "Unknown profile 'nonexistent'. You must configure it first with --configure."
       );
     });
@@ -520,10 +521,11 @@ describe("login", () => {
         region: "",
       });
 
-      await expect(login._loadProfileAsync("incomplete")).rejects.toThrow(
-        CLIError
-      );
-      await expect(login._loadProfileAsync("incomplete")).rejects.toThrow(
+      const error = await login
+        ._loadProfileAsync("incomplete")
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
         "Profile 'incomplete' is not configured properly."
       );
     });
@@ -717,8 +719,8 @@ describe("login", () => {
         region: "us-east-1",
       });
 
-      await expect(
-        login.loginAsync(
+      const error = await login
+        .loginAsync(
           "default",
           "invalid-mode",
           true,
@@ -729,20 +731,9 @@ describe("login", () => {
           false,
           false
         )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        login.loginAsync(
-          "default",
-          "invalid-mode",
-          true,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false
-        )
-      ).rejects.toThrow("Invalid mode");
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe("Invalid mode");
     });
 
     it("should use China SAML endpoint for cn- region", async () => {
@@ -1012,22 +1003,18 @@ describe("login", () => {
         },
       ];
 
-      await expect(
-        login._askUserForRoleAndDurationAsync(
+      const error = await login
+        ._askUserForRoleAndDurationAsync(
           roles,
           true,
           "arn:aws:iam::123456789012:role/NonExistentRole",
           "1"
         )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        login._askUserForRoleAndDurationAsync(
-          roles,
-          true,
-          "arn:aws:iam::123456789012:role/NonExistentRole",
-          "1"
-        )
-      ).rejects.toThrow("was not found in the SAML response");
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toContain(
+        "was not found in the SAML response"
+      );
     });
   });
 
@@ -1779,6 +1766,81 @@ describe("login", () => {
       }
 
       await expect(promise).rejects.toThrow("SAML response not found");
+    });
+
+    it("should close browser when SAML response is received successfully", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      // Simulate a valid SAML response
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=validBase64EncodedSaml",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      const result = await promise;
+      expect(result).toBe("validBase64EncodedSaml");
+      // Browser is closed by SAML request handler when response is received
+      expect(mockBrowser.close).toHaveBeenCalled();
+    });
+
+    it("should close browser when puppeteer launch succeeds but SAML response is missing", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => undefined,
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      await expect(promise).rejects.toThrow("SAML response not found");
+      expect(mockBrowser.close).toHaveBeenCalled();
     });
   });
 });

@@ -226,8 +226,8 @@ describe("loginStates", () => {
       const mockPage = createMockPage();
       mockPage.$.mockResolvedValue(null); // Neither aadTile nor msaTile found
 
-      await expect(
-        getAccountSelectionState().handler(
+      const error = await getAccountSelectionState()
+        .handler(
           mockPage as never,
           createMockElementHandle() as never,
           false,
@@ -235,17 +235,11 @@ describe("loginStates", () => {
           undefined,
           false
         )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        getAccountSelectionState().handler(
-          mockPage as never,
-          createMockElementHandle() as never,
-          false,
-          "",
-          undefined,
-          false
-        )
-      ).rejects.toThrow("No accounts found on account selection screen.");
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "No accounts found on account selection screen."
+      );
     });
 
     it("should auto-select when only one account is found", async () => {
@@ -481,8 +475,8 @@ describe("loginStates", () => {
         "Authentication failed. Please try again."
       );
 
-      await expect(
-        getTfaFailedState().handler(
+      const error = await getTfaFailedState()
+        .handler(
           mockPage as never,
           mockElement as never,
           false,
@@ -490,17 +484,11 @@ describe("loginStates", () => {
           undefined,
           false
         )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        getTfaFailedState().handler(
-          mockPage as never,
-          mockElement as never,
-          false,
-          "",
-          undefined,
-          false
-        )
-      ).rejects.toThrow("Authentication failed. Please try again.");
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Authentication failed. Please try again."
+      );
     });
   });
 
@@ -513,8 +501,8 @@ describe("loginStates", () => {
       const mockElement = {};
       mockPage.evaluate.mockResolvedValue("Service temporarily unavailable");
 
-      await expect(
-        getServiceExceptionState().handler(
+      const error = await getServiceExceptionState()
+        .handler(
           mockPage as never,
           mockElement as never,
           false,
@@ -522,17 +510,11 @@ describe("loginStates", () => {
           undefined,
           false
         )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        getServiceExceptionState().handler(
-          mockPage as never,
-          mockElement as never,
-          false,
-          "",
-          undefined,
-          false
-        )
-      ).rejects.toThrow("Service temporarily unavailable");
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Service temporarily unavailable"
+      );
     });
   });
 
@@ -583,6 +565,52 @@ describe("loginStates", () => {
 
       expect(consoleSpy).toHaveBeenCalledWith("Invalid code");
       consoleSpy.mockRestore();
+    });
+
+    it("should wait for form submission to finish after clicking submit", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        verificationCode: "123456",
+      });
+
+      await getTfaCodeInputState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        false,
+        "",
+        undefined,
+        false
+      );
+
+      // Verify waitForSelector was called with correct selectors for form completion
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        "input[name=otc].has-error,input[name=otc].moveOffScreen",
+        { timeout: 60000 }
+      );
+    });
+
+    it("should focus on input and clear before typing verification code", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        verificationCode: "999999",
+      });
+
+      await getTfaCodeInputState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        false,
+        "",
+        undefined,
+        false
+      );
+
+      expect(mockPage.focus).toHaveBeenCalledWith('input[name="otc"]');
+      // Should press Backspace 100 times to clear input
+      expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
+      expect(mockPage.keyboard.press).toHaveBeenCalledTimes(100);
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith("999999");
     });
   });
 });
