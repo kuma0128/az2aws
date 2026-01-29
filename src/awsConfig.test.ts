@@ -346,6 +346,119 @@ region = eu-west-1
         "Permission denied"
       );
     });
+
+    it("should return parsed INI data with correct structure for multiple sections", async () => {
+      const configContent = `
+[default]
+azure_tenant_id = default-tenant
+region = us-east-1
+
+[profile dev]
+azure_tenant_id = dev-tenant
+azure_app_id_uri = https://dev.example.com
+region = us-west-2
+
+[profile prod]
+azure_tenant_id = prod-tenant
+azure_app_id_uri = https://prod.example.com
+region = eu-west-1
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+        ) => {
+          callback(null, configContent);
+        }
+      );
+
+      const result =
+        await awsConfig._loadAsync<Record<string, Record<string, string>>>(
+          "config"
+        );
+
+      expect(result).toBeDefined();
+      expect(result?.default).toEqual({
+        azure_tenant_id: "default-tenant",
+        region: "us-east-1",
+      });
+      expect(result?.["profile dev"]).toEqual({
+        azure_tenant_id: "dev-tenant",
+        azure_app_id_uri: "https://dev.example.com",
+        region: "us-west-2",
+      });
+      expect(result?.["profile prod"]).toEqual({
+        azure_tenant_id: "prod-tenant",
+        azure_app_id_uri: "https://prod.example.com",
+        region: "eu-west-1",
+      });
+    });
+
+    it("should return empty object for empty file content", async () => {
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+        ) => {
+          callback(null, "");
+        }
+      );
+
+      const result = await awsConfig._loadAsync<Record<string, unknown>>("config");
+      expect(result).toEqual({});
+    });
+
+    it("should parse INI with special characters in values", async () => {
+      const credentialsContent = `
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+        ) => {
+          callback(null, credentialsContent);
+        }
+      );
+
+      const result =
+        await awsConfig._loadAsync<Record<string, Record<string, string>>>(
+          "credentials"
+        );
+
+      expect(result?.default.aws_access_key_id).toBe("AKIAIOSFODNN7EXAMPLE");
+      expect(result?.default.aws_secret_access_key).toBe(
+        "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+      );
+      expect(result?.default.aws_session_token).toBe(
+        "FwoGZXIvYXdzEBYaDH+token/with+special==chars"
+      );
+    });
+
+    it("should return undefined for non-existent file (ENOENT)", async () => {
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+        ) => {
+          const error = new Error("ENOENT") as NodeJS.ErrnoException;
+          error.code = "ENOENT";
+          callback(error);
+        }
+      );
+
+      const result = await awsConfig._loadAsync("config");
+      expect(result).toBeUndefined();
+    });
   });
 
   describe("_saveAsync", () => {
