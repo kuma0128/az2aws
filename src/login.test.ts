@@ -1093,6 +1093,39 @@ describe("login", () => {
 
       expect(loginAsyncSpy).not.toHaveBeenCalled();
     });
+
+    it("should propagate error when loginAsync throws", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(["profile1"]);
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(true);
+      const loginError = new Error("Login failed");
+      vi.spyOn(login, "loginAsync").mockRejectedValue(loginError);
+
+      const error = await login
+        .loginAll("cli", true, true, false, false, false, true, false, false)
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(loginError);
+      expect((error as Error).message).toBe("Login failed");
+    });
+
+    it("should propagate error when isProfileAboutToExpireAsync throws", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(["profile1"]);
+      const expireError = new Error("Failed to check expiration");
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockRejectedValue(
+        expireError
+      );
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      const error = await login
+        .loginAll("cli", true, true, false, false, false, false, false, false)
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(expireError);
+      expect((error as Error).message).toBe("Failed to check expiration");
+      expect(loginAsyncSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe("_askUserForRoleAndDurationAsync error cases", () => {
