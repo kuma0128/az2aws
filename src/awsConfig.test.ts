@@ -273,6 +273,52 @@ aws_expiration = ${futureDate.toISOString()}
         expect(result).toBe(false);
       });
     });
+
+    it("should return true when aws_expiration is invalid date string", async () => {
+      const credentialsContent = `
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+aws_expiration = invalid-date-string
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+        ) => {
+          callback(null, credentialsContent);
+        }
+      );
+
+      const result = await awsConfig.isProfileAboutToExpireAsync("default");
+      // Invalid Date results in NaN - treat as expired for safety
+      expect(result).toBe(true);
+    });
+
+    it("should return true when aws_expiration is empty string", async () => {
+      const credentialsContent = `
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+aws_expiration =
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+        ) => {
+          callback(null, credentialsContent);
+        }
+      );
+
+      const result = await awsConfig.isProfileAboutToExpireAsync("default");
+      // Empty string results in Invalid Date (NaN) - treat as expired for safety
+      expect(result).toBe(true);
+    });
   });
 
   describe("getAllProfileNames", () => {
@@ -374,10 +420,9 @@ region = eu-west-1
         }
       );
 
-      const result =
-        await awsConfig._loadAsync<Record<string, Record<string, string>>>(
-          "config"
-        );
+      const result = await awsConfig._loadAsync<
+        Record<string, Record<string, string>>
+      >("config");
 
       expect(result).toBeDefined();
       expect(result?.default).toEqual({
@@ -407,7 +452,9 @@ region = eu-west-1
         }
       );
 
-      const result = await awsConfig._loadAsync<Record<string, unknown>>("config");
+      const result = await awsConfig._loadAsync<Record<string, unknown>>(
+        "config"
+      );
       expect(result).toEqual({});
     });
 
@@ -429,10 +476,9 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         }
       );
 
-      const result =
-        await awsConfig._loadAsync<Record<string, Record<string, string>>>(
-          "credentials"
-        );
+      const result = await awsConfig._loadAsync<
+        Record<string, Record<string, string>>
+      >("credentials");
 
       expect(result?.default.aws_access_key_id).toBe("AKIAIOSFODNN7EXAMPLE");
       expect(result?.default.aws_secret_access_key).toBe(
@@ -538,7 +584,9 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
       expect(writtenData).toContain("[default]");
       expect(writtenData).not.toContain("[profile default]");
       expect(writtenData).toContain("azure_tenant_id=new-tenant");
-      expect(writtenData).toContain("azure_app_id_uri=https://new-app.example.com");
+      expect(writtenData).toContain(
+        "azure_app_id_uri=https://new-app.example.com"
+      );
       expect(writtenData).toContain("azure_default_remember_me=true");
     });
 
@@ -631,7 +679,9 @@ custom_field = should-be-preserved
       expect(fs.writeFile).toHaveBeenCalled();
       // Should update existing values
       expect(writtenData).toContain("azure_tenant_id=updated-tenant");
-      expect(writtenData).toContain("azure_app_id_uri=https://updated-app.example.com");
+      expect(writtenData).toContain(
+        "azure_app_id_uri=https://updated-app.example.com"
+      );
       // Should preserve custom fields
       expect(writtenData).toContain("custom_field=should-be-preserved");
     });

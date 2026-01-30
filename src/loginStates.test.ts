@@ -651,6 +651,8 @@ describe("loginStates", () => {
         verificationCode: "123456",
       });
 
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
       await getTfaCodeInputState().handler(
         mockPage as never,
         createMockElementHandle() as never,
@@ -663,6 +665,7 @@ describe("loginStates", () => {
       expect(inquirer.prompt).toHaveBeenCalled();
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("123456");
       expect(mockPage.click).toHaveBeenCalledWith("input[type=submit]");
+      consoleSpy.mockRestore();
     });
 
     it("should display error message when present", async () => {
@@ -696,6 +699,8 @@ describe("loginStates", () => {
         verificationCode: "123456",
       });
 
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
       await getTfaCodeInputState().handler(
         mockPage as never,
         createMockElementHandle() as never,
@@ -710,6 +715,7 @@ describe("loginStates", () => {
         "input[name=otc].has-error,input[name=otc].moveOffScreen",
         { timeout: 60000 }
       );
+      consoleSpy.mockRestore();
     });
 
     it("should focus on input and clear before typing verification code", async () => {
@@ -718,6 +724,8 @@ describe("loginStates", () => {
       vi.mocked(inquirer.prompt).mockResolvedValue({
         verificationCode: "999999",
       });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       await getTfaCodeInputState().handler(
         mockPage as never,
@@ -733,6 +741,7 @@ describe("loginStates", () => {
       expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
       expect(mockPage.keyboard.press).toHaveBeenCalledTimes(100);
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("999999");
+      consoleSpy.mockRestore();
     });
   });
 });
