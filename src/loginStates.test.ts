@@ -150,6 +150,43 @@ describe("loginStates", () => {
       expect(consoleSpy).toHaveBeenCalledWith("Error message");
       consoleSpy.mockRestore();
     });
+
+    it("should wait for input, focus, clear, type, and submit", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+
+      await getUsernameState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        true,
+        "test@example.com",
+        undefined,
+        false
+      );
+
+      // Should wait for username input to be visible
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        'input[name="loginfmt"]',
+        { visible: true, timeout: 60000 }
+      );
+
+      // Should focus on username input
+      expect(mockPage.focus).toHaveBeenCalledWith('input[name="loginfmt"]');
+
+      // Should clear input with 100 backspaces
+      expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
+      expect(mockPage.keyboard.press).toHaveBeenCalledTimes(100);
+
+      // Should type username
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith("test@example.com");
+
+      // Should wait for submit button and click
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        "input[type=submit]",
+        { visible: true, timeout: 60000 }
+      );
+      expect(mockPage.click).toHaveBeenCalledWith("input[type=submit]");
+    });
   });
 
   describe("password input handler", () => {
@@ -216,6 +253,54 @@ describe("loginStates", () => {
       expect(inquirer.prompt).toHaveBeenCalled();
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("userPassword");
     });
+
+    it("should prompt for password when noPrompt is true but defaultPassword is empty", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        password: "promptedPassword",
+      });
+
+      await getPasswordState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        true, // noPrompt
+        "",
+        "", // empty defaultPassword
+        false
+      );
+
+      // Should still prompt because defaultPassword is empty
+      expect(inquirer.prompt).toHaveBeenCalled();
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith("promptedPassword");
+    });
+
+    it("should focus, type password, and submit form", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+
+      await getPasswordState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        true,
+        "",
+        "testPassword",
+        false
+      );
+
+      // Should focus on password input
+      expect(mockPage.focus).toHaveBeenCalledWith(
+        'input[name="Password"],input[name="passwd"]'
+      );
+
+      // Should type password
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith("testPassword");
+
+      // Should click submit
+      expect(mockPage.click).toHaveBeenCalledWith(
+        "span[class=submit],input[type=submit]"
+      );
+    });
   });
 
   describe("account selection handler", () => {
@@ -226,8 +311,8 @@ describe("loginStates", () => {
       const mockPage = createMockPage();
       mockPage.$.mockResolvedValue(null); // Neither aadTile nor msaTile found
 
-      await expect(
-        getAccountSelectionState().handler(
+      const error = await getAccountSelectionState()
+        .handler(
           mockPage as never,
           createMockElementHandle() as never,
           false,
@@ -235,17 +320,11 @@ describe("loginStates", () => {
           undefined,
           false
         )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        getAccountSelectionState().handler(
-          mockPage as never,
-          createMockElementHandle() as never,
-          false,
-          "",
-          undefined,
-          false
-        )
-      ).rejects.toThrow("No accounts found on account selection screen.");
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "No accounts found on account selection screen."
+      );
     });
 
     it("should auto-select when only one account is found", async () => {
@@ -301,6 +380,43 @@ describe("loginStates", () => {
 
       expect(inquirer.prompt).toHaveBeenCalled();
       expect(mockPage.click).toHaveBeenCalledWith("#msaTileTitle");
+      consoleSpy.mockRestore();
+    });
+
+    it("should throw Error when inquirer returns unknown account", async () => {
+      const mockPage = createMockPage();
+      const mockAadTile = {};
+      const mockMsaTile = {};
+      mockPage.$.mockImplementation((selector: string) => {
+        if (selector === "#aadTileTitle") return Promise.resolve(mockAadTile);
+        if (selector === "#msaTileTitle") return Promise.resolve(mockMsaTile);
+        return Promise.resolve(null);
+      });
+      mockPage.evaluate.mockImplementation((_fn: unknown, el: unknown) => {
+        if (el === mockAadTile) return Promise.resolve("Work Account");
+        if (el === mockMsaTile) return Promise.resolve("Personal Account");
+        return Promise.resolve("");
+      });
+      // Return an account that doesn't exist in the list
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        account: "Non-Existent Account",
+      });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      const error = await getAccountSelectionState()
+        .handler(
+          mockPage as never,
+          createMockElementHandle() as never,
+          false,
+          "",
+          undefined,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("Unable to find account");
       consoleSpy.mockRestore();
     });
   });
@@ -481,8 +597,8 @@ describe("loginStates", () => {
         "Authentication failed. Please try again."
       );
 
-      await expect(
-        getTfaFailedState().handler(
+      const error = await getTfaFailedState()
+        .handler(
           mockPage as never,
           mockElement as never,
           false,
@@ -490,17 +606,11 @@ describe("loginStates", () => {
           undefined,
           false
         )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        getTfaFailedState().handler(
-          mockPage as never,
-          mockElement as never,
-          false,
-          "",
-          undefined,
-          false
-        )
-      ).rejects.toThrow("Authentication failed. Please try again.");
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Authentication failed. Please try again."
+      );
     });
   });
 
@@ -513,8 +623,8 @@ describe("loginStates", () => {
       const mockElement = {};
       mockPage.evaluate.mockResolvedValue("Service temporarily unavailable");
 
-      await expect(
-        getServiceExceptionState().handler(
+      const error = await getServiceExceptionState()
+        .handler(
           mockPage as never,
           mockElement as never,
           false,
@@ -522,17 +632,11 @@ describe("loginStates", () => {
           undefined,
           false
         )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        getServiceExceptionState().handler(
-          mockPage as never,
-          mockElement as never,
-          false,
-          "",
-          undefined,
-          false
-        )
-      ).rejects.toThrow("Service temporarily unavailable");
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Service temporarily unavailable"
+      );
     });
   });
 
@@ -547,6 +651,8 @@ describe("loginStates", () => {
         verificationCode: "123456",
       });
 
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
       await getTfaCodeInputState().handler(
         mockPage as never,
         createMockElementHandle() as never,
@@ -559,6 +665,7 @@ describe("loginStates", () => {
       expect(inquirer.prompt).toHaveBeenCalled();
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("123456");
       expect(mockPage.click).toHaveBeenCalledWith("input[type=submit]");
+      consoleSpy.mockRestore();
     });
 
     it("should display error message when present", async () => {
@@ -582,6 +689,58 @@ describe("loginStates", () => {
       );
 
       expect(consoleSpy).toHaveBeenCalledWith("Invalid code");
+      consoleSpy.mockRestore();
+    });
+
+    it("should wait for form submission to finish after clicking submit", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        verificationCode: "123456",
+      });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await getTfaCodeInputState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        false,
+        "",
+        undefined,
+        false
+      );
+
+      // Verify waitForSelector was called with correct selectors for form completion
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith(
+        "input[name=otc].has-error,input[name=otc].moveOffScreen",
+        { timeout: 60000 }
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it("should focus on input and clear before typing verification code", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        verificationCode: "999999",
+      });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await getTfaCodeInputState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        false,
+        "",
+        undefined,
+        false
+      );
+
+      expect(mockPage.focus).toHaveBeenCalledWith('input[name="otc"]');
+      // Should press Backspace 100 times to clear input
+      expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
+      expect(mockPage.keyboard.press).toHaveBeenCalledTimes(100);
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith("999999");
       consoleSpy.mockRestore();
     });
   });

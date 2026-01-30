@@ -48,6 +48,12 @@ vi.mock("mkdirp", () => ({
   default: mockMkdirp,
 }));
 
+vi.mock("bluebird", () => ({
+  default: {
+    delay: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 import inquirer from "inquirer";
 import { awsConfig } from "./awsConfig";
 import { paths } from "./paths";
@@ -239,9 +245,9 @@ describe("login", () => {
       expect(url).toContain("SAMLRequest=");
     });
 
-    it("should include the app ID URI in the SAML request", async () => {
-      const appIdUri = "https://my-app.example.com";
-      const tenantId = "my-tenant";
+    it("should include appIdUri and AssertionConsumerServiceURL in decoded SAML request", async () => {
+      const appIdUri = "https://verify-app.example.com";
+      const tenantId = "verify-tenant";
       const assertionConsumerServiceURL = "https://signin.aws.amazon.com/saml";
 
       const url = await login._createLoginUrlAsync(
@@ -250,9 +256,28 @@ describe("login", () => {
         assertionConsumerServiceURL
       );
 
-      expect(url).toBeDefined();
-      expect(typeof url).toBe("string");
-      expect(url.startsWith("https://login.microsoftonline.com/")).toBe(true);
+      // Extract and decode SAMLRequest
+      const urlObj = new URL(url);
+      const samlRequestEncoded = urlObj.searchParams.get("SAMLRequest");
+      expect(samlRequestEncoded).not.toBeNull();
+
+      const samlRequestBase64 = decodeURIComponent(samlRequestEncoded!);
+      const samlRequestBuffer = Buffer.from(samlRequestBase64, "base64");
+
+      // Inflate the deflated SAML request
+      const zlib = await import("zlib");
+      const samlRequest = await new Promise<string>((resolve, reject) => {
+        zlib.inflateRaw(samlRequestBuffer, (err, result) => {
+          if (err) reject(err);
+          else resolve(result.toString("utf8"));
+        });
+      });
+
+      // Verify SAML request contains expected values
+      expect(samlRequest).toContain(appIdUri);
+      expect(samlRequest).toContain(assertionConsumerServiceURL);
+      expect(samlRequest).toContain("samlp:AuthnRequest");
+      expect(samlRequest).toContain("Issuer");
     });
 
     it("should work with GovCloud SAML endpoint", async () => {
@@ -287,6 +312,11 @@ describe("login", () => {
         `https://login.microsoftonline.com/${tenantId}/saml2`
       );
     });
+
+    // Note: zlib.deflateRaw error path test is skipped because:
+    // - ESM modules don't allow spying on Node.js built-in modules
+    // - The error path is trivial (just rejects with the zlib error)
+    // - The implementation at login.ts:246-249 simply passes the error to reject()
   });
 
   describe("_askUserForRoleAndDurationAsync", () => {
@@ -295,13 +325,13 @@ describe("login", () => {
     });
 
     it("should throw CLIError when no roles are provided", async () => {
-      await expect(
-        login._askUserForRoleAndDurationAsync([], false, "", "1")
-      ).rejects.toThrow(CLIError);
-
-      await expect(
-        login._askUserForRoleAndDurationAsync([], false, "", "1")
-      ).rejects.toThrow("No roles found in SAML response.");
+      const error = await login
+        ._askUserForRoleAndDurationAsync([], false, "", "1")
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "No roles found in SAML response."
+      );
     });
 
     it("should return the only role when single role is provided", async () => {
@@ -435,12 +465,11 @@ describe("login", () => {
         },
       ];
 
-      await expect(
-        login._askUserForRoleAndDurationAsync(roles, true, "", "1")
-      ).rejects.toThrow(CLIError);
-      await expect(
-        login._askUserForRoleAndDurationAsync(roles, true, "", "1")
-      ).rejects.toThrow(
+      const error = await login
+        ._askUserForRoleAndDurationAsync(roles, true, "", "1")
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
         "--no-prompt requires azure_default_role_arn when multiple roles are available."
       );
       expect(inquirer.prompt).not.toHaveBeenCalled();
@@ -483,6 +512,77 @@ describe("login", () => {
       expect(result.durationHours).toBe(1);
       expect(inquirer.prompt).not.toHaveBeenCalled();
     });
+
+    it("should default duration to 1 hour when defaultDurationHours is non-numeric", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "invalid"
+      );
+
+      expect(result.durationHours).toBe(1);
+    });
+
+    it("should default duration to 1 hour when defaultDurationHours is zero or negative", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      // Test with "0"
+      let result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "0"
+      );
+      expect(result.durationHours).toBe(1);
+
+      // Test with "-5"
+      result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "-5"
+      );
+      expect(result.durationHours).toBe(1);
+    });
+
+    it("should throw Error when inquirer returns unknown role", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role1",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider1",
+        },
+        {
+          roleArn: "arn:aws:iam::123456789012:role/Role2",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider2",
+        },
+      ];
+
+      // Inquirer returns a role ARN that doesn't exist
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        role: "arn:aws:iam::123456789012:role/NonExistentRole",
+        durationHours: "1",
+      });
+
+      const error = await login
+        ._askUserForRoleAndDurationAsync(roles, false, "", "1")
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("Unable to find role");
+    });
   });
 
   describe("_loadProfileAsync", () => {
@@ -496,15 +596,17 @@ describe("login", () => {
 
     afterEach(() => {
       process.env = originalEnv;
+      vi.restoreAllMocks();
     });
 
     it("should throw CLIError when profile does not exist", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
 
-      await expect(login._loadProfileAsync("nonexistent")).rejects.toThrow(
-        CLIError
-      );
-      await expect(login._loadProfileAsync("nonexistent")).rejects.toThrow(
+      const error = await login
+        ._loadProfileAsync("nonexistent")
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
         "Unknown profile 'nonexistent'. You must configure it first with --configure."
       );
     });
@@ -520,10 +622,11 @@ describe("login", () => {
         region: "",
       });
 
-      await expect(login._loadProfileAsync("incomplete")).rejects.toThrow(
-        CLIError
-      );
-      await expect(login._loadProfileAsync("incomplete")).rejects.toThrow(
+      const error = await login
+        ._loadProfileAsync("incomplete")
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
         "Profile 'incomplete' is not configured properly."
       );
     });
@@ -717,8 +820,8 @@ describe("login", () => {
         region: "us-east-1",
       });
 
-      await expect(
-        login.loginAsync(
+      const error = await login
+        .loginAsync(
           "default",
           "invalid-mode",
           true,
@@ -729,20 +832,9 @@ describe("login", () => {
           false,
           false
         )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        login.loginAsync(
-          "default",
-          "invalid-mode",
-          true,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false
-        )
-      ).rejects.toThrow("Invalid mode");
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe("Invalid mode");
     });
 
     it("should use China SAML endpoint for cn- region", async () => {
@@ -989,6 +1081,39 @@ describe("login", () => {
 
       expect(loginAsyncSpy).not.toHaveBeenCalled();
     });
+
+    it("should propagate error when loginAsync throws", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(["profile1"]);
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(true);
+      const loginError = new Error("Login failed");
+      vi.spyOn(login, "loginAsync").mockRejectedValue(loginError);
+
+      const error = await login
+        .loginAll("cli", true, true, false, false, false, true, false, false)
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(loginError);
+      expect((error as Error).message).toBe("Login failed");
+    });
+
+    it("should propagate error when isProfileAboutToExpireAsync throws", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(["profile1"]);
+      const expireError = new Error("Failed to check expiration");
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockRejectedValue(
+        expireError
+      );
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      const error = await login
+        .loginAll("cli", true, true, false, false, false, false, false, false)
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(expireError);
+      expect((error as Error).message).toBe("Failed to check expiration");
+      expect(loginAsyncSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe("_askUserForRoleAndDurationAsync error cases", () => {
@@ -1012,22 +1137,18 @@ describe("login", () => {
         },
       ];
 
-      await expect(
-        login._askUserForRoleAndDurationAsync(
+      const error = await login
+        ._askUserForRoleAndDurationAsync(
           roles,
           true,
           "arn:aws:iam::123456789012:role/NonExistentRole",
           "1"
         )
-      ).rejects.toThrow(CLIError);
-      await expect(
-        login._askUserForRoleAndDurationAsync(
-          roles,
-          true,
-          "arn:aws:iam::123456789012:role/NonExistentRole",
-          "1"
-        )
-      ).rejects.toThrow("was not found in the SAML response");
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toContain(
+        "was not found in the SAML response"
+      );
     });
   });
 
@@ -1189,6 +1310,51 @@ describe("login", () => {
           aws_expiration: "2024-01-01T00:00:00.000Z",
         }
       );
+    });
+
+    it("should call assumeRoleWithSAML with correct parameters", async () => {
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-saml-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/MyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/MyProvider",
+        },
+        4, // 4 hours
+        false,
+        "ap-northeast-1"
+      );
+
+      expect(mockSend).toHaveBeenCalledWith({
+        PrincipalArn: "arn:aws:iam::123456789012:saml-provider/MyProvider",
+        RoleArn: "arn:aws:iam::123456789012:role/MyRole",
+        SAMLAssertion: "base64-saml-assertion",
+        DurationSeconds: 14400, // 4 * 60 * 60
+      });
+    });
+
+    it("should propagate STS error when assumeRoleWithSAML fails", async () => {
+      const stsError = new Error("Access denied");
+      mockSend.mockRejectedValue(stsError);
+
+      const error = await login
+        ._assumeRoleAsync(
+          "test-profile",
+          "base64-assertion",
+          {
+            roleArn: "arn:aws:iam::123456789012:role/TestRole",
+            principalArn:
+              "arn:aws:iam::123456789012:saml-provider/TestProvider",
+          },
+          1,
+          false,
+          "us-east-1"
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(stsError);
+      expect((error as Error).message).toBe("Access denied");
+      expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
     });
 
     it("should handle credentials with missing optional fields", async () => {
@@ -1660,6 +1826,7 @@ describe("login", () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
       Object.keys(paths).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
@@ -1671,6 +1838,7 @@ describe("login", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
       });
+      vi.restoreAllMocks();
     });
 
     it("should throw error when SAMLResponse is not found in postData", async () => {
@@ -1779,6 +1947,544 @@ describe("login", () => {
       }
 
       await expect(promise).rejects.toThrow("SAML response not found");
+    });
+
+    it("should close browser when SAML response is received successfully", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      // Simulate a valid SAML response
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=validBase64EncodedSaml",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      const result = await promise;
+      expect(result).toBe("validBase64EncodedSaml");
+      // Browser is closed by SAML request handler when response is received
+      expect(mockBrowser.close).toHaveBeenCalled();
+    });
+
+    it("should close browser when puppeteer launch succeeds but SAML response is missing", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => undefined,
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      await expect(promise).rejects.toThrow("SAML response not found");
+      expect(mockBrowser.close).toHaveBeenCalled();
+    });
+  });
+
+  describe("_performLoginAsync cliProxy state handling", () => {
+    const originalPaths = { ...paths };
+
+    const createMockPage = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let requestHandler: ((req: any) => void) | null = null;
+      let resolveRequestInterception: (() => void) | null = null;
+      const requestInterceptionReady = new Promise<void>((resolve) => {
+        resolveRequestInterception = resolve;
+      });
+
+      return {
+        setExtraHTTPHeaders: vi.fn().mockResolvedValue(undefined),
+        setViewport: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn().mockImplementation((event: string, handler: unknown) => {
+          if (event === "request") {
+            requestHandler = handler as typeof requestHandler;
+          }
+        }),
+        setRequestInterception: vi.fn().mockImplementation(() => {
+          if (resolveRequestInterception) resolveRequestInterception();
+          return Promise.resolve();
+        }),
+        goto: vi.fn().mockResolvedValue(undefined),
+        waitForNavigation: vi.fn().mockResolvedValue(undefined),
+        $: vi.fn().mockResolvedValue(null),
+        screenshot: vi.fn().mockResolvedValue(undefined),
+        getRequestHandler: () => requestHandler,
+        waitForRequestInterception: () => requestInterceptionReady,
+      };
+    };
+
+    const createMockBrowser = (
+      mockPage: ReturnType<typeof createMockPage>
+    ) => ({
+      pages: vi.fn().mockResolvedValue([mockPage]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      Object.keys(paths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+    });
+
+    afterEach(() => {
+      Object.keys(originalPaths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+    });
+
+    it("should throw CLIError with screenshot when unrecognized page persists beyond timeout", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      // page.$ always returns null (no state recognized)
+      mockPage.$.mockResolvedValue(null);
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true, // headless
+          false,
+          true, // cliProxy=true
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toContain(
+        "Unable to recognize page state!"
+      );
+      expect(mockPage.screenshot).toHaveBeenCalledWith({
+        path: "az2aws-unrecognized-state.png",
+      });
+    });
+
+    it("should continue loop when page.$ throws an error", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      // First few calls throw error, subsequent calls return null
+      let callCount = 0;
+      mockPage.$.mockImplementation(() => {
+        callCount++;
+        if (callCount <= 3) {
+          return Promise.reject(new Error("Page not ready"));
+        }
+        return Promise.resolve(null);
+      });
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true, // cliProxy=true
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toContain(
+        "Unable to recognize page state!"
+      );
+      // Verify page.$ was called multiple times (loop continued after errors)
+      expect(mockPage.$.mock.calls.length).toBeGreaterThan(3);
+    });
+
+    it("should call req.continue() for non-SAML requests", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      mockPage.$.mockResolvedValue(null);
+
+      const continueMock = vi.fn().mockResolvedValue(undefined);
+
+      // Start the login process
+      const promise = login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true, // cliProxy=true
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      await mockPage.waitForRequestInterception();
+
+      // Simulate a non-SAML request
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://login.microsoftonline.com/common/oauth2",
+          postData: () => undefined,
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: continueMock,
+        });
+      }
+
+      // Wait for the test to complete (will timeout due to unrecognized state)
+      await promise;
+
+      // Verify req.continue() was called for non-SAML request
+      expect(continueMock).toHaveBeenCalled();
+    });
+  });
+
+  describe("_performLoginAsync request interception", () => {
+    const originalPaths = { ...paths };
+
+    const createMockPage = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let requestHandler: ((req: any) => void) | null = null;
+      let resolveRequestInterception: (() => void) | null = null;
+      const requestInterceptionReady = new Promise<void>((resolve) => {
+        resolveRequestInterception = resolve;
+      });
+
+      return {
+        setExtraHTTPHeaders: vi.fn().mockResolvedValue(undefined),
+        setViewport: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn().mockImplementation((event: string, handler: unknown) => {
+          if (event === "request") {
+            requestHandler = handler as typeof requestHandler;
+          }
+        }),
+        setRequestInterception: vi.fn().mockImplementation(() => {
+          if (resolveRequestInterception) resolveRequestInterception();
+          return Promise.resolve();
+        }),
+        goto: vi.fn().mockResolvedValue(undefined),
+        waitForNavigation: vi.fn().mockResolvedValue(undefined),
+        $: vi.fn().mockResolvedValue(null),
+        screenshot: vi.fn().mockResolvedValue(undefined),
+        getRequestHandler: () => requestHandler,
+        waitForRequestInterception: () => requestInterceptionReady,
+      };
+    };
+
+    const createMockBrowser = (
+      mockPage: ReturnType<typeof createMockPage>
+    ) => ({
+      pages: vi.fn().mockResolvedValue([mockPage]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      Object.keys(paths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+    });
+
+    afterEach(() => {
+      Object.keys(originalPaths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+      vi.restoreAllMocks();
+    });
+
+    it("should call req.continue() for multiple non-SAML requests before SAML response", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const continueMocks = [
+        vi.fn().mockResolvedValue(undefined),
+        vi.fn().mockResolvedValue(undefined),
+        vi.fn().mockResolvedValue(undefined),
+      ];
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false, // cliProxy=false
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        // Simulate multiple non-SAML requests
+        requestHandler({
+          url: () => "https://login.microsoftonline.com/common/oauth2",
+          postData: () => undefined,
+          respond: vi.fn(),
+          continue: continueMocks[0],
+        });
+        requestHandler({
+          url: () => "https://aadcdn.msftauth.net/shared/1.0/content/js",
+          postData: () => undefined,
+          respond: vi.fn(),
+          continue: continueMocks[1],
+        });
+        requestHandler({
+          url: () => "https://login.microsoftonline.com/common/oauth2/token",
+          postData: () => undefined,
+          respond: vi.fn(),
+          continue: continueMocks[2],
+        });
+
+        // Finally send a valid SAML response
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=validSamlResponse",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn(),
+        });
+      }
+
+      const result = await promise;
+      expect(result).toBe("validSamlResponse");
+
+      // All non-SAML requests should have called continue()
+      expect(continueMocks[0]).toHaveBeenCalled();
+      expect(continueMocks[1]).toHaveBeenCalled();
+      expect(continueMocks[2]).toHaveBeenCalled();
+    });
+
+    it("should handle GovCloud SAML endpoint correctly", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.amazonaws-us-gov.com/saml",
+          postData: () => "SAMLResponse=govCloudSaml",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn(),
+        });
+      }
+
+      const result = await promise;
+      expect(result).toBe("govCloudSaml");
+    });
+
+    it("should handle China region SAML endpoint correctly", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.amazonaws.cn/saml",
+          postData: () => "SAMLResponse=chinaSaml",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn(),
+        });
+      }
+
+      const result = await promise;
+      expect(result).toBe("chinaSaml");
+    });
+  });
+
+  describe("loginAsync error propagation", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should propagate error when _performLoginAsync fails", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+      });
+
+      const loginError = new Error("Browser launch failed");
+      vi.spyOn(login, "_performLoginAsync").mockRejectedValue(loginError);
+
+      const error = await login
+        .loginAsync(
+          "default",
+          "cli",
+          true,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(loginError);
+      expect((error as Error).message).toBe("Browser launch failed");
+    });
+
+    it("should propagate error when _assumeRoleAsync fails", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+      });
+
+      vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+      ]);
+      vi.spyOn(login, "_askUserForRoleAndDurationAsync").mockResolvedValue({
+        role: {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        durationHours: 1,
+      });
+
+      const assumeRoleError = new Error("STS assume role failed");
+      vi.spyOn(login, "_assumeRoleAsync").mockRejectedValue(assumeRoleError);
+
+      const error = await login
+        .loginAsync(
+          "default",
+          "cli",
+          true,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(assumeRoleError);
+      expect((error as Error).message).toBe("STS assume role failed");
     });
   });
 });
