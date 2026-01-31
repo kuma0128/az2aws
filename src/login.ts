@@ -30,6 +30,12 @@ const AWS_SAML_ENDPOINT = "https://signin.aws.amazon.com/saml";
 const AWS_CN_SAML_ENDPOINT = "https://signin.amazonaws.cn/saml";
 const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
 
+const getProxyUrl = (): string | undefined =>
+  process.env.https_proxy ||
+  process.env.HTTPS_PROXY ||
+  process.env.http_proxy ||
+  process.env.HTTP_PROXY;
+
 interface Role {
   roleArn: string;
   principalArn: string;
@@ -323,8 +329,9 @@ export const login = {
         }
       }
 
-      if (process.env.https_proxy) {
-        args.push(`--proxy-server=${process.env.https_proxy}`);
+      const proxyUrl = getProxyUrl();
+      if (proxyUrl) {
+        args.push(`--proxy-server=${proxyUrl}`);
       }
 
       const ignoreDefaultArgs = noDisableExtensions
@@ -669,15 +676,13 @@ export const login = {
       );
     }
 
-    if (process.env.https_proxy) {
+    const proxyUrl = getProxyUrl();
+    if (proxyUrl) {
       const proxyOptions = awsNoVerifySsl ? { rejectUnauthorized: false } : {};
       stsOptions = {
         ...stsOptions,
         requestHandler: new NodeHttpHandler({
-          httpsAgent: new HttpsProxyAgent(
-            process.env.https_proxy,
-            proxyOptions
-          ),
+          httpsAgent: new HttpsProxyAgent(proxyUrl, proxyOptions),
         }),
       };
     } else if (awsNoVerifySsl) {
