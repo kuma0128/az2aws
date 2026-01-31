@@ -18,9 +18,20 @@ export const generateTotpFromSecret = (secret: string, epoch?: number): string =
   return generateSync(options);
 };
 
+const isValidBase32 = (value: string): boolean => {
+  // Base32 alphabet: A-Z and 2-7, optionally with = padding
+  const base32Regex = /^[A-Z2-7]+=*$/i;
+  return base32Regex.test(value) && value.length >= 16;
+};
+
 export const getTotpFromEnv = (): string | undefined => {
   const tfaSecret = getTfaSecret();
   if (!tfaSecret) return undefined;
+  if (!isValidBase32(tfaSecret)) {
+    throw new CLIError(
+      "AZURE_DEFAULT_TFA_SECRET must be a valid base32 string (at least 16 characters, A-Z and 2-7 only)."
+    );
+  }
   return generateTotpFromSecret(tfaSecret);
 };
 

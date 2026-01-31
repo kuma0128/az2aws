@@ -284,6 +284,18 @@ describe("login", () => {
 
       expect(result).toBe(login._generateTotpFromSecret(secret, 0));
     });
+
+    it("should throw CLIError for invalid base32 secret", () => {
+      process.env.AZURE_DEFAULT_TFA_SECRET = "invalid!@#$";
+
+      expect(() => login._getTotpFromEnv()).toThrow(CLIError);
+    });
+
+    it("should throw CLIError for too short secret", () => {
+      process.env.AZURE_DEFAULT_TFA_SECRET = "ABCD"; // Less than 16 chars
+
+      expect(() => login._getTotpFromEnv()).toThrow(CLIError);
+    });
   });
 
   describe("_createLoginUrlAsync", () => {
