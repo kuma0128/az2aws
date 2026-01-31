@@ -140,6 +140,7 @@ You can set defaults via environment variables (use with `--no-prompt`):
 - `AZURE_DEFAULT_USERNAME` / `AZURE_DEFAULT_PASSWORD` - Credentials
 - `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` - AWS role settings
 - `ASSERTION_CONSUMER_SERVICE_URL` - Custom SAML Assertion Consumer Service URL
+  (Advanced: Use with caution. Misconfiguration may expose your SAML assertion.)
 
 When using `--no-prompt` with multiple available roles, you must set
 `AZURE_DEFAULT_ROLE_ARN` (or configure `azure_default_role_arn`) so the CLI can
