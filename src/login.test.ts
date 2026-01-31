@@ -48,6 +48,9 @@ vi.mock("mkdirp", () => ({
   default: mockMkdirp,
 }));
 
+// Mock Bluebird.delay to resolve immediately for faster test execution.
+// Note: This means timing-sensitive behavior in cliProxy loops won't be tested
+// in real-time. For timing-critical tests, consider using vi.useFakeTimers().
 vi.mock("bluebird", () => ({
   default: {
     delay: vi.fn().mockResolvedValue(undefined),
