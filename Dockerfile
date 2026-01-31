@@ -1,7 +1,7 @@
 FROM node:24-slim AS build
 WORKDIR /az2aws
 COPY package.json yarn.lock ./
-RUN yarn install --production
+RUN yarn install --production --frozen-lockfile
 
 FROM node:24-slim
 WORKDIR /az2aws
