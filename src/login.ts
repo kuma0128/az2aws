@@ -597,9 +597,12 @@ export const login = {
         );
       }
 
-      console.log(
-        `Logging in with environment variables (no profile '${profileName}' found)...`
+      console.warn(
+        `WARNING: Profile '${profileName}' not found. ` +
+          `Using environment variables only. ` +
+          `Credentials will NOT be saved to AWS profile '${profileName}'.`
       );
+      console.log("Logging in with environment variables...");
       return {
         azure_tenant_id: env.azure_tenant_id,
         azure_app_id_uri: env.azure_app_id_uri,
