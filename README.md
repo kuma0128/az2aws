@@ -121,6 +121,10 @@ Set the `region` in your ~/.aws/config to use non-standard AWS partitions:
 - **GovCloud**: us-gov-west-1, us-gov-east-1
 - **China**: cn-north-1, cn-northwest-1
 
+For GovCloud, make sure your AWS CLI default region is set to a GovCloud
+region if you do not set a profile region; otherwise STS calls may target the
+standard partition.
+
 #### Stay Logged In
 
 Enable "Stay logged in" during configuration to use `--no-prompt` without storing passwords:
