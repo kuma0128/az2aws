@@ -7,6 +7,8 @@ import { Command } from "commander";
 import { configureProfileAsync } from "./configureProfileAsync";
 import { login } from "./login";
 import { paths } from "./paths";
+import { existsSync } from "fs";
+import { CLIError } from "./CLIError";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { version } = require("../package.json") as { version: string };
@@ -82,6 +84,12 @@ const disableGpu = !!options.disableGpu;
 const chromiumExecutable = options.chromiumExecutable as string | undefined;
 
 if (chromiumExecutable) {
+  if (!existsSync(chromiumExecutable)) {
+    console.error(
+      `Error: Chromium executable not found at: ${chromiumExecutable}`
+    );
+    process.exit(1);
+  }
   paths.chromeBin = chromiumExecutable;
 }
 
