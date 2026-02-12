@@ -1,4 +1,3 @@
-import _ from "lodash";
 import Bluebird from "bluebird";
 import inquirer, { Question } from "inquirer";
 import { Page, ElementHandle } from "puppeteer";
@@ -155,12 +154,12 @@ export const states: State[] = [
             name: "account",
             message: "Account:",
             type: "list",
-            choices: _.map(accounts, "message"),
+            choices: accounts.map((a) => a.message),
             default: aadTileMessage,
           } as Question,
         ]);
 
-        account = _.find(accounts, ["message", answers.account]);
+        account = accounts.find((a) => a.message === answers.account);
       }
 
       if (!account) {
