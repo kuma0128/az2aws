@@ -76,9 +76,10 @@ export const states: State[] = [
       await page.focus(`input[name="loginfmt"]`);
 
       debug("Clearing input");
-      for (let i = 0; i < 100; i++) {
-        await page.keyboard.press("Backspace");
-      }
+      await page.$eval('input[name="loginfmt"]', (el) => {
+        el.select();
+      });
+      await page.keyboard.press("Backspace");
 
       debug("Typing username");
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
@@ -356,9 +357,10 @@ export const states: State[] = [
       await page.focus(`input[name="otc"]`);
 
       debug("Clearing input");
-      for (let i = 0; i < 100; i++) {
-        await page.keyboard.press("Backspace");
-      }
+      await page.$eval('input[name="otc"]', (el) => {
+        el.select();
+      });
+      await page.keyboard.press("Backspace");
 
       debug("Typing verification code");
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
