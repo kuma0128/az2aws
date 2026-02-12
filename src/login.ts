@@ -12,6 +12,7 @@ import { awsConfig, ProfileConfig } from "./awsConfig";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { paths } from "./paths";
 import mkdirp from "mkdirp";
+import fs from "fs/promises";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { states } from "./loginStates";
@@ -356,7 +357,28 @@ export const login = {
         launchParams.executablePath = paths.chromeBin;
       }
 
-      browser = await puppeteer.launch(launchParams);
+      try {
+        browser = await puppeteer.launch(launchParams);
+      } catch (e) {
+        if (
+          e instanceof Error &&
+          e.name === "TargetCloseError" &&
+          rememberMe &&
+          !paths.userDataDir
+        ) {
+          debug(
+            `Browser launch failed with TargetCloseError. Resetting profile at ${paths.chromium}`
+          );
+          console.warn(
+            "Browser profile appears incompatible. Resetting profile data and retrying..."
+          );
+          await fs.rm(paths.chromium, { recursive: true, force: true });
+          await mkdirp(paths.chromium);
+          browser = await puppeteer.launch(launchParams);
+        } else {
+          throw e;
+        }
+      }
 
       // Wait for a bit as sometimes the browser isn't ready.
       await Bluebird.delay(200);
