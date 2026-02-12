@@ -1,4 +1,3 @@
-import _ from "lodash";
 import Bluebird from "bluebird";
 import inquirer, { QuestionCollection } from "inquirer";
 import zlib from "zlib";
@@ -590,7 +589,7 @@ export const login = {
           );
         }
 
-        role = _.find(roles, ["roleArn", defaultRoleArn]);
+        role = roles.find((r) => r.roleArn === defaultRoleArn);
         if (!role) {
           throw new CLIError(
             `Default role ARN '${defaultRoleArn}' was not found in the SAML response.`
@@ -603,7 +602,7 @@ export const login = {
           name: "role",
           message: "Role:",
           type: "list",
-          choices: _.sortBy(_.map(roles, "roleArn")),
+          choices: roles.map((r) => r.roleArn).sort(),
           default: defaultRoleArn,
         });
       }
@@ -633,7 +632,7 @@ export const login = {
     // user is logged in and using multiple profiles --all-profiles and --no-prompt
     if (questions.length > 0) {
       const answers = await inquirer.prompt(questions);
-      if (!role) role = _.find(roles, ["roleArn", answers.role]);
+      if (!role) role = roles.find((r) => r.roleArn === answers.role);
       if (answers.durationHours) {
         durationHours = parseInt(answers.durationHours as string, 10);
       }
