@@ -1899,13 +1899,7 @@ describe("login", () => {
 
     // Create a TargetCloseError-like class to simulate puppeteer's error
     class TargetCloseError extends Error {
-      constructor(message: string) {
-        super(message);
-        // Override constructor name to match puppeteer's TargetCloseError
-        Object.defineProperty(this.constructor, "name", {
-          value: "TargetCloseError",
-        });
-      }
+      override name = "TargetCloseError";
     }
 
     const createMockPage = () => ({

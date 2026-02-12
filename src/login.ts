@@ -362,7 +362,7 @@ export const login = {
       } catch (e) {
         if (
           e instanceof Error &&
-          e.constructor.name === "TargetCloseError" &&
+          e.name === "TargetCloseError" &&
           rememberMe &&
           !paths.userDataDir
         ) {
