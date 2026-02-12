@@ -17,14 +17,26 @@ vi.mock("./awsConfig", () => ({
   },
 }));
 
-const { mockSend, mockHttpsProxyAgent, mockPuppeteerLaunch, mockMkdirp } =
-  vi.hoisted(() => {
-    const mockSend = vi.fn();
-    const mockHttpsProxyAgent = vi.fn();
-    const mockPuppeteerLaunch = vi.fn();
-    const mockMkdirp = vi.fn();
-    return { mockSend, mockHttpsProxyAgent, mockPuppeteerLaunch, mockMkdirp };
-  });
+const {
+  mockSend,
+  mockHttpsProxyAgent,
+  mockPuppeteerLaunch,
+  mockMkdirp,
+  mockFsRm,
+} = vi.hoisted(() => {
+  const mockSend = vi.fn();
+  const mockHttpsProxyAgent = vi.fn();
+  const mockPuppeteerLaunch = vi.fn();
+  const mockMkdirp = vi.fn();
+  const mockFsRm = vi.fn();
+  return {
+    mockSend,
+    mockHttpsProxyAgent,
+    mockPuppeteerLaunch,
+    mockMkdirp,
+    mockFsRm,
+  };
+});
 
 vi.mock("@aws-sdk/client-sts", () => {
   return {
@@ -46,6 +58,12 @@ vi.mock("puppeteer", () => ({
 
 vi.mock("mkdirp", () => ({
   default: mockMkdirp,
+}));
+
+vi.mock("fs/promises", () => ({
+  default: {
+    rm: mockFsRm,
+  },
 }));
 
 // Mock Bluebird.delay to resolve immediately for faster test execution.
@@ -1873,6 +1891,243 @@ describe("login", () => {
           ]),
         })
       );
+    });
+  });
+
+  describe("_performLoginAsync browser profile reset on TargetCloseError", () => {
+    const originalPaths = { ...paths };
+
+    // Create a TargetCloseError-like class to simulate puppeteer's error
+    class TargetCloseError extends Error {
+      constructor(message: string) {
+        super(message);
+        // Override constructor name to match puppeteer's TargetCloseError
+        Object.defineProperty(this.constructor, "name", {
+          value: "TargetCloseError",
+        });
+      }
+    }
+
+    const createMockPage = () => ({
+      setExtraHTTPHeaders: vi.fn().mockResolvedValue(undefined),
+      setViewport: vi.fn().mockResolvedValue(undefined),
+      on: vi.fn(),
+      setRequestInterception: vi.fn().mockResolvedValue(undefined),
+      goto: vi.fn().mockResolvedValue(undefined),
+      waitForNavigation: vi.fn().mockResolvedValue(undefined),
+      $: vi.fn().mockResolvedValue(null),
+      screenshot: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const createMockBrowser = (
+      mockPage: ReturnType<typeof createMockPage>
+    ) => ({
+      pages: vi.fn().mockResolvedValue([mockPage]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      mockFsRm.mockResolvedValue(undefined);
+      mockMkdirp.mockResolvedValue(undefined);
+      Object.keys(paths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+    });
+
+    afterEach(() => {
+      Object.keys(originalPaths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+      vi.restoreAllMocks();
+    });
+
+    it("should reset profile and retry when TargetCloseError occurs with rememberMe=true", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromium = "/mock/chromium/path";
+
+      // First call throws TargetCloseError, second call succeeds
+      mockPuppeteerLaunch
+        .mockRejectedValueOnce(
+          new TargetCloseError(
+            "Protocol error (Target.setAutoAttach): Target closed"
+          )
+        )
+        .mockResolvedValueOnce(mockBrowser);
+
+      // page.$ returns null to trigger unrecognized page timeout
+      mockPage.$.mockResolvedValue(null);
+
+      // The function will eventually throw CLIError due to unrecognized page,
+      // but the important thing is that it retried the launch
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true, // cliProxy
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false
+        );
+      } catch {
+        // Expected - will throw due to unrecognized page timeout
+      }
+
+      // Verify profile was reset
+      expect(mockFsRm).toHaveBeenCalledWith("/mock/chromium/path", {
+        recursive: true,
+        force: true,
+      });
+      expect(mockMkdirp).toHaveBeenCalledWith("/mock/chromium/path");
+      // Verify puppeteer.launch was called twice (initial + retry)
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
+      expect(console.warn).toHaveBeenCalledWith(
+        "Browser profile appears incompatible. Resetting profile data and retrying..."
+      );
+    });
+
+    it("should use userDataDir for reset when it is set", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = "/custom/user/data";
+
+      mockPuppeteerLaunch
+        .mockRejectedValueOnce(
+          new TargetCloseError("Protocol error: Target closed")
+        )
+        .mockResolvedValueOnce(mockBrowser);
+
+      mockPage.$.mockResolvedValue(null);
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false
+        );
+      } catch {
+        // Expected
+      }
+
+      expect(mockFsRm).toHaveBeenCalledWith("/custom/user/data", {
+        recursive: true,
+        force: true,
+      });
+      expect(mockMkdirp).toHaveBeenCalledWith("/custom/user/data");
+    });
+
+    it("should re-throw TargetCloseError when rememberMe=false", async () => {
+      const targetCloseError = new TargetCloseError(
+        "Protocol error (Target.setAutoAttach): Target closed"
+      );
+      mockPuppeteerLaunch.mockRejectedValueOnce(targetCloseError);
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false, // rememberMe=false
+          false,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(targetCloseError);
+      expect(mockFsRm).not.toHaveBeenCalled();
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(1);
+    });
+
+    it("should re-throw non-TargetCloseError even when rememberMe=true", async () => {
+      const otherError = new Error("Some other launch error");
+      mockPuppeteerLaunch.mockRejectedValueOnce(otherError);
+      mockMkdirp.mockResolvedValue(undefined);
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe=true
+          false,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(otherError);
+      expect(mockFsRm).not.toHaveBeenCalled();
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(1);
+    });
+
+    it("should propagate error when retry also fails", async () => {
+      const retryError = new Error("Retry also failed");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromium = "/mock/chromium/path";
+
+      mockPuppeteerLaunch
+        .mockRejectedValueOnce(
+          new TargetCloseError("Protocol error: Target closed")
+        )
+        .mockRejectedValueOnce(retryError);
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe=true
+          false,
+          false
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(retryError);
+      expect(mockFsRm).toHaveBeenCalled();
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
     });
   });
 
