@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/kuma0128/az2aws/compare/v1.4.0...v1.5.0) (2026-02-12)
+
+
+### Features
+
+* optimize Docker image build ([#105](https://github.com/kuma0128/az2aws/issues/105)) ([fc7f491](https://github.com/kuma0128/az2aws/commit/fc7f491a3d3029f3dbca750b984cbb3b5ea4bd3a))
+
+
+### Bug Fixes
+
+* handle TargetCloseError from incompatible browser profile ([#117](https://github.com/kuma0128/az2aws/issues/117)) ([d5c1752](https://github.com/kuma0128/az2aws/commit/d5c17521cd179891a13c8285d451ad353b47bc71))
+
 ## [1.4.0](https://github.com/kuma0128/az2aws/compare/v1.3.0...v1.4.0) (2026-02-12)
 
 
