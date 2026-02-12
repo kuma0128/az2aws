@@ -16,15 +16,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+        with:
+          standalone: true
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-
-      - run: corepack enable
-      - run: yarn install
-      - run: yarn lint
-      - run: yarn test
-      - run: yarn build
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
 
       - uses: actions/upload-artifact@v6
         with:

@@ -94,6 +94,13 @@ export const awsConfig = {
     }
 
     const timeDifference = expirationDate.getTime() - new Date().getTime();
+
+    // If expiration date is invalid (NaN), treat as expired for safety
+    if (isNaN(timeDifference)) {
+      debug("Invalid expiration date, treating as expired");
+      return true;
+    }
+
     debug(
       `Remaining time till credential expiration: ${
         timeDifference / 1000
@@ -164,6 +171,6 @@ export const awsConfig = {
     await mkdirp(paths.awsDir);
 
     debug(`Writing '${type}' INI to file '${paths[type]}'`);
-    await writeFile(paths[type]!, text);
+    await writeFile(paths[type], text);
   },
 };

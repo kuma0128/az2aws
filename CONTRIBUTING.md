@@ -49,10 +49,10 @@ mise use --global node@24
 node -v
 ```
 
-5. Install yarn:
+5. Enable pnpm via corepack:
 
 ```sh
-npm install -g yarn
+corepack enable
 ```
 
 ### Setup
@@ -67,32 +67,33 @@ cd az2aws
 2. Install dependencies:
 
 ```sh
-yarn install
+pnpm install
 ```
 
 3. Start development mode:
 
 ```sh
-yarn start
+pnpm start
 ```
 
 Or build and run production mode:
 
 ```sh
-yarn build && node ./lib/index.js
+pnpm build && node ./lib/index.js
 ```
 
 ### Available Scripts
 
 | Script | Description |
 |--------|-------------|
-| `yarn start` | Start development mode with hot reload |
-| `yarn build` | Build for production |
-| `yarn test` | Run linting and formatting checks |
-| `yarn test:unit` | Run unit tests |
-| `yarn eslint` | Run ESLint |
-| `yarn prettier:check` | Check code formatting |
-| `yarn prettier:write` | Auto-fix code formatting |
+| `pnpm start` | Start development mode with hot reload |
+| `pnpm build` | Build for production |
+| `pnpm test` | Run unit tests |
+| `pnpm test:coverage` | Run unit tests with coverage |
+| `pnpm lint` | Run ESLint and formatting checks |
+| `pnpm eslint` | Run ESLint |
+| `pnpm prettier:check` | Check code formatting |
+| `pnpm prettier:write` | Auto-fix code formatting |
 
 ## Development Workflow
 
@@ -107,7 +108,7 @@ git checkout -b fix/your-bug-fix
 2. Make your changes and ensure tests pass:
 
 ```sh
-yarn test
+pnpm test
 ```
 
 3. Commit your changes following our [commit message guidelines](#commit-message-guidelines).
@@ -118,8 +119,8 @@ yarn test
 
 ### Before Submitting
 
-- [ ] Run `yarn test` and ensure all checks pass
-- [ ] Run `yarn build` to verify the build succeeds
+- [ ] Run `pnpm test` and ensure all checks pass
+- [ ] Run `pnpm build` to verify the build succeeds
 - [ ] Update documentation if you changed any user-facing behavior
 - [ ] Add tests for new functionality
 
@@ -164,13 +165,13 @@ This project uses ESLint and Prettier. Your code will be automatically checked.
 
 ```sh
 # Check formatting
-yarn prettier:check
+pnpm prettier:check
 
 # Auto-fix formatting
-yarn prettier:write
+pnpm prettier:write
 
 # Run linter
-yarn eslint
+pnpm eslint
 ```
 
 ### File Organization

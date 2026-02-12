@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.4.0](https://github.com/kuma0128/az2aws/compare/v1.3.0...v1.4.0) (2026-02-12)
+
+
+### Features
+
+* add GovCloud region warning ([#104](https://github.com/kuma0128/az2aws/issues/104)) ([1e169cc](https://github.com/kuma0128/az2aws/commit/1e169cc77c35a5453728f71952aa4201842c8430))
+
+
+### Bug Fixes
+
+* honor http_proxy for browser and STS ([#92](https://github.com/kuma0128/az2aws/issues/92)) ([0e002ae](https://github.com/kuma0128/az2aws/commit/0e002ae362466cd9434bb364150bf54227738225))
+
+
+### Performance Improvements
+
+* optimize keyboard input clearing with select + backspace ([#116](https://github.com/kuma0128/az2aws/issues/116)) ([84b4cfb](https://github.com/kuma0128/az2aws/commit/84b4cfbef32917a6f6d2f9ef56d5a13b09a91f3a))
+* replace lodash with native array methods ([#115](https://github.com/kuma0128/az2aws/issues/115)) ([f61786f](https://github.com/kuma0128/az2aws/commit/f61786f0ab1f215d351fe3ddba15d22cfb048198))
+
+## [1.3.0](https://github.com/kuma0128/az2aws/compare/v1.2.0...v1.3.0) (2026-01-27)
+
+
+### Features
+
+* Add Comprehensive Loginstate Tests and Implementation ([#110](https://github.com/kuma0128/az2aws/issues/110)) ([09fce50](https://github.com/kuma0128/az2aws/commit/09fce501050731e2b0e5063ef8d2d5e4076827a1))
+
+
+### Bug Fixes
+
+* Apply Prettier formatting and add region logging to login functions ([#109](https://github.com/kuma0128/az2aws/issues/109)) ([26a5ef6](https://github.com/kuma0128/az2aws/commit/26a5ef636014f56ad77813f42e866a25b08be2f3))
+* clarify session duration validation message ([#91](https://github.com/kuma0128/az2aws/issues/91)) ([22d87ec](https://github.com/kuma0128/az2aws/commit/22d87ec57318c6dc69d09e098d7e123d07df882e))
+* correct typo 'occured' to 'occurred' in error message ([#86](https://github.com/kuma0128/az2aws/issues/86)) ([b0a75d2](https://github.com/kuma0128/az2aws/commit/b0a75d2c7cecaef7888d17a9880bcd63000713b8))
+* enforce defaults for no-prompt role selection ([#90](https://github.com/kuma0128/az2aws/issues/90)) ([bea40f6](https://github.com/kuma0128/az2aws/commit/bea40f64a9dc6851b34a396fdd315752669c1d9d))
+
 ## [1.2.0](https://github.com/kuma0128/az2aws/compare/v1.1.3...v1.2.0) (2026-01-22)
 
 
