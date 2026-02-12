@@ -1,9 +1,15 @@
 .github
+.claude
 src
 typings
+coverage
+issue
 .dockerignore
 .editorconfig
 .eslintrc.json
+.release-please-manifest.json
+release-please-config.json
+vitest.config.ts
 docker-launch.sh
 Dockerfile
 snapcraft.yaml
