@@ -37,6 +37,10 @@
   "engines": {
     "node": ">=24.0"
   },
+  "packageManager": "pnpm@10.29.3",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "puppeteer"]
+  },
   "bin": {
     "az2aws": "lib/index.js"
   },
@@ -50,7 +54,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "yarn eslint && yarn prettier:check"
+    "lint": "pnpm eslint && pnpm prettier:check"
   },
   "dependencies": {
     "@aws-sdk/client-sts": "^3.723.0",
