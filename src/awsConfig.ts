@@ -171,6 +171,6 @@ export const awsConfig = {
     await mkdirp(paths.awsDir);
 
     debug(`Writing '${type}' INI to file '${paths[type]}'`);
-    await writeFile(paths[type]!, text);
+    await writeFile(paths[type], text);
   },
 };

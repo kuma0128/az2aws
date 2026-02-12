@@ -42,10 +42,11 @@ RUN apt-get update \
    && apt-get -q -y clean \
    && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*
 
-COPY package.json yarn.lock /az2aws/
+COPY package.json pnpm-lock.yaml /az2aws/
 
-RUN cd /az2aws \
-   && yarn install --production
+RUN corepack enable \
+   && cd /az2aws \
+   && pnpm install --prod --frozen-lockfile
 
 COPY lib /az2aws/lib
 
