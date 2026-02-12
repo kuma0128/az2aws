@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.4.0](https://github.com/kuma0128/az2aws/compare/v1.3.0...v1.4.0) (2026-02-12)
+
+
+### Features
+
+* add GovCloud region warning ([#104](https://github.com/kuma0128/az2aws/issues/104)) ([1e169cc](https://github.com/kuma0128/az2aws/commit/1e169cc77c35a5453728f71952aa4201842c8430))
+
+
+### Bug Fixes
+
+* honor http_proxy for browser and STS ([#92](https://github.com/kuma0128/az2aws/issues/92)) ([0e002ae](https://github.com/kuma0128/az2aws/commit/0e002ae362466cd9434bb364150bf54227738225))
+
+
+### Performance Improvements
+
+* optimize keyboard input clearing with select + backspace ([#116](https://github.com/kuma0128/az2aws/issues/116)) ([84b4cfb](https://github.com/kuma0128/az2aws/commit/84b4cfbef32917a6f6d2f9ef56d5a13b09a91f3a))
+* replace lodash with native array methods ([#115](https://github.com/kuma0128/az2aws/issues/115)) ([f61786f](https://github.com/kuma0128/az2aws/commit/f61786f0ab1f215d351fe3ddba15d22cfb048198))
+
 ## [1.3.0](https://github.com/kuma0128/az2aws/compare/v1.2.0...v1.3.0) (2026-01-27)
 
 
