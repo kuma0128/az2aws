@@ -2000,22 +2000,17 @@ describe("login", () => {
       );
     });
 
-    it("should use userDataDir for reset when it is set", async () => {
-      const mockPage = createMockPage();
-      const mockBrowser = createMockBrowser(mockPage);
+    it("should re-throw TargetCloseError when userDataDir is set to avoid deleting user-provided profile", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (paths as any).userDataDir = "/custom/user/data";
 
-      mockPuppeteerLaunch
-        .mockRejectedValueOnce(
-          new TargetCloseError("Protocol error: Target closed")
-        )
-        .mockResolvedValueOnce(mockBrowser);
+      const targetCloseError = new TargetCloseError(
+        "Protocol error: Target closed"
+      );
+      mockPuppeteerLaunch.mockRejectedValueOnce(targetCloseError);
 
-      mockPage.$.mockResolvedValue(null);
-
-      try {
-        await login._performLoginAsync(
+      const error = await login
+        ._performLoginAsync(
           "https://login.example.com",
           true,
           false,
@@ -2028,16 +2023,12 @@ describe("login", () => {
           true, // rememberMe
           false,
           false
-        );
-      } catch {
-        // Expected
-      }
+        )
+        .catch((e: unknown) => e);
 
-      expect(mockFsRm).toHaveBeenCalledWith("/custom/user/data", {
-        recursive: true,
-        force: true,
-      });
-      expect(mockMkdirp).toHaveBeenCalledWith("/custom/user/data");
+      expect(error).toBe(targetCloseError);
+      expect(mockFsRm).not.toHaveBeenCalled();
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(1);
     });
 
     it("should re-throw TargetCloseError when rememberMe=false", async () => {

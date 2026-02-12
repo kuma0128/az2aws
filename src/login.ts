@@ -363,17 +363,17 @@ export const login = {
         if (
           e instanceof Error &&
           e.constructor.name === "TargetCloseError" &&
-          rememberMe
+          rememberMe &&
+          !paths.userDataDir
         ) {
-          const userDataDir = paths.userDataDir || paths.chromium;
           debug(
-            `Browser launch failed with TargetCloseError. Resetting profile at ${userDataDir}`
+            `Browser launch failed with TargetCloseError. Resetting profile at ${paths.chromium}`
           );
           console.warn(
             "Browser profile appears incompatible. Resetting profile data and retrying..."
           );
-          await fs.rm(userDataDir, { recursive: true, force: true });
-          await mkdirp(userDataDir);
+          await fs.rm(paths.chromium, { recursive: true, force: true });
+          await mkdirp(paths.chromium);
           browser = await puppeteer.launch(launchParams);
         } else {
           throw e;
