@@ -19,6 +19,7 @@ import inquirer from "inquirer";
 // Helper to create mock page
 const createMockPage = () => ({
   $: vi.fn(),
+  $eval: vi.fn().mockResolvedValue(undefined),
   evaluate: vi.fn(),
   waitForSelector: vi.fn().mockResolvedValue(undefined),
   focus: vi.fn().mockResolvedValue(undefined),
@@ -169,7 +170,11 @@ describe("loginStates", () => {
       // Should focus on username input
       expect(mockPage.focus).toHaveBeenCalledWith('input[name="loginfmt"]');
 
-      // Should clear input with backspaces (implementation detail: multiple times)
+      // Should select all text and delete with single backspace
+      expect(mockPage.$eval).toHaveBeenCalledWith(
+        'input[name="loginfmt"]',
+        expect.any(Function)
+      );
       expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
 
       // Should type username
@@ -732,7 +737,11 @@ describe("loginStates", () => {
       );
 
       expect(mockPage.focus).toHaveBeenCalledWith('input[name="otc"]');
-      // Should clear input with backspaces (implementation detail: multiple times)
+      // Should select all text and delete with single backspace
+      expect(mockPage.$eval).toHaveBeenCalledWith(
+        'input[name="otc"]',
+        expect.any(Function)
+      );
       expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("999999");
       consoleSpy.mockRestore();
