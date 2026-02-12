@@ -186,6 +186,13 @@ You'll be prompted for username, password, and MFA if required. After login, use
 
 #### Troubleshooting
 
+If you see `TargetCloseError: Protocol error (Target.setAutoAttach): Target closed`,
+the browser profile stored in `~/.aws/chromium` may be incompatible with the
+bundled Chromium version (e.g., after upgrading or downgrading az2aws). az2aws
+will automatically reset the profile and retry. If the error persists, try
+manually deleting `~/.aws/chromium` or using your system Chrome via
+`BROWSER_CHROME_BIN`.
+
 If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
 Try:
  `--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
