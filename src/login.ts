@@ -10,7 +10,6 @@ import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
 import { awsConfig, ProfileConfig } from "./awsConfig";
-import { HttpsProxyAgent } from "https-proxy-agent";
 import { paths } from "./paths";
 import { mkdirp } from "mkdirp";
 import fs from "fs/promises";
@@ -31,6 +30,17 @@ const AWS_SAML_ENDPOINT = "https://signin.aws.amazon.com/saml";
 const AWS_CN_SAML_ENDPOINT = "https://signin.amazonaws.cn/saml";
 const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
 
+type HttpsProxyAgentModule = typeof import("https-proxy-agent");
+type HttpsProxyAgentOptions =
+  import("https-proxy-agent").HttpsProxyAgentOptions<string>;
+
+// Keep the runtime import as native `import()` so CommonJS output can load
+// the ESM-only https-proxy-agent package.
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const importHttpsProxyAgent = Function(
+  'return import("https-proxy-agent")'
+) as () => Promise<HttpsProxyAgentModule>;
+
 const getProxyUrl = (): string | undefined =>
   process.env.https_proxy ||
   process.env.HTTPS_PROXY ||
@@ -43,6 +53,14 @@ interface Role {
 }
 
 export const login = {
+  async _createHttpsProxyAgentAsync(
+    proxyUrl: string,
+    proxyOptions?: HttpsProxyAgentOptions
+  ) {
+    const { HttpsProxyAgent } = await importHttpsProxyAgent();
+    return new HttpsProxyAgent(proxyUrl, proxyOptions);
+  },
+
   async loginAsync(
     profileName: string,
     mode: string,
@@ -732,7 +750,10 @@ export const login = {
       stsOptions = {
         ...stsOptions,
         requestHandler: new NodeHttpHandler({
-          httpsAgent: new HttpsProxyAgent(proxyUrl, proxyOptions),
+          httpsAgent: await this._createHttpsProxyAgentAsync(
+            proxyUrl,
+            proxyOptions
+          ),
         }),
       };
     } else if (awsNoVerifySsl) {
