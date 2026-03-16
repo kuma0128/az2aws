@@ -653,9 +653,9 @@ describe("login", () => {
       );
 
       const questions = vi.mocked(inquirer.prompt).mock.calls[0][0];
-      const roleQuestion = (questions as { name: string; default?: string }[]).find(
-        (question) => question.name === "role"
-      );
+      const roleQuestion = (
+        questions as { name: string; default?: string }[]
+      ).find((question) => question.name === "role");
       expect(roleQuestion?.default).toBe(
         "arn:aws:iam::123456789012:role/Role2"
       );
