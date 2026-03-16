@@ -53,7 +53,7 @@ export const login = {
     enableChromeSeamlessSso: boolean,
     noDisableExtensions: boolean,
     disableGpu: boolean,
-    incognito = false
+    incognito = false,
   ): Promise<void> {
     let headless, cliProxy;
     if (mode === "cli") {
@@ -71,13 +71,13 @@ export const login = {
 
     const profile = await this._loadProfileAsync(profileName);
     console.log(
-      `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`
+      `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`,
     );
     if (profile.region && profile.region.startsWith("us-gov")) {
       console.warn(
         "GovCloud region detected in profile. Note: Other AWS CLI operations " +
           "will use your AWS CLI default region. If needed, set it to match " +
-          "this GovCloud region (us-gov-west-1 or us-gov-east-1)."
+          "this GovCloud region (us-gov-west-1 or us-gov-east-1).",
       );
     }
     let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
@@ -93,7 +93,7 @@ export const login = {
     const loginUrl = await this._createLoginUrlAsync(
       profile.azure_app_id_uri,
       profile.azure_tenant_id,
-      assertionConsumerServiceURL
+      assertionConsumerServiceURL,
     );
     const samlResponse = await this._performLoginAsync(
       loginUrl,
@@ -108,14 +108,14 @@ export const login = {
       profile.azure_default_remember_me,
       noDisableExtensions,
       disableGpu,
-      incognito
+      incognito,
     );
     const roles = this._parseRolesFromSamlResponse(samlResponse);
     const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
       roles,
       noPrompt,
       profile.azure_default_role_arn,
-      profile.azure_default_duration_hours
+      profile.azure_default_duration_hours,
     );
 
     await this._assumeRoleAsync(
@@ -124,7 +124,7 @@ export const login = {
       role,
       durationHours,
       awsNoVerifySsl,
-      profile.region
+      profile.region,
     );
   },
 
@@ -138,7 +138,7 @@ export const login = {
     forceRefresh: boolean,
     noDisableExtensions: boolean,
     disableGpu: boolean,
-    incognito = false
+    incognito = false,
   ): Promise<void> {
     const profiles = await awsConfig.getAllProfileNames();
 
@@ -167,7 +167,7 @@ export const login = {
         enableChromeSeamlessSso,
         noDisableExtensions,
         disableGpu,
-        incognito
+        incognito,
       );
     }
   },
@@ -208,7 +208,7 @@ export const login = {
 
     if (!profile)
       throw new CLIError(
-        `Unknown profile '${profileName}'. You must configure it first with --configure.`
+        `Unknown profile '${profileName}'. You must configure it first with --configure.`,
       );
 
     const env = this._loadProfileFromEnv();
@@ -220,7 +220,7 @@ export const login = {
 
     if (!profile.azure_tenant_id || !profile.azure_app_id_uri)
       throw new CLIError(
-        `Profile '${profileName}' is not configured properly.`
+        `Profile '${profileName}' is not configured properly.`,
       );
 
     console.log(`Logging in with profile '${profileName}'...`);
@@ -238,7 +238,7 @@ export const login = {
   _createLoginUrlAsync(
     appIdUri: string,
     tenantId: string,
-    assertionConsumerServiceURL: string
+    assertionConsumerServiceURL: string,
   ): Promise<string> {
     debug("Generating UUID for SAML request");
     const id = v4();
@@ -263,7 +263,7 @@ export const login = {
         const samlBase64 = samlBuffer.toString("base64");
 
         const url = `https://login.microsoftonline.com/${tenantId}/saml2?SAMLRequest=${encodeURIComponent(
-          samlBase64
+          samlBase64,
         )}`;
         debug("Created login URL", url);
 
@@ -303,7 +303,7 @@ export const login = {
     rememberMe: boolean,
     noDisableExtensions: boolean,
     disableGpu: boolean,
-    incognito = false
+    incognito = false,
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
@@ -314,15 +314,15 @@ export const login = {
       const args = headless
         ? []
         : incognito
-        ? [`--window-size=${WIDTH},${HEIGHT}`]
-        : [`--app=${url}`, `--window-size=${WIDTH},${HEIGHT}`];
+          ? [`--window-size=${WIDTH},${HEIGHT}`]
+          : [`--app=${url}`, `--window-size=${WIDTH},${HEIGHT}`];
       if (disableSandbox) args.push("--no-sandbox");
       if (enableChromeNetworkService)
         args.push("--enable-features=NetworkService");
       if (enableChromeSeamlessSso)
         args.push(
           `--auth-server-whitelist=${AZURE_AD_SSO}`,
-          `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`
+          `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`,
         );
       debug(`rememberMe value: ${rememberMe} (type: ${typeof rememberMe})`);
       if (useRememberMe) {
@@ -341,7 +341,7 @@ export const login = {
 
       if (incognito && rememberMe) {
         console.warn(
-          "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles."
+          "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles.",
         );
       }
 
@@ -383,10 +383,10 @@ export const login = {
           !paths.userDataDir
         ) {
           debug(
-            `Browser launch failed with TargetCloseError. Resetting profile at ${paths.chromium}`
+            `Browser launch failed with TargetCloseError. Resetting profile at ${paths.chromium}`,
           );
           console.warn(
-            "Browser profile appears incompatible. Resetting profile data and retrying..."
+            "Browser profile appears incompatible. Resetting profile data and retrying...",
           );
           await fs.rm(paths.chromium, { recursive: true, force: true });
           await mkdirp(paths.chromium);
@@ -405,7 +405,7 @@ export const login = {
         const context: BrowserContext = await browser.createBrowserContext();
         page = await context.newPage();
         await Promise.all(
-          existingPages.map((existingPage) => existingPage.close())
+          existingPages.map((existingPage) => existingPage.close()),
         );
         if (!headless) {
           await page.bringToFront();
@@ -491,7 +491,7 @@ export const login = {
                 debug(
                   `Error when running state "${
                     state.name
-                  }". ${err.toString()}. Retrying...`
+                  }". ${err.toString()}. Retrying...`,
                 );
               }
               break;
@@ -509,7 +509,7 @@ export const login = {
                   noPrompt,
                   defaultUsername,
                   defaultPassword,
-                  useRememberMe
+                  useRememberMe,
                 ),
               ]);
 
@@ -527,7 +527,7 @@ export const login = {
               const path = "az2aws-unrecognized-state.png";
               await page.screenshot({ path });
               throw new CLIError(
-                `Unable to recognize page state! A screenshot has been dumped to ${path}. If this problem persists, try running with --mode=gui or --mode=debug`
+                `Unable to recognize page state! A screenshot has been dumped to ${path}. If this problem persists, try running with --mode=gui or --mode=debug`,
               );
             }
 
@@ -579,7 +579,7 @@ export const login = {
     debug("Looking for role SAML attribute");
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const roles: Role[] = saml(
-      "Attribute[Name='https://aws.amazon.com/SAML/Attributes/Role']>AttributeValue"
+      "Attribute[Name='https://aws.amazon.com/SAML/Attributes/Role']>AttributeValue",
     )
       .map(function () {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -613,7 +613,7 @@ export const login = {
     roles: Role[],
     noPrompt: boolean,
     defaultRoleArn: string,
-    defaultDurationHours: string
+    defaultDurationHours: string,
   ): Promise<{
     role: Role;
     durationHours: number;
@@ -636,14 +636,14 @@ export const login = {
       if (noPrompt) {
         if (!defaultRoleArn) {
           throw new CLIError(
-            "--no-prompt requires azure_default_role_arn when multiple roles are available."
+            "--no-prompt requires azure_default_role_arn when multiple roles are available.",
           );
         }
 
         role = roles.find((r) => r.roleArn === defaultRoleArn);
         if (!role) {
           throw new CLIError(
-            `Default role ARN '${defaultRoleArn}' was not found in the SAML response.`
+            `Default role ARN '${defaultRoleArn}' was not found in the SAML response.`,
           );
         }
         debug("Valid role found. No need to ask.");
@@ -713,7 +713,7 @@ export const login = {
     role: Role,
     durationHours: number,
     awsNoVerifySsl: boolean,
-    region: string
+    region: string,
   ): Promise<void> {
     console.log(`Assuming role ${role.roleArn} in region ${region}...`);
     let stsOptions: STSClientConfig = {};
@@ -722,7 +722,7 @@ export const login = {
       console.warn(
         "WARNING: SSL certificate verification is disabled. " +
           "This makes the connection vulnerable to MITM attacks. " +
-          "Consider using NODE_EXTRA_CA_CERTS environment variable instead."
+          "Consider using NODE_EXTRA_CA_CERTS environment variable instead.",
       );
     }
 

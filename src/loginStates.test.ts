@@ -73,12 +73,12 @@ describe("loginStates", () => {
         true, // noPrompt
         "default@example.com", // defaultUsername
         undefined,
-        false
+        false,
       );
 
       expect(inquirer.prompt).not.toHaveBeenCalled();
       expect(mockPage.keyboard.type).toHaveBeenCalledWith(
-        "default@example.com"
+        "default@example.com",
       );
     });
 
@@ -95,7 +95,7 @@ describe("loginStates", () => {
         false, // noPrompt
         "",
         undefined,
-        false
+        false,
       );
 
       expect(inquirer.prompt).toHaveBeenCalled();
@@ -115,12 +115,12 @@ describe("loginStates", () => {
         true, // noPrompt
         "", // empty defaultUsername
         undefined,
-        false
+        false,
       );
 
       expect(inquirer.prompt).toHaveBeenCalled();
       expect(mockPage.keyboard.type).toHaveBeenCalledWith(
-        "prompted@example.com"
+        "prompted@example.com",
       );
     });
 
@@ -141,7 +141,7 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false
+        false,
       );
 
       expect(consoleSpy).toHaveBeenCalledWith("Error message");
@@ -158,13 +158,13 @@ describe("loginStates", () => {
         true,
         "test@example.com",
         undefined,
-        false
+        false,
       );
 
       // Should wait for username input to be visible
       expect(mockPage.waitForSelector).toHaveBeenCalledWith(
         'input[name="loginfmt"]',
-        { visible: true, timeout: 60000 }
+        { visible: true, timeout: 60000 },
       );
 
       // Should focus on username input
@@ -173,7 +173,7 @@ describe("loginStates", () => {
       // Should select all text and delete with single backspace
       expect(mockPage.$eval).toHaveBeenCalledWith(
         'input[name="loginfmt"]',
-        expect.any(Function)
+        expect.any(Function),
       );
       expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
 
@@ -183,7 +183,7 @@ describe("loginStates", () => {
       // Should wait for submit button and click
       expect(mockPage.waitForSelector).toHaveBeenCalledWith(
         "input[type=submit]",
-        { visible: true, timeout: 60000 }
+        { visible: true, timeout: 60000 },
       );
       expect(mockPage.click).toHaveBeenCalledWith("input[type=submit]");
     });
@@ -203,7 +203,7 @@ describe("loginStates", () => {
         true, // noPrompt
         "",
         "defaultPassword123",
-        false
+        false,
       );
 
       expect(inquirer.prompt).not.toHaveBeenCalled();
@@ -225,7 +225,7 @@ describe("loginStates", () => {
         true, // noPrompt - but error present means we should still prompt
         "",
         "defaultPassword",
-        false
+        false,
       );
 
       expect(consoleSpy).toHaveBeenCalledWith("Wrong password");
@@ -247,7 +247,7 @@ describe("loginStates", () => {
         false,
         "",
         "",
-        false
+        false,
       );
 
       expect(inquirer.prompt).toHaveBeenCalled();
@@ -267,7 +267,7 @@ describe("loginStates", () => {
         true, // noPrompt
         "",
         "", // empty defaultPassword
-        false
+        false,
       );
 
       // Should still prompt because defaultPassword is empty
@@ -285,12 +285,12 @@ describe("loginStates", () => {
         true,
         "",
         "testPassword",
-        false
+        false,
       );
 
       // Should focus on password input
       expect(mockPage.focus).toHaveBeenCalledWith(
-        'input[name="Password"],input[name="passwd"]'
+        'input[name="Password"],input[name="passwd"]',
       );
 
       // Should type password
@@ -298,7 +298,7 @@ describe("loginStates", () => {
 
       // Should click submit
       expect(mockPage.click).toHaveBeenCalledWith(
-        "span[class=submit],input[type=submit]"
+        "span[class=submit],input[type=submit]",
       );
     });
   });
@@ -318,12 +318,12 @@ describe("loginStates", () => {
           false,
           "",
           undefined,
-          false
+          false,
         )
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toBe(
-        "No accounts found on account selection screen."
+        "No accounts found on account selection screen.",
       );
     });
 
@@ -342,7 +342,7 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false
+        false,
       );
 
       expect(inquirer.prompt).not.toHaveBeenCalled();
@@ -375,7 +375,7 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false
+        false,
       );
 
       expect(inquirer.prompt).toHaveBeenCalled();
@@ -411,7 +411,7 @@ describe("loginStates", () => {
           false,
           "",
           undefined,
-          false
+          false,
         )
         .catch((e: unknown) => e);
 
@@ -434,7 +434,7 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        true // rememberMe
+        true, // rememberMe
       );
 
       expect(mockPage.click).toHaveBeenCalledWith("#idSIButton9");
@@ -449,7 +449,7 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false // rememberMe
+        false, // rememberMe
       );
 
       expect(mockPage.click).toHaveBeenCalledWith("#idBtn_Back");
@@ -488,21 +488,21 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false
+        false,
       );
 
       expect(mockPage.click).toHaveBeenCalledWith(
-        "input[value='Send notification']"
+        "input[value='Send notification']",
       );
       expect(mockPage.waitForSelector).toHaveBeenCalledWith(
         "#idRemoteNGC_DisplaySign",
-        { visible: true, timeout: 60000 }
+        { visible: true, timeout: 60000 },
       );
       expect(consoleSpy).toHaveBeenCalledWith("Approve the sign-in request");
       expect(consoleSpy).toHaveBeenCalledWith("42");
       expect(mockPage.waitForSelector).toHaveBeenCalledWith(
         "#idRemoteNGC_DisplaySign",
-        { hidden: true, timeout: 60000 }
+        { hidden: true, timeout: 60000 },
       );
 
       consoleSpy.mockRestore();
@@ -535,18 +535,18 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false
+        false,
       );
 
       expect(consoleSpy).toHaveBeenCalledWith("Open your Authenticator app");
       expect(mockPage.waitForSelector).toHaveBeenCalledWith(
         "#idRichContext_DisplaySign",
-        { visible: true, timeout: 5000 }
+        { visible: true, timeout: 5000 },
       );
       expect(consoleSpy).toHaveBeenCalledWith("58");
       expect(mockPage.waitForSelector).toHaveBeenCalledWith(
         "#idDiv_SAOTCAS_Description",
-        { hidden: true, timeout: 60000 }
+        { hidden: true, timeout: 60000 },
       );
 
       consoleSpy.mockRestore();
@@ -572,14 +572,14 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false
+        false,
       );
 
       expect(consoleSpy).toHaveBeenCalledWith("Open your Authenticator app");
       // Should not throw, just continue
       expect(mockPage.waitForSelector).toHaveBeenCalledWith(
         "#idDiv_SAOTCAS_Description",
-        { hidden: true, timeout: 60000 }
+        { hidden: true, timeout: 60000 },
       );
 
       consoleSpy.mockRestore();
@@ -594,7 +594,7 @@ describe("loginStates", () => {
       const mockPage = createMockPage();
       const mockElement = {};
       mockPage.evaluate.mockResolvedValue(
-        "Authentication failed. Please try again."
+        "Authentication failed. Please try again.",
       );
 
       const error = await getTfaFailedState()
@@ -604,12 +604,12 @@ describe("loginStates", () => {
           false,
           "",
           undefined,
-          false
+          false,
         )
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toBe(
-        "Authentication failed. Please try again."
+        "Authentication failed. Please try again.",
       );
     });
   });
@@ -630,12 +630,12 @@ describe("loginStates", () => {
           false,
           "",
           undefined,
-          false
+          false,
         )
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toBe(
-        "Service temporarily unavailable"
+        "Service temporarily unavailable",
       );
     });
   });
@@ -659,7 +659,7 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false
+        false,
       );
 
       expect(inquirer.prompt).toHaveBeenCalled();
@@ -685,7 +685,7 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false
+        false,
       );
 
       expect(consoleSpy).toHaveBeenCalledWith("Invalid code");
@@ -707,13 +707,13 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false
+        false,
       );
 
       // Verify waitForSelector was called with correct selectors for form completion
       expect(mockPage.waitForSelector).toHaveBeenCalledWith(
         "input[name=otc].has-error,input[name=otc].moveOffScreen",
-        { timeout: 60000 }
+        { timeout: 60000 },
       );
       consoleSpy.mockRestore();
     });
@@ -733,14 +733,14 @@ describe("loginStates", () => {
         false,
         "",
         undefined,
-        false
+        false,
       );
 
       expect(mockPage.focus).toHaveBeenCalledWith('input[name="otc"]');
       // Should select all text and delete with single backspace
       expect(mockPage.$eval).toHaveBeenCalledWith(
         'input[name="otc"]',
-        expect.any(Function)
+        expect.any(Function),
       );
       expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("999999");
