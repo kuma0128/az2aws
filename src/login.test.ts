@@ -1568,6 +1568,7 @@ describe("login", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
       });
+      vi.restoreAllMocks();
     });
 
     it("should include --user-data-dir when rememberMe=true and userDataDir is set", async () => {
@@ -1927,6 +1928,167 @@ describe("login", () => {
           ]),
         })
       );
+    });
+
+    it("should omit --app when incognito=true in non-headless mode", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false, // headless=false
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+          true // incognito
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining(["--window-size=425,550"]),
+        })
+      );
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.not.arrayContaining(["--app=https://login.example.com"]),
+        })
+      );
+    });
+
+    it("should warn when incognito=true and rememberMe=true", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false,
+          true // incognito
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "WARNING: Incognito mode ignores persisted Chrome profiles. " +
+          "Disable 'Stay logged in' to avoid confusion."
+      );
+    });
+  });
+
+  describe("_performLoginAsync incognito mode", () => {
+    const createMockPage = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let requestHandler: ((req: any) => void) | null = null;
+      let resolveRequestInterception: (() => void) | null = null;
+      const requestInterceptionReady = new Promise<void>((resolve) => {
+        resolveRequestInterception = resolve;
+      });
+
+      return {
+        setExtraHTTPHeaders: vi.fn().mockResolvedValue(undefined),
+        setViewport: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn().mockImplementation((event: string, handler: unknown) => {
+          if (event === "request") {
+            requestHandler = handler as typeof requestHandler;
+          }
+        }),
+        setRequestInterception: vi.fn().mockImplementation(() => {
+          if (resolveRequestInterception) resolveRequestInterception();
+          return Promise.resolve();
+        }),
+        goto: vi.fn().mockResolvedValue(undefined),
+        waitForNavigation: vi.fn().mockResolvedValue(undefined),
+        bringToFront: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        $: vi.fn().mockResolvedValue(null),
+        screenshot: vi.fn().mockResolvedValue(undefined),
+        getRequestHandler: () => requestHandler,
+        waitForRequestInterception: () => requestInterceptionReady,
+      };
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should use a new browser context and close default pages when incognito=true", async () => {
+      const defaultPage = createMockPage();
+      const incognitoPage = createMockPage();
+      const mockContext = {
+        newPage: vi.fn().mockResolvedValue(incognitoPage),
+      };
+      const mockBrowser = {
+        pages: vi.fn().mockResolvedValue([defaultPage]),
+        createBrowserContext: vi.fn().mockResolvedValue(mockContext),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        false, // headless=false
+        false,
+        false, // cliProxy=false
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false,
+        true // incognito
+      );
+
+      await incognitoPage.waitForRequestInterception();
+      await Promise.resolve();
+
+      const requestHandler = incognitoPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=incognitoSaml",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      const result = await promise;
+      expect(result).toBe("incognitoSaml");
+      expect(mockContext.newPage.mock.invocationCallOrder[0]).toBeLessThan(
+        defaultPage.close.mock.invocationCallOrder[0]
+      );
+      expect(defaultPage.close).toHaveBeenCalledTimes(1);
+      expect(mockBrowser.createBrowserContext).toHaveBeenCalledTimes(1);
+      expect(mockContext.newPage).toHaveBeenCalledTimes(1);
+      expect(incognitoPage.goto).toHaveBeenCalledWith(
+        "https://login.example.com",
+        { waitUntil: "domcontentloaded" }
+      );
+      expect(incognitoPage.bringToFront).toHaveBeenCalledTimes(1);
     });
   });
 

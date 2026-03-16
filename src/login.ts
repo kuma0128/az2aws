@@ -290,6 +290,7 @@ export const login = {
    * @param {bool} [rememberMe] - Enable remembering the session
    * @param {bool} [noDisableExtensions] - True to prevent Puppeteer from disabling Chromium extensions
    * @param {bool} [disableGpu] - Disables GPU Acceleration
+   * @param {bool} [incognito] - Launch the login flow in an incognito browser context
    * @returns {Promise.<string>} The SAML response.
    * @private
    */
@@ -306,7 +307,7 @@ export const login = {
     rememberMe: boolean,
     noDisableExtensions: boolean,
     disableGpu: boolean,
-    incognito: boolean
+    incognito = false
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
@@ -315,6 +316,8 @@ export const login = {
     try {
       const args = headless
         ? []
+        : incognito
+        ? [`--window-size=${WIDTH},${HEIGHT}`]
         : [`--app=${url}`, `--window-size=${WIDTH},${HEIGHT}`];
       if (disableSandbox) args.push("--no-sandbox");
       if (enableChromeNetworkService)
@@ -402,8 +405,15 @@ export const login = {
 
       let page: Page;
       if (incognito) {
+        const existingPages = await browser.pages();
         const context: BrowserContext = await browser.createBrowserContext();
         page = await context.newPage();
+        await Promise.all(
+          existingPages.map((existingPage) => existingPage.close())
+        );
+        if (!headless) {
+          await page.bringToFront();
+        }
       } else {
         const pages = await browser.pages();
         page = pages[0];
@@ -450,7 +460,7 @@ export const login = {
       await page.setRequestInterception(true);
 
       try {
-        if (incognito || headless || (!headless && cliProxy)) {
+        if (incognito || headless || cliProxy) {
           debug("Going to login page");
           await page.goto(url, { waitUntil: "domcontentloaded" });
         } else {

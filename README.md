@@ -100,6 +100,7 @@ https://snapcraft.io/az2aws
 | `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
 | `--no-disable-extensions` | Keep browser extensions enabled |
 | `--disable-gpu` | Disable GPU acceleration |
+| `--incognito` | Open the login flow in an incognito browser context |
 | `--version (-v)` | Show version number |
 
 ## Usage
@@ -131,6 +132,10 @@ Enable "Stay logged in" during configuration to use `--no-prompt` without storin
 
     az2aws --no-prompt
     az2aws --profile foo --no-prompt
+
+`--incognito` starts the login flow in a fresh incognito browser context. This
+helps avoid reusing an existing browser session, but it also means persisted
+"Stay logged in" browser state will not be reused.
 
 #### Environment Variables
 
@@ -176,6 +181,7 @@ Example:
     az2aws                    # Default profile
     az2aws --profile foo      # Named profile
     az2aws --mode gui         # Use browser UI (more reliable)
+    az2aws --mode gui --incognito  # Open a fresh incognito login window
 
 You'll be prompted for username, password, and MFA if required. After login, use AWS CLI/SDKs as usual.
 
