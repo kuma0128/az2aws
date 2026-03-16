@@ -77,6 +77,7 @@ vi.mock("bluebird", () => ({
 
 import inquirer from "inquirer";
 import { awsConfig } from "./awsConfig";
+import { states } from "./loginStates";
 import { paths } from "./paths";
 
 describe("login", () => {
@@ -1674,6 +1675,45 @@ describe("login", () => {
       );
     });
 
+    it("should ignore saved profile arguments when incognito=true and rememberMe=true", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = "/user/data";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).profileDir = "CustomProfile";
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false,
+          true // incognito
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(mockMkdirp).not.toHaveBeenCalled();
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.not.arrayContaining([
+            "--user-data-dir=/user/data",
+            "--profile-directory=CustomProfile",
+          ]),
+        })
+      );
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
     it("should include auth whitelist args when enableChromeSeamlessSso=true", async () => {
       try {
         await login._performLoginAsync(
@@ -1987,8 +2027,7 @@ describe("login", () => {
       }
 
       expect(warnSpy).toHaveBeenCalledWith(
-        "WARNING: Incognito mode ignores persisted Chrome profiles. " +
-          "Disable 'Stay logged in' to avoid confusion."
+        "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles."
       );
     });
   });
@@ -2089,6 +2128,72 @@ describe("login", () => {
         { waitUntil: "domcontentloaded" }
       );
       expect(incognitoPage.bringToFront).toHaveBeenCalledTimes(1);
+    });
+
+    it("should disable rememberMe automation when incognito=true", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const defaultPage = createMockPage();
+      const incognitoPage = createMockPage();
+      const selectedElement = {};
+      let receivedRememberMe: boolean | undefined;
+      const mockContext = {
+        newPage: vi.fn().mockResolvedValue(incognitoPage),
+      };
+      const mockBrowser = {
+        pages: vi.fn().mockResolvedValue([defaultPage]),
+        createBrowserContext: vi.fn().mockResolvedValue(mockContext),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      incognitoPage.$.mockImplementation((selector: string) =>
+        Promise.resolve(
+          selector === "#remember-me-check" ? selectedElement : null
+        )
+      );
+
+      const state = {
+        name: "incognito remember me check",
+        selector: "#remember-me-check",
+        async handler(
+          _page: unknown,
+          _selected: unknown,
+          _noPrompt: boolean,
+          _defaultUsername: string,
+          _defaultPassword: string | undefined,
+          rememberMe: boolean
+        ): Promise<void> {
+          receivedRememberMe = rememberMe;
+          throw new Error("stop test");
+        },
+      };
+      states.unshift(state);
+
+      let error: unknown;
+      try {
+        error = await login
+          ._performLoginAsync(
+            "https://login.example.com",
+            true,
+            false,
+            true,
+            false,
+            false,
+            "",
+            undefined,
+            false,
+            true,
+            false,
+            false,
+            true
+          )
+          .catch((e: unknown) => e);
+      } finally {
+        states.shift();
+      }
+
+      expect((error as Error).message).toBe("stop test");
+      expect(receivedRememberMe).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
     });
   });
 

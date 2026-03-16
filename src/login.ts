@@ -4,12 +4,8 @@ import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
 import { load } from "cheerio";
 import { v4 } from "uuid";
-import puppeteer, {
-  Browser,
-  BrowserContext,
-  HTTPRequest,
-  Page,
-} from "puppeteer";
+import puppeteer from "puppeteer";
+import type { Browser, BrowserContext, HTTPRequest, Page } from "puppeteer";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
@@ -312,6 +308,7 @@ export const login = {
     debug("Loading login page in Chrome");
 
     let browser: Browser | undefined;
+    const useRememberMe = rememberMe && !incognito;
 
     try {
       const args = headless
@@ -328,7 +325,7 @@ export const login = {
           `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`
         );
       debug(`rememberMe value: ${rememberMe} (type: ${typeof rememberMe})`);
-      if (rememberMe) {
+      if (useRememberMe) {
         if (paths.userDataDir) {
           args.push(`--user-data-dir=${paths.userDataDir}`);
         } else {
@@ -344,8 +341,7 @@ export const login = {
 
       if (incognito && rememberMe) {
         console.warn(
-          "WARNING: Incognito mode ignores persisted Chrome profiles. " +
-            "Disable 'Stay logged in' to avoid confusion."
+          "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles."
         );
       }
 
@@ -383,7 +379,7 @@ export const login = {
         if (
           e instanceof Error &&
           e.name === "TargetCloseError" &&
-          rememberMe &&
+          useRememberMe &&
           !paths.userDataDir
         ) {
           debug(
@@ -513,7 +509,7 @@ export const login = {
                   noPrompt,
                   defaultUsername,
                   defaultPassword,
-                  rememberMe
+                  useRememberMe
                 ),
               ]);
 

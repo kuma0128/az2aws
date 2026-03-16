@@ -134,8 +134,8 @@ Enable "Stay logged in" during configuration to use `--no-prompt` without storin
     az2aws --profile foo --no-prompt
 
 `--incognito` starts the login flow in a fresh incognito browser context. This
-helps avoid reusing an existing browser session, but it also means persisted
-"Stay logged in" browser state will not be reused.
+helps avoid reusing an existing browser session, and it overrides any saved
+"Stay logged in" browser state for that run.
 
 #### Environment Variables
 
