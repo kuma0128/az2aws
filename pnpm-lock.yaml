@@ -25,8 +25,8 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0
       commander:
-        specifier: ^9.5.0
-        version: 9.5.0
+        specifier: ^14.0.3
+        version: 14.0.3
       debug:
         specifier: ^4.4.3
         version: 4.4.3
@@ -1165,9 +1165,9 @@ packages:
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
 
-  commander@9.5.0:
-    resolution: {integrity: sha512-KRs7WVDKg86PWiuAqhDrAQnTXZKraVcCc6vFdL14qrZ/DcWwuRo7VoiYXalXO7S5GKpqYiVEwCbgFDfxNHKJBQ==}
-    engines: {node: ^12.20.0 || >=14}
+  commander@14.0.3:
+    resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
+    engines: {node: '>=20'}
 
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
@@ -3549,7 +3549,7 @@ snapshots:
 
   color-name@1.1.4: {}
 
-  commander@9.5.0: {}
+  commander@14.0.3: {}
 
   concat-map@0.0.1: {}
 
