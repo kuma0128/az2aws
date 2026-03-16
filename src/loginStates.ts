@@ -10,7 +10,10 @@ const debug = _debug("az2aws");
 const getTfaSecret = (): string | undefined =>
   process.env.azure_default_tfa_secret || process.env.AZURE_DEFAULT_TFA_SECRET;
 
-export const generateTotpFromSecret = (secret: string, epoch?: number): string => {
+export const generateTotpFromSecret = (
+  secret: string,
+  epoch?: number
+): string => {
   const options: { secret: string; epoch?: number } = { secret };
   if (typeof epoch === "number") {
     options.epoch = epoch;
