@@ -12,7 +12,7 @@ import { CLIError } from "./CLIError";
 import { awsConfig, ProfileConfig } from "./awsConfig";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { paths } from "./paths";
-import mkdirp from "mkdirp";
+import { mkdirp } from "mkdirp";
 import fs from "fs/promises";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";

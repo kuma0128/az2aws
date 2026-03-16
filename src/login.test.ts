@@ -57,7 +57,7 @@ vi.mock("puppeteer", () => ({
 }));
 
 vi.mock("mkdirp", () => ({
-  default: mockMkdirp,
+  mkdirp: mockMkdirp,
 }));
 
 vi.mock("fs/promises", () => ({
