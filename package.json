@@ -71,7 +71,7 @@
     "commander": "^9.5.0",
     "debug": "^4.4.3",
     "https-proxy-agent": "^7.0.6",
-    "ini": "^3.0.1",
+    "ini": "^6.0.0",
     "inquirer": "^8.2.7",
     "mkdirp": "^2.1.6",
     "puppeteer": "^24.39.1",

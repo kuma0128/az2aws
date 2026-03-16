@@ -34,8 +34,8 @@ importers:
         specifier: ^7.0.6
         version: 7.0.6
       ini:
-        specifier: ^3.0.1
-        version: 3.0.1
+        specifier: ^6.0.0
+        version: 6.0.0
       inquirer:
         specifier: ^8.2.7
         version: 8.2.7(@types/node@24.12.0)
@@ -1521,9 +1521,9 @@ packages:
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
 
-  ini@3.0.1:
-    resolution: {integrity: sha512-it4HyVAUTKBc6m8e1iXWvXSTdndF7HbdN713+kvLrymxTaU4AUBWrJ4vEooP+V7fexnVD3LKcBshjGGPefSMUQ==}
-    engines: {node: ^12.13.0 || ^14.15.0 || >=16.0.0}
+  ini@6.0.0:
+    resolution: {integrity: sha512-IBTdIkzZNOpqm7q3dRqJvMaldXjDHWkEDfrwGEQTs5eaQMWV+djAhR+wahyNNMAa+qpbDUhBMVt4ZKNwpPm7xQ==}
+    engines: {node: ^20.17.0 || >=22.9.0}
 
   inquirer@8.2.7:
     resolution: {integrity: sha512-UjOaSel/iddGZJ5xP/Eixh6dY1XghiBw4XK13rCCIJcJfyhhoul/7KhLLUGtebEj6GDYM6Vnx/mVsjx2L/mFIA==}
@@ -3964,7 +3964,7 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  ini@3.0.1: {}
+  ini@6.0.0: {}
 
   inquirer@8.2.7(@types/node@24.12.0):
     dependencies:
