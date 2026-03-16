@@ -4,7 +4,8 @@ import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
 import { load } from "cheerio";
 import { v4 } from "uuid";
-import puppeteer, { Browser, HTTPRequest } from "puppeteer";
+import puppeteer from "puppeteer";
+import type { Browser, BrowserContext, HTTPRequest, Page } from "puppeteer";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
@@ -51,7 +52,8 @@ export const login = {
     awsNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false
   ): Promise<void> {
     let headless, cliProxy;
     if (mode === "cli") {
@@ -105,7 +107,8 @@ export const login = {
       enableChromeSeamlessSso,
       profile.azure_default_remember_me,
       noDisableExtensions,
-      disableGpu
+      disableGpu,
+      incognito
     );
     const roles = this._parseRolesFromSamlResponse(samlResponse);
     const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
@@ -134,7 +137,8 @@ export const login = {
     enableChromeSeamlessSso: boolean,
     forceRefresh: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false
   ): Promise<void> {
     const profiles = await awsConfig.getAllProfileNames();
 
@@ -162,7 +166,8 @@ export const login = {
         awsNoVerifySsl,
         enableChromeSeamlessSso,
         noDisableExtensions,
-        disableGpu
+        disableGpu,
+        incognito
       );
     }
   },
@@ -281,6 +286,7 @@ export const login = {
    * @param {bool} [rememberMe] - Enable remembering the session
    * @param {bool} [noDisableExtensions] - True to prevent Puppeteer from disabling Chromium extensions
    * @param {bool} [disableGpu] - Disables GPU Acceleration
+   * @param {bool} [incognito] - Launch the login flow in an incognito browser context
    * @returns {Promise.<string>} The SAML response.
    * @private
    */
@@ -296,15 +302,19 @@ export const login = {
     enableChromeSeamlessSso: boolean,
     rememberMe: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
     let browser: Browser | undefined;
+    const useRememberMe = rememberMe && !incognito;
 
     try {
       const args = headless
         ? []
+        : incognito
+        ? [`--window-size=${WIDTH},${HEIGHT}`]
         : [`--app=${url}`, `--window-size=${WIDTH},${HEIGHT}`];
       if (disableSandbox) args.push("--no-sandbox");
       if (enableChromeNetworkService)
@@ -315,7 +325,7 @@ export const login = {
           `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`
         );
       debug(`rememberMe value: ${rememberMe} (type: ${typeof rememberMe})`);
-      if (rememberMe) {
+      if (useRememberMe) {
         if (paths.userDataDir) {
           args.push(`--user-data-dir=${paths.userDataDir}`);
         } else {
@@ -327,6 +337,12 @@ export const login = {
         if (paths.profileDir) {
           args.push(`--profile-directory=${paths.profileDir}`);
         }
+      }
+
+      if (incognito && rememberMe) {
+        console.warn(
+          "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles."
+        );
       }
 
       const proxyUrl = getProxyUrl();
@@ -363,7 +379,7 @@ export const login = {
         if (
           e instanceof Error &&
           e.name === "TargetCloseError" &&
-          rememberMe &&
+          useRememberMe &&
           !paths.userDataDir
         ) {
           debug(
@@ -383,8 +399,21 @@ export const login = {
       // Wait for a bit as sometimes the browser isn't ready.
       await Bluebird.delay(200);
 
-      const pages = await browser.pages();
-      const page = pages[0];
+      let page: Page;
+      if (incognito) {
+        const existingPages = await browser.pages();
+        const context: BrowserContext = await browser.createBrowserContext();
+        page = await context.newPage();
+        await Promise.all(
+          existingPages.map((existingPage) => existingPage.close())
+        );
+        if (!headless) {
+          await page.bringToFront();
+        }
+      } else {
+        const pages = await browser.pages();
+        page = pages[0];
+      }
       await page.setExtraHTTPHeaders({
         "Accept-Language": "en",
       });
@@ -427,7 +456,7 @@ export const login = {
       await page.setRequestInterception(true);
 
       try {
-        if (headless || (!headless && cliProxy)) {
+        if (incognito || headless || cliProxy) {
           debug("Going to login page");
           await page.goto(url, { waitUntil: "domcontentloaded" });
         } else {
@@ -480,7 +509,7 @@ export const login = {
                   noPrompt,
                   defaultUsername,
                   defaultPassword,
-                  rememberMe
+                  useRememberMe
                 ),
               ]);
 

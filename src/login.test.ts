@@ -77,6 +77,7 @@ vi.mock("bluebird", () => ({
 
 import inquirer from "inquirer";
 import { awsConfig } from "./awsConfig";
+import { states } from "./loginStates";
 import { paths } from "./paths";
 
 describe("login", () => {
@@ -736,6 +737,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
 
@@ -761,6 +763,7 @@ describe("login", () => {
         "cli",
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -792,6 +795,7 @@ describe("login", () => {
         "cli",
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -878,6 +882,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
 
@@ -907,6 +912,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
 
@@ -932,6 +938,7 @@ describe("login", () => {
         "cli",
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -972,6 +979,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
 
@@ -997,6 +1005,7 @@ describe("login", () => {
         false,
         true, // forceRefresh
         false,
+        false,
         false
       );
 
@@ -1012,6 +1021,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
@@ -1019,6 +1029,7 @@ describe("login", () => {
         "cli",
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -1050,6 +1061,7 @@ describe("login", () => {
         false,
         false, // forceRefresh
         false,
+        false,
         false
       );
 
@@ -1063,6 +1075,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
@@ -1070,6 +1083,7 @@ describe("login", () => {
         "cli",
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -1097,6 +1111,7 @@ describe("login", () => {
         false,
         false, // forceRefresh
         false,
+        false,
         false
       );
 
@@ -1110,7 +1125,18 @@ describe("login", () => {
       vi.spyOn(login, "loginAsync").mockRejectedValue(loginError);
 
       const error = await login
-        .loginAll("cli", true, true, false, false, false, true, false, false)
+        .loginAll(
+          "cli",
+          true,
+          true,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        )
         .catch((e: unknown) => e);
 
       expect(error).toBe(loginError);
@@ -1128,7 +1154,18 @@ describe("login", () => {
         .mockResolvedValue(undefined);
 
       const error = await login
-        .loginAll("cli", true, true, false, false, false, false, false, false)
+        .loginAll(
+          "cli",
+          true,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        )
         .catch((e: unknown) => e);
 
       expect(error).toBe(expireError);
@@ -1532,6 +1569,7 @@ describe("login", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
       });
+      vi.restoreAllMocks();
     });
 
     it("should include --user-data-dir when rememberMe=true and userDataDir is set", async () => {
@@ -1635,6 +1673,45 @@ describe("login", () => {
           ]),
         })
       );
+    });
+
+    it("should ignore saved profile arguments when incognito=true and rememberMe=true", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = "/user/data";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).profileDir = "CustomProfile";
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false,
+          true // incognito
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(mockMkdirp).not.toHaveBeenCalled();
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.not.arrayContaining([
+            "--user-data-dir=/user/data",
+            "--profile-directory=CustomProfile",
+          ]),
+        })
+      );
+      expect(warnSpy).toHaveBeenCalledTimes(1);
     });
 
     it("should include auth whitelist args when enableChromeSeamlessSso=true", async () => {
@@ -1891,6 +1968,232 @@ describe("login", () => {
           ]),
         })
       );
+    });
+
+    it("should omit --app when incognito=true in non-headless mode", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false, // headless=false
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+          true // incognito
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining(["--window-size=425,550"]),
+        })
+      );
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.not.arrayContaining(["--app=https://login.example.com"]),
+        })
+      );
+    });
+
+    it("should warn when incognito=true and rememberMe=true", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false,
+          true // incognito
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles."
+      );
+    });
+  });
+
+  describe("_performLoginAsync incognito mode", () => {
+    const createMockPage = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let requestHandler: ((req: any) => void) | null = null;
+      let resolveRequestInterception: (() => void) | null = null;
+      const requestInterceptionReady = new Promise<void>((resolve) => {
+        resolveRequestInterception = resolve;
+      });
+
+      return {
+        setExtraHTTPHeaders: vi.fn().mockResolvedValue(undefined),
+        setViewport: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn().mockImplementation((event: string, handler: unknown) => {
+          if (event === "request") {
+            requestHandler = handler as typeof requestHandler;
+          }
+        }),
+        setRequestInterception: vi.fn().mockImplementation(() => {
+          if (resolveRequestInterception) resolveRequestInterception();
+          return Promise.resolve();
+        }),
+        goto: vi.fn().mockResolvedValue(undefined),
+        waitForNavigation: vi.fn().mockResolvedValue(undefined),
+        bringToFront: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        $: vi.fn().mockResolvedValue(null),
+        screenshot: vi.fn().mockResolvedValue(undefined),
+        getRequestHandler: () => requestHandler,
+        waitForRequestInterception: () => requestInterceptionReady,
+      };
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should use a new browser context and close default pages when incognito=true", async () => {
+      const defaultPage = createMockPage();
+      const incognitoPage = createMockPage();
+      const mockContext = {
+        newPage: vi.fn().mockResolvedValue(incognitoPage),
+      };
+      const mockBrowser = {
+        pages: vi.fn().mockResolvedValue([defaultPage]),
+        createBrowserContext: vi.fn().mockResolvedValue(mockContext),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        false, // headless=false
+        false,
+        false, // cliProxy=false
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false,
+        true // incognito
+      );
+
+      await incognitoPage.waitForRequestInterception();
+      await Promise.resolve();
+
+      const requestHandler = incognitoPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=incognitoSaml",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      const result = await promise;
+      expect(result).toBe("incognitoSaml");
+      expect(mockContext.newPage.mock.invocationCallOrder[0]).toBeLessThan(
+        defaultPage.close.mock.invocationCallOrder[0]
+      );
+      expect(defaultPage.close).toHaveBeenCalledTimes(1);
+      expect(mockBrowser.createBrowserContext).toHaveBeenCalledTimes(1);
+      expect(mockContext.newPage).toHaveBeenCalledTimes(1);
+      expect(incognitoPage.goto).toHaveBeenCalledWith(
+        "https://login.example.com",
+        { waitUntil: "domcontentloaded" }
+      );
+      expect(incognitoPage.bringToFront).toHaveBeenCalledTimes(1);
+    });
+
+    it("should disable rememberMe automation when incognito=true", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const defaultPage = createMockPage();
+      const incognitoPage = createMockPage();
+      const selectedElement = {};
+      let receivedRememberMe: boolean | undefined;
+      const mockContext = {
+        newPage: vi.fn().mockResolvedValue(incognitoPage),
+      };
+      const mockBrowser = {
+        pages: vi.fn().mockResolvedValue([defaultPage]),
+        createBrowserContext: vi.fn().mockResolvedValue(mockContext),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      incognitoPage.$.mockImplementation((selector: string) =>
+        Promise.resolve(
+          selector === "#remember-me-check" ? selectedElement : null
+        )
+      );
+
+      const state = {
+        name: "incognito remember me check",
+        selector: "#remember-me-check",
+        async handler(
+          _page: unknown,
+          _selected: unknown,
+          _noPrompt: boolean,
+          _defaultUsername: string,
+          _defaultPassword: string | undefined,
+          rememberMe: boolean
+        ): Promise<void> {
+          receivedRememberMe = rememberMe;
+          throw new Error("stop test");
+        },
+      };
+      states.unshift(state);
+
+      let error: unknown;
+      try {
+        error = await login
+          ._performLoginAsync(
+            "https://login.example.com",
+            true,
+            false,
+            true,
+            false,
+            false,
+            "",
+            undefined,
+            false,
+            true,
+            false,
+            false,
+            true
+          )
+          .catch((e: unknown) => e);
+      } finally {
+        states.shift();
+      }
+
+      expect((error as Error).message).toBe("stop test");
+      expect(receivedRememberMe).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
     });
   });
 
