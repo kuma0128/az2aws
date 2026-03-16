@@ -60,97 +60,98 @@ export const login = {
     const effectiveNoPrompt = credentialProcess ? true : noPrompt;
 
     try {
-    if (credentialProcess) {
-      console.log = (...args: unknown[]) => console.error(...args);
-    }
-
-    let headless, cliProxy;
-    if (mode === "cli") {
-      headless = true;
-      cliProxy = true;
-    } else if (mode === "gui") {
-      headless = false;
-      cliProxy = false;
-    } else if (mode === "debug") {
-      headless = false;
-      cliProxy = true;
-    } else {
-      throw new CLIError("Invalid mode");
-    }
-
-    const profile = await this._loadProfileAsync(profileName);
-    console.log(
-      `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`
-    );
-    if (profile.region && profile.region.startsWith("us-gov")) {
-      console.warn(
-        "GovCloud region detected in profile. Note: Other AWS CLI operations " +
-          "will use your AWS CLI default region. If needed, set it to match " +
-          "this GovCloud region (us-gov-west-1 or us-gov-east-1)."
-      );
-    }
-    let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
-    if (profile.region && profile.region.startsWith("us-gov")) {
-      assertionConsumerServiceURL = AWS_GOV_SAML_ENDPOINT;
-    }
-    if (profile.region && profile.region.startsWith("cn-")) {
-      assertionConsumerServiceURL = AWS_CN_SAML_ENDPOINT;
-    }
-
-    console.log("Using AWS SAML endpoint", assertionConsumerServiceURL);
-
-    const loginUrl = await this._createLoginUrlAsync(
-      profile.azure_app_id_uri,
-      profile.azure_tenant_id,
-      assertionConsumerServiceURL
-    );
-    const samlResponse = await this._performLoginAsync(
-      loginUrl,
-      headless,
-      disableSandbox,
-      cliProxy,
-      effectiveNoPrompt,
-      enableChromeNetworkService,
-      profile.azure_default_username,
-      profile.azure_default_password,
-      enableChromeSeamlessSso,
-      profile.azure_default_remember_me,
-      noDisableExtensions,
-      disableGpu
-    );
-    const roles = this._parseRolesFromSamlResponse(samlResponse);
-    const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
-      roles,
-      effectiveNoPrompt,
-      profile.azure_default_role_arn,
-      profile.azure_default_duration_hours
-    );
-
-    const credentials = await this._assumeRoleAsync(
-      profileName,
-      samlResponse,
-      role,
-      durationHours,
-      awsNoVerifySsl,
-      profile.region,
-      !credentialProcess
-    );
-
-    if (credentialProcess) {
-      if (!credentials) {
-        throw new CLIError("Unable to retrieve credentials.");
+      if (credentialProcess) {
+        console.log = (...args: unknown[]) => console.error(...args);
       }
 
-      originalConsoleLog(
-        JSON.stringify({
-          Version: 1,
-          AccessKeyId: credentials.aws_access_key_id,
-          SecretAccessKey: credentials.aws_secret_access_key,
-          SessionToken: credentials.aws_session_token,
-          Expiration: credentials.aws_expiration,
-        })
+      let headless, cliProxy;
+      if (mode === "cli") {
+        headless = true;
+        cliProxy = true;
+      } else if (mode === "gui") {
+        headless = false;
+        cliProxy = false;
+      } else if (mode === "debug") {
+        headless = false;
+        cliProxy = true;
+      } else {
+        throw new CLIError("Invalid mode");
+      }
+
+      const profile = await this._loadProfileAsync(profileName);
+      console.log(
+        `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`
       );
-    }
+      if (profile.region && profile.region.startsWith("us-gov")) {
+        console.warn(
+          "GovCloud region detected in profile. Note: Other AWS CLI operations " +
+            "will use your AWS CLI default region. If needed, set it to match " +
+            "this GovCloud region (us-gov-west-1 or us-gov-east-1)."
+        );
+      }
+      let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
+      if (profile.region && profile.region.startsWith("us-gov")) {
+        assertionConsumerServiceURL = AWS_GOV_SAML_ENDPOINT;
+      }
+      if (profile.region && profile.region.startsWith("cn-")) {
+        assertionConsumerServiceURL = AWS_CN_SAML_ENDPOINT;
+      }
+
+      console.log("Using AWS SAML endpoint", assertionConsumerServiceURL);
+
+      const loginUrl = await this._createLoginUrlAsync(
+        profile.azure_app_id_uri,
+        profile.azure_tenant_id,
+        assertionConsumerServiceURL
+      );
+      const samlResponse = await this._performLoginAsync(
+        loginUrl,
+        headless,
+        disableSandbox,
+        cliProxy,
+        effectiveNoPrompt,
+        enableChromeNetworkService,
+        profile.azure_default_username,
+        profile.azure_default_password,
+        enableChromeSeamlessSso,
+        profile.azure_default_remember_me,
+        noDisableExtensions,
+        disableGpu
+      );
+      const roles = this._parseRolesFromSamlResponse(samlResponse);
+      const { role, durationHours } =
+        await this._askUserForRoleAndDurationAsync(
+          roles,
+          effectiveNoPrompt,
+          profile.azure_default_role_arn,
+          profile.azure_default_duration_hours
+        );
+
+      const credentials = await this._assumeRoleAsync(
+        profileName,
+        samlResponse,
+        role,
+        durationHours,
+        awsNoVerifySsl,
+        profile.region,
+        !credentialProcess
+      );
+
+      if (credentialProcess) {
+        if (!credentials) {
+          throw new CLIError("Unable to retrieve credentials.");
+        }
+
+        originalConsoleLog(
+          JSON.stringify({
+            Version: 1,
+            AccessKeyId: credentials.aws_access_key_id,
+            SecretAccessKey: credentials.aws_secret_access_key,
+            SessionToken: credentials.aws_session_token,
+            Expiration: credentials.aws_expiration,
+          })
+        );
+      }
     } finally {
       console.log = originalConsoleLog;
     }
