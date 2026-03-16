@@ -75,7 +75,7 @@
     "inquirer": "^8.2.7",
     "mkdirp": "^2.1.6",
     "puppeteer": "^24.39.1",
-    "uuid": "^9.0.1"
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/bluebird": "^3.5.42",
