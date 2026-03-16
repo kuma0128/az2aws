@@ -35,7 +35,12 @@ const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
 // eslint-disable-next-line @typescript-eslint/no-implied-eval
 const importHttpsProxyAgent = Function(
   'return import("https-proxy-agent")'
-) as () => Promise<{ HttpsProxyAgent: new (proxy: string, opts?: Record<string, unknown>) => import("http").Agent }>;
+) as () => Promise<{
+  HttpsProxyAgent: new (
+    proxy: string,
+    opts?: Record<string, unknown>
+  ) => import("http").Agent;
+}>;
 
 const getProxyUrl = (): string | undefined =>
   process.env.https_proxy ||
