@@ -1503,7 +1503,8 @@ describe("login", () => {
           "base64-assertion",
           {
             roleArn: "arn:aws:iam::123456789012:role/TestRole",
-            principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+            principalArn:
+              "arn:aws:iam::123456789012:saml-provider/TestProvider",
           },
           1,
           false,

@@ -117,12 +117,13 @@ export const login = {
         disableGpu
       );
       const roles = this._parseRolesFromSamlResponse(samlResponse);
-      const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
-        roles,
-        noPrompt,
-        profile.azure_default_role_arn,
-        profile.azure_default_duration_hours
-      );
+      const { role, durationHours } =
+        await this._askUserForRoleAndDurationAsync(
+          roles,
+          noPrompt,
+          profile.azure_default_role_arn,
+          profile.azure_default_duration_hours
+        );
 
       const credentials = await this._assumeRoleAsync(
         profileName,
@@ -777,7 +778,9 @@ export const login = {
       !res.Credentials.Expiration
     ) {
       debug("Received incomplete security credentials from AWS");
-      throw new CLIError("Unable to get complete security credentials from AWS");
+      throw new CLIError(
+        "Unable to get complete security credentials from AWS"
+      );
     }
 
     const credentials: AwsCredentials = {
