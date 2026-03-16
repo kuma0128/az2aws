@@ -736,6 +736,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
 
@@ -761,6 +762,7 @@ describe("login", () => {
         "cli",
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -792,6 +794,7 @@ describe("login", () => {
         "cli",
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -878,6 +881,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
 
@@ -907,6 +911,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
 
@@ -932,6 +937,7 @@ describe("login", () => {
         "cli",
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -972,6 +978,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
 
@@ -997,6 +1004,7 @@ describe("login", () => {
         false,
         true, // forceRefresh
         false,
+        false,
         false
       );
 
@@ -1012,6 +1020,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
@@ -1019,6 +1028,7 @@ describe("login", () => {
         "cli",
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -1050,6 +1060,7 @@ describe("login", () => {
         false,
         false, // forceRefresh
         false,
+        false,
         false
       );
 
@@ -1063,6 +1074,7 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
         false
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
@@ -1070,6 +1082,7 @@ describe("login", () => {
         "cli",
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -1097,6 +1110,7 @@ describe("login", () => {
         false,
         false, // forceRefresh
         false,
+        false,
         false
       );
 
@@ -1110,7 +1124,18 @@ describe("login", () => {
       vi.spyOn(login, "loginAsync").mockRejectedValue(loginError);
 
       const error = await login
-        .loginAll("cli", true, true, false, false, false, true, false, false)
+        .loginAll(
+          "cli",
+          true,
+          true,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        )
         .catch((e: unknown) => e);
 
       expect(error).toBe(loginError);
@@ -1128,7 +1153,18 @@ describe("login", () => {
         .mockResolvedValue(undefined);
 
       const error = await login
-        .loginAll("cli", true, true, false, false, false, false, false, false)
+        .loginAll(
+          "cli",
+          true,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        )
         .catch((e: unknown) => e);
 
       expect(error).toBe(expireError);

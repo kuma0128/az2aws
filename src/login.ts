@@ -4,7 +4,12 @@ import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
 import { load } from "cheerio";
 import { v4 } from "uuid";
-import puppeteer, { Browser, HTTPRequest } from "puppeteer";
+import puppeteer, {
+  Browser,
+  BrowserContext,
+  HTTPRequest,
+  Page,
+} from "puppeteer";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
@@ -51,7 +56,8 @@ export const login = {
     awsNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false
   ): Promise<void> {
     let headless, cliProxy;
     if (mode === "cli") {
@@ -105,7 +111,8 @@ export const login = {
       enableChromeSeamlessSso,
       profile.azure_default_remember_me,
       noDisableExtensions,
-      disableGpu
+      disableGpu,
+      incognito
     );
     const roles = this._parseRolesFromSamlResponse(samlResponse);
     const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
@@ -134,7 +141,8 @@ export const login = {
     enableChromeSeamlessSso: boolean,
     forceRefresh: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false
   ): Promise<void> {
     const profiles = await awsConfig.getAllProfileNames();
 
@@ -162,7 +170,8 @@ export const login = {
         awsNoVerifySsl,
         enableChromeSeamlessSso,
         noDisableExtensions,
-        disableGpu
+        disableGpu,
+        incognito
       );
     }
   },
@@ -296,7 +305,8 @@ export const login = {
     enableChromeSeamlessSso: boolean,
     rememberMe: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito: boolean
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
@@ -327,6 +337,13 @@ export const login = {
         if (paths.profileDir) {
           args.push(`--profile-directory=${paths.profileDir}`);
         }
+      }
+
+      if (incognito && rememberMe) {
+        console.warn(
+          "WARNING: Incognito mode ignores persisted Chrome profiles. " +
+            "Disable 'Stay logged in' to avoid confusion."
+        );
       }
 
       const proxyUrl = getProxyUrl();
@@ -383,8 +400,14 @@ export const login = {
       // Wait for a bit as sometimes the browser isn't ready.
       await Bluebird.delay(200);
 
-      const pages = await browser.pages();
-      const page = pages[0];
+      let page: Page;
+      if (incognito) {
+        const context: BrowserContext = await browser.createBrowserContext();
+        page = await context.newPage();
+      } else {
+        const pages = await browser.pages();
+        page = pages[0];
+      }
       await page.setExtraHTTPHeaders({
         "Accept-Language": "en",
       });
@@ -427,7 +450,7 @@ export const login = {
       await page.setRequestInterception(true);
 
       try {
-        if (headless || (!headless && cliProxy)) {
+        if (incognito || headless || (!headless && cliProxy)) {
           debug("Going to login page");
           await page.goto(url, { waitUntil: "domcontentloaded" });
         } else {
