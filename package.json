@@ -73,7 +73,7 @@
     "https-proxy-agent": "^7.0.6",
     "ini": "^6.0.0",
     "inquirer": "^8.2.7",
-    "mkdirp": "^2.1.6",
+    "mkdirp": "^3.0.1",
     "puppeteer": "^24.39.1",
     "uuid": "^13.0.0"
   },

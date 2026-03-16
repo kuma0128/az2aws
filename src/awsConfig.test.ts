@@ -4,7 +4,7 @@ import { awsConfig } from "./awsConfig";
 
 vi.mock("fs");
 vi.mock("mkdirp", () => ({
-  default: vi.fn().mockResolvedValue(undefined),
+  mkdirp: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe("awsConfig", () => {
