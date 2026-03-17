@@ -6,6 +6,7 @@ process.on("SIGTERM", () => process.exit(1));
 import { Command } from "commander";
 import { configureProfileAsync } from "./configureProfileAsync";
 import { login } from "./login";
+import { checkForUpdate } from "./updateNotifier";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { version } = require("../package.json") as { version: string };
@@ -76,10 +77,15 @@ const noDisableExtensions = !options.disableExtensions;
 const disableGpu = !!options.disableGpu;
 const incognito = !!options.incognito;
 
-Promise.resolve()
-  .then(() => {
+// Start the update lookup immediately, but only print after the main flow ends.
+const updateCheckPromise = checkForUpdate(version);
+
+async function runAsync(): Promise<void> {
+  let exitCode = 0;
+
+  try {
     if (options.allProfiles) {
-      return login.loginAll(
+      await login.loginAll(
         mode,
         disableSandbox,
         noPrompt,
@@ -91,28 +97,42 @@ Promise.resolve()
         disableGpu,
         incognito,
       );
+    } else if (options.configure) {
+      await configureProfileAsync(profileName);
+    } else {
+      await login.loginAsync(
+        profileName,
+        mode,
+        disableSandbox,
+        noPrompt,
+        enableChromeNetworkService,
+        awsNoVerifySsl,
+        enableChromeSeamlessSso,
+        noDisableExtensions,
+        disableGpu,
+        incognito,
+      );
     }
-
-    if (options.configure) return configureProfileAsync(profileName);
-    return login.loginAsync(
-      profileName,
-      mode,
-      disableSandbox,
-      noPrompt,
-      enableChromeNetworkService,
-      awsNoVerifySsl,
-      enableChromeSeamlessSso,
-      noDisableExtensions,
-      disableGpu,
-      incognito,
-    );
-  })
-  .catch((err: Error) => {
-    if (err.name === "CLIError") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "CLIError") {
       console.error(err.message);
-      process.exit(2);
+      exitCode = 2;
     } else {
       console.error(err);
-      process.exit(1);
+      exitCode = 1;
     }
-  });
+  }
+
+  if (exitCode === 0) {
+    const updateMessage = await updateCheckPromise;
+    if (updateMessage) {
+      process.stderr.write(updateMessage);
+    }
+  }
+
+  if (exitCode !== 0) {
+    process.exit(exitCode);
+  }
+}
+
+void runAsync();
