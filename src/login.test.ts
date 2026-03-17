@@ -580,6 +580,24 @@ describe("login", () => {
       expect(result.durationHours).toBe(1);
     });
 
+    it("should default duration to 1 hour when defaultDurationHours exceeds 12", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "13",
+      );
+
+      expect(result.durationHours).toBe(1);
+    });
+
     it("should throw Error when inquirer returns unknown role", async () => {
       const roles = [
         {
@@ -964,8 +982,8 @@ describe("login", () => {
       vi.restoreAllMocks();
     });
 
-    it("should return early when profiles is undefined", async () => {
-      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(undefined);
+    it("should not call loginAsync when no profiles are configured", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([]);
       const loginAsyncSpy = vi
         .spyOn(login, "loginAsync")
         .mockResolvedValue(undefined);

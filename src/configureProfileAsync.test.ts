@@ -227,8 +227,7 @@ describe("configureProfileAsync", () => {
 
       expect(tenantIdQuestion.validate("")).toBe(false);
       expect(tenantIdQuestion.validate("valid-tenant")).toBe(true);
-      // Note: whitespace-only strings currently pass validation (truthy)
-      expect(tenantIdQuestion.validate("   ")).toBe(true);
+      expect(tenantIdQuestion.validate("   ")).toBe(false);
     });
 
     it("should validate appIdUri - empty string returns false", async () => {
@@ -259,6 +258,7 @@ describe("configureProfileAsync", () => {
 
       expect(appIdUriQuestion.validate("")).toBe(false);
       expect(appIdUriQuestion.validate("https://app.example.com")).toBe(true);
+      expect(appIdUriQuestion.validate("   ")).toBe(false);
     });
 
     it("should validate rememberMe - only accepts true or false", async () => {

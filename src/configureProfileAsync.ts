@@ -13,14 +13,14 @@ export async function configureProfileAsync(
       type: "input" as const,
       name: "tenantId",
       message: "Azure Tenant ID:",
-      validate: (input: string): boolean => !!input,
+      validate: (input: string): boolean => input.trim().length > 0,
       default: profile && profile.azure_tenant_id,
     },
     {
       type: "input" as const,
       name: "appIdUri",
       message: "Azure App ID URI:",
-      validate: (input: string): boolean => !!input,
+      validate: (input: string): boolean => input.trim().length > 0,
       default: profile && profile.azure_app_id_uri,
     },
     {

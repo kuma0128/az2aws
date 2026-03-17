@@ -161,10 +161,6 @@ export const login = {
   ): Promise<void> {
     const profiles = await awsConfig.getAllProfileNames();
 
-    if (!profiles) {
-      return;
-    }
-
     for (const profile of profiles) {
       debug(`Check if profile ${profile} is expired or is about to expire`);
       if (
@@ -641,7 +637,11 @@ export const login = {
     let durationHours = 1;
     if (defaultDurationHours) {
       const parsedDuration = parseInt(defaultDurationHours, 10);
-      if (!Number.isNaN(parsedDuration) && parsedDuration > 0) {
+      if (
+        !Number.isNaN(parsedDuration) &&
+        parsedDuration > 0 &&
+        parsedDuration <= 12
+      ) {
         durationHours = parsedDuration;
       }
     }
