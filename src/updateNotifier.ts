@@ -6,6 +6,8 @@ import os from "os";
 const PACKAGE_NAME = "az2aws";
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
 const FAKE_LATEST_VERSION_ENV = "AZ2AWS_FAKE_LATEST_VERSION";
+const ANSI_YELLOW = "\u001b[33m";
+const ANSI_RESET = "\u001b[0m";
 
 type InstallMethod = "mise" | "snap" | "unknown";
 
@@ -18,6 +20,7 @@ interface CheckForUpdateOptions {
   env?: NodeJS.ProcessEnv;
   executablePath?: string;
   installMethod?: InstallMethod;
+  useColor?: boolean;
 }
 
 function getCachePath(): string {
@@ -131,13 +134,16 @@ function createUpdateMessage(
   currentVersion: string,
   latestVersion: string,
   installMethod: InstallMethod,
+  useColor = false,
 ): string {
-  return [
+  const message = [
     "",
     `Update available! ${currentVersion} -> ${latestVersion}`,
     getUpdateInstructions(installMethod),
     "",
   ].join("\n");
+
+  return useColor ? `${ANSI_YELLOW}${message}${ANSI_RESET}` : message;
 }
 
 export async function checkForUpdate(
@@ -166,7 +172,12 @@ export async function checkForUpdate(
         options.installMethod ??
         detectInstallMethod(env, options.executablePath ?? process.argv[1]);
 
-      return createUpdateMessage(currentVersion, latestVersion, installMethod);
+      return createUpdateMessage(
+        currentVersion,
+        latestVersion,
+        installMethod,
+        options.useColor ?? false,
+      );
     }
   } catch {
     // Silently ignore update check failures

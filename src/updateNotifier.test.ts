@@ -61,6 +61,22 @@ describe("checkForUpdate", () => {
     expect(consoleSpy).not.toHaveBeenCalled();
   });
 
+  it("should colorize the update message when color output is enabled", async () => {
+    const req = createMockRequest();
+    vi.mocked(https.get).mockImplementation((_url, _opts, cb) => {
+      const callback = cb as (res: EventEmitter) => void;
+      callback(createMockResponse(JSON.stringify({ version: "2.0.0" })));
+      return req as never;
+    });
+
+    const message = await checkForUpdate("1.5.0", { useColor: true });
+
+    expect(message).toContain("\u001b[33m");
+    expect(message).toContain("\u001b[0m");
+    expect(message).toContain("Update available!");
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
   it("should not show message when already on latest version", async () => {
     const req = createMockRequest();
     vi.mocked(https.get).mockImplementation((_url, _opts, cb) => {

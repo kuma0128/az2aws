@@ -78,7 +78,9 @@ const disableGpu = !!options.disableGpu;
 const incognito = !!options.incognito;
 
 // Start the update lookup immediately, but only print after the main flow ends.
-const updateCheckPromise = checkForUpdate(version);
+const updateCheckPromise = checkForUpdate(version, {
+  useColor: process.stderr.isTTY && !process.env.NO_COLOR,
+});
 
 async function runAsync(): Promise<void> {
   let exitCode = 0;
