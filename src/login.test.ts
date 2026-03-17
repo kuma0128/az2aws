@@ -1222,6 +1222,14 @@ describe("login", () => {
       delete process.env.HTTP_PROXY;
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(login, "_createHttpsProxyAgentAsync").mockImplementation(
+        async (proxyUrl, proxyOptions) => {
+          mockHttpsProxyAgent(proxyUrl, proxyOptions);
+          return {} as Awaited<
+            ReturnType<typeof login._createHttpsProxyAgentAsync>
+          >;
+        }
+      );
       mockSend.mockResolvedValue({
         Credentials: {
           AccessKeyId: "AKIAIOSFODNN7EXAMPLE",
