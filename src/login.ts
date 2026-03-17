@@ -1,5 +1,5 @@
 import Bluebird from "bluebird";
-import inquirer, { QuestionCollection } from "inquirer";
+import inquirer from "inquirer";
 import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
 import { load } from "cheerio";
@@ -645,7 +645,8 @@ export const login = {
         durationHours = parsedDuration;
       }
     }
-    const questions: QuestionCollection[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const questions: any[] = [];
     if (roles.length === 0) {
       throw new CLIError("No roles found in SAML response.");
     } else if (roles.length === 1) {
@@ -671,7 +672,7 @@ export const login = {
         questions.push({
           name: "role",
           message: "Role:",
-          type: "list",
+          type: "select",
           choices: roles.map((r) => r.roleArn).sort(),
           default: defaultRoleArn,
         });
@@ -690,9 +691,9 @@ export const login = {
         message: "Session Duration Hours (up to 12):",
         type: "input",
         default: defaultDurationHours || 1,
-        validate: (input): boolean | string => {
-          input = Number(input);
-          if (input > 0 && input <= 12) return true;
+        validate: (input: string): boolean | string => {
+          const num = Number(input);
+          if (num > 0 && num <= 12) return true;
           return "Duration hours must be between 1 and 12";
         },
       });

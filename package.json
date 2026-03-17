@@ -81,7 +81,6 @@
     "@types/bluebird": "^3.5.42",
     "@types/debug": "^4.1.12",
     "@types/ini": "^4.1.1",
-    "@types/inquirer": "^8.2.12",
     "@types/node": "^25.5.0",
     "@typescript-eslint/eslint-plugin": "^8.57.0",
     "@typescript-eslint/parser": "^8.57.0",
