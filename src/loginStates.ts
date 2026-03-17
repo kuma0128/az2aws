@@ -12,7 +12,7 @@ export type StateHandler = (
   noPrompt: boolean,
   defaultUsername: string,
   defaultPassword: string | undefined,
-  rememberMe: boolean
+  rememberMe: boolean,
 ) => Promise<void>;
 
 export interface State {
@@ -36,7 +36,7 @@ export const states: State[] = [
       page: Page,
       _selected: ElementHandle,
       noPrompt: boolean,
-      defaultUsername: string
+      defaultUsername: string,
     ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
@@ -45,7 +45,7 @@ export const states: State[] = [
         const errorMessage = await page.evaluate(
           // eslint-disable-next-line
           (err) => err?.textContent ?? "",
-          error
+          error,
         );
         console.log(errorMessage);
       }
@@ -102,7 +102,7 @@ export const states: State[] = [
       await Promise.race([
         page.waitForSelector(
           `input[name=loginfmt].has-error,input[name=loginfmt].moveOffScreen`,
-          { timeout: 60000 }
+          { timeout: 60000 },
         ),
         (async (): Promise<void> => {
           await Bluebird.delay(1000);
@@ -124,7 +124,7 @@ export const states: State[] = [
       const aadTileMessage: string = await page.evaluate(
         // eslint-disable-next-line
         (a) => a?.textContent ?? "",
-        aadTile
+        aadTile,
       );
 
       const msaTile = await page.$("#msaTileTitle");
@@ -132,7 +132,7 @@ export const states: State[] = [
       const msaTileMessage: string = await page.evaluate(
         // eslint-disable-next-line
         (m) => m?.textContent ?? "",
-        msaTile
+        msaTile,
       );
 
       const accounts = [
@@ -148,7 +148,7 @@ export const states: State[] = [
       } else {
         debug("Asking user to choose account");
         console.log(
-          "It looks like this Username is used with more than one account from Microsoft. Which one do you want to use?"
+          "It looks like this Username is used with more than one account from Microsoft. Which one do you want to use?",
         );
         const answers = await inquirer.prompt([
           {
@@ -188,7 +188,7 @@ export const states: State[] = [
       debug("Printing the message displayed");
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const messageElement = await page.$(
-        "#idDiv_RemoteNGC_PollingDescription"
+        "#idDiv_RemoteNGC_PollingDescription",
       );
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const codeElement = await page.$("#idRemoteNGC_DisplaySign");
@@ -196,7 +196,7 @@ export const states: State[] = [
       const message = await page.evaluate(
         // eslint-disable-next-line
         (el) => el?.textContent ?? "",
-        messageElement
+        messageElement,
       );
       console.log(message);
       debug("Printing the auth code");
@@ -204,7 +204,7 @@ export const states: State[] = [
       const authCode = await page.evaluate(
         // eslint-disable-next-line
         (el) => el?.textContent ?? "",
-        codeElement
+        codeElement,
       );
       console.log(authCode);
       debug("Waiting for response");
@@ -222,7 +222,7 @@ export const states: State[] = [
       _selected: ElementHandle,
       noPrompt: boolean,
       _defaultUsername: string,
-      defaultPassword: string | undefined
+      defaultPassword: string | undefined,
     ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
@@ -231,7 +231,7 @@ export const states: State[] = [
         const errorMessage = await page.evaluate(
           // eslint-disable-next-line
           (err) => err?.textContent ?? "",
-          error
+          error,
         );
         console.log(errorMessage);
         defaultPassword = ""; // Password error. Unset the default and allow user to enter it.
@@ -274,7 +274,7 @@ export const states: State[] = [
       const descriptionMessage = await page.evaluate(
         // eslint-disable-next-line
         (description) => description?.textContent ?? "",
-        selected
+        selected,
       );
       console.log(descriptionMessage);
 
@@ -286,14 +286,14 @@ export const states: State[] = [
         });
         debug("Checking if authentication code is displayed");
         const authenticationCodeElement = await page.$(
-          "#idRichContext_DisplaySign"
+          "#idRichContext_DisplaySign",
         );
         debug("Reading the authentication code");
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const authenticationCode = await page.evaluate(
           // eslint-disable-next-line
           (d) => d?.textContent ?? "",
-          authenticationCodeElement
+          authenticationCodeElement,
         );
         debug("Printing the authentication code to console");
         console.log(authenticationCode);
@@ -316,7 +316,7 @@ export const states: State[] = [
       const descriptionMessage = await page.evaluate(
         // eslint-disable-next-line
         (description) => description?.textContent ?? "",
-        selected
+        selected,
       );
       throw new CLIError(descriptionMessage);
     },
@@ -332,7 +332,7 @@ export const states: State[] = [
         const errorMessage = await page.evaluate(
           // eslint-disable-next-line
           (err) => err?.textContent ?? "",
-          error
+          error,
         );
         console.log(errorMessage);
       } else {
@@ -341,7 +341,7 @@ export const states: State[] = [
         const descriptionMessage = await page.evaluate(
           // eslint-disable-next-line
           (d) => d?.textContent ?? "",
-          description
+          description,
         );
         console.log(descriptionMessage);
       }
@@ -373,7 +373,7 @@ export const states: State[] = [
       await Promise.race([
         page.waitForSelector(
           `input[name=otc].has-error,input[name=otc].moveOffScreen`,
-          { timeout: 60000 }
+          { timeout: 60000 },
         ),
         (async (): Promise<void> => {
           await Bluebird.delay(1000);
@@ -394,7 +394,7 @@ export const states: State[] = [
       _noPrompt: boolean,
       _defaultUsername: string,
       _defaultPassword: string | undefined,
-      rememberMe: boolean
+      rememberMe: boolean,
     ): Promise<void> {
       if (rememberMe) {
         debug("Clicking remember me button");
@@ -416,7 +416,7 @@ export const states: State[] = [
       const descriptionMessage = await page.evaluate(
         // eslint-disable-next-line
         (description) => description?.textContent ?? "",
-        selected
+        selected,
       );
       throw new CLIError(descriptionMessage);
     },

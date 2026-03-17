@@ -39,7 +39,7 @@ describe("paths", () => {
     const expectedCredentialsPath = path.join(
       os.homedir(),
       ".aws",
-      "credentials"
+      "credentials",
     );
     expect(paths.credentials).toBe(expectedCredentialsPath);
   });
