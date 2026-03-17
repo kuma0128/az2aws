@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.0](https://github.com/kuma0128/az2aws/compare/v1.5.0...v1.6.0) (2026-03-17)
+
+
+### Features
+
+* add incognito mode option ([#97](https://github.com/kuma0128/az2aws/issues/97)) ([01d5f98](https://github.com/kuma0128/az2aws/commit/01d5f98897795eca9cef1b372284ac0a8c24b840))
+* notify new available version ([#137](https://github.com/kuma0128/az2aws/issues/137)) ([c204bae](https://github.com/kuma0128/az2aws/commit/c204bae4ec57ea0b63d01d5d6c963951f8341318))
+
+
+### Bug Fixes
+
+* update dependencies and add Dependabot config ([#120](https://github.com/kuma0128/az2aws/issues/120)) ([c500dd0](https://github.com/kuma0128/az2aws/commit/c500dd06fd4c799bde467d069ec03ac244967542))
+* update workflows to use pnpm cache and remove standalone option ([#119](https://github.com/kuma0128/az2aws/issues/119)) ([8d759c3](https://github.com/kuma0128/az2aws/commit/8d759c34d8d04211325cfba56692e2cbc55cfe51))
+
 ## [1.5.0](https://github.com/kuma0128/az2aws/compare/v1.4.0...v1.5.0) (2026-02-12)
 
 
