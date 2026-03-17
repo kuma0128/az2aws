@@ -123,7 +123,7 @@ export const awsConfig = {
     await this._saveAsync("credentials", credentials);
   },
 
-  async getAllProfileNames(): Promise<string[] | undefined> {
+  async getAllProfileNames(): Promise<string[]> {
     debug(`Getting all configured profiles from config.`);
     const config =
       (await this._loadAsync<{ [key: string]: ProfileConfig }>("config")) || {};

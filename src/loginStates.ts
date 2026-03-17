@@ -1,5 +1,5 @@
 import Bluebird from "bluebird";
-import inquirer, { Question } from "inquirer";
+import inquirer from "inquirer";
 import { Page, ElementHandle } from "puppeteer";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
@@ -57,12 +57,14 @@ export const states: State[] = [
         username = defaultUsername;
       } else {
         debug("Prompting user for username");
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         ({ username } = await inquirer.prompt([
           {
+            type: "input" as const,
             name: "username",
             message: "Username:",
             default: defaultUsername,
-          } as Question,
+          },
         ]));
       }
 
@@ -154,10 +156,10 @@ export const states: State[] = [
           {
             name: "account",
             message: "Account:",
-            type: "list",
+            type: "select",
             choices: accounts.map((a) => a.message),
             default: aadTileMessage,
-          } as Question,
+          },
         ]);
 
         account = accounts.find((a) => a.message === answers.account);
@@ -244,12 +246,13 @@ export const states: State[] = [
         password = defaultPassword;
       } else {
         debug("Prompting user for password");
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         ({ password } = await inquirer.prompt([
           {
             name: "password",
             message: "Password:",
             type: "password",
-          } as Question,
+          },
         ]));
       }
 
@@ -346,11 +349,13 @@ export const states: State[] = [
         console.log(descriptionMessage);
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const { verificationCode } = await inquirer.prompt([
         {
+          type: "input" as const,
           name: "verificationCode",
           message: "Verification Code:",
-        } as Question,
+        },
       ]);
 
       debug("Focusing on verification code input");
