@@ -34,11 +34,11 @@ const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
 // the ESM-only https-proxy-agent package.
 // eslint-disable-next-line @typescript-eslint/no-implied-eval
 const importHttpsProxyAgent = Function(
-  'return import("https-proxy-agent")'
+  'return import("https-proxy-agent")',
 ) as () => Promise<{
   HttpsProxyAgent: new (
     proxy: string,
-    opts?: Record<string, unknown>
+    opts?: Record<string, unknown>,
   ) => import("http").Agent;
 }>;
 
@@ -56,7 +56,7 @@ interface Role {
 export const login = {
   async _createHttpsProxyAgentAsync(
     proxyUrl: string,
-    proxyOptions?: Record<string, unknown>
+    proxyOptions?: Record<string, unknown>,
   ): Promise<import("http").Agent> {
     const { HttpsProxyAgent } = await importHttpsProxyAgent();
     return new HttpsProxyAgent(proxyUrl, proxyOptions);
@@ -753,7 +753,7 @@ export const login = {
         requestHandler: new NodeHttpHandler({
           httpsAgent: await this._createHttpsProxyAgentAsync(
             proxyUrl,
-            proxyOptions
+            proxyOptions,
           ),
         }),
       };

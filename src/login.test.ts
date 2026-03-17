@@ -1228,7 +1228,7 @@ describe("login", () => {
           return {} as Awaited<
             ReturnType<typeof login._createHttpsProxyAgentAsync>
           >;
-        }
+        },
       );
       mockSend.mockResolvedValue({
         Credentials: {
