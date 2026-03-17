@@ -55,7 +55,7 @@
     "start": "ts-node-dev src/index.ts",
     "build": "tsc",
     "watch": "tsc -w",
-    "eslint": "eslint . --ext .ts",
+    "eslint": "eslint .",
     "prettier:write": "prettier --write \"src/**/*.{ts,json}\"",
     "prettier:check": "prettier --check \"src/**/*.ts\"",
     "test": "vitest run",
