@@ -89,7 +89,7 @@
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.8.1",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.2",
     "vitest": "^4.1.0"
   }
 }
