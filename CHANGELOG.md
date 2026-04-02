@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/kuma0128/az2aws/compare/v1.6.0...v1.6.1) (2026-04-02)
+
+
+### Bug Fixes
+
+* pin transitive security dependency versions ([#149](https://github.com/kuma0128/az2aws/issues/149)) ([cf224df](https://github.com/kuma0128/az2aws/commit/cf224dfaee28a8f1ef0a183c94ddf843d9b7d928))
+
 ## [1.6.0](https://github.com/kuma0128/az2aws/compare/v1.5.0...v1.6.0) (2026-03-17)
 
 
