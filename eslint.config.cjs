@@ -1,6 +1,6 @@
 const tseslint = require("@typescript-eslint/eslint-plugin");
 const prettier = require("eslint-config-prettier");
-const sourceFiles = ["src/**/*.ts", "typings/**/*.ts"];
+const sourceFiles = ["src/**/*.ts"];
 
 module.exports = [
   {
