@@ -14,6 +14,7 @@ overrides:
   picomatch@<2.3.2: 2.3.2
   picomatch@>=4.0.0 <4.0.4: 4.0.4
   yauzl@<3.2.1: 3.2.1
+  vite@<7.3.2: 7.3.2
 
 importers:
 
@@ -64,7 +65,7 @@ importers:
         version: 8.58.0(eslint@10.1.0)(typescript@6.0.2)
       '@vitest/coverage-v8':
         specifier: ^4.1.0
-        version: 4.1.1(vitest@4.1.1(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)))
+        version: 4.1.1(vitest@4.1.1(@types/node@25.5.0)(vite@7.3.2(@types/node@25.5.0)))
       eslint:
         specifier: ^10.0.3
         version: 10.1.0
@@ -80,9 +81,12 @@ importers:
       typescript:
         specifier: ^6.0.2
         version: 6.0.2
+      vite:
+        specifier: ^7.3.2
+        version: 7.3.2(@types/node@25.5.0)
       vitest:
         specifier: ^4.1.0
-        version: 4.1.1(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0))
+        version: 4.1.1(@types/node@25.5.0)(vite@7.3.2(@types/node@25.5.0))
 
 packages:
 
@@ -1017,7 +1021,7 @@ packages:
     resolution: {integrity: sha512-h3BOylsfsCLPeceuCPAAJ+BvNwSENgJa4hXoXu4im0bs9Lyp4URc4JYK4pWLZ4pG/UQn7AT92K6IByi6rE6g3A==}
     peerDependencies:
       msw: ^2.4.9
-      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+      vite: 7.3.2
     peerDependenciesMeta:
       msw:
         optional: true
@@ -1800,11 +1804,11 @@ packages:
     engines: {node: '>=8.6'}
 
   picomatch@4.0.4:
-    resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
+    resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==, tarball: https://registry.npmjs.org/picomatch/-/picomatch-4.0.4.tgz}
     engines: {node: '>=12'}
 
-  postcss@8.5.8:
-    resolution: {integrity: sha512-OW/rX8O/jXnm82Ey1k44pObPtdblfiuWnrd8X7GJ7emImCOstunGbXUpp7HdBrFQX6rJzn3sPT397Wp5aCwCHg==, tarball: https://registry.npmjs.org/postcss/-/postcss-8.5.8.tgz}
+  postcss@8.5.9:
+    resolution: {integrity: sha512-7a70Nsot+EMX9fFU3064K/kdHWZqGVY+BADLyXc8Dfv+mTLLVl6JzJpPaCZ2kQL9gIJvKXSLMHhqdRRjwQeFtw==, tarball: https://registry.npmjs.org/postcss/-/postcss-8.5.9.tgz}
     engines: {node: ^10 || ^12 || >=14}
 
   prelude-ls@1.2.1:
@@ -1982,6 +1986,10 @@ packages:
     resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
     engines: {node: '>=12.0.0'}
 
+  tinyglobby@0.2.16:
+    resolution: {integrity: sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg==, tarball: https://registry.npmjs.org/tinyglobby/-/tinyglobby-0.2.16.tgz}
+    engines: {node: '>=12.0.0'}
+
   tinyrainbow@3.1.0:
     resolution: {integrity: sha512-Bf+ILmBgretUrdJxzXM0SgXLZ3XfiaUuOj/IKQHuTXip+05Xn+uyEYdVg0kYDipTBcLrCVyUzAPz7QmArb0mmw==}
     engines: {node: '>=14.0.0'}
@@ -2056,8 +2064,8 @@ packages:
   v8-compile-cache-lib@3.0.1:
     resolution: {integrity: sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==}
 
-  vite@7.3.1:
-    resolution: {integrity: sha512-w+N7Hifpc3gRjZ63vYBXA56dvvRlNWRczTdmCBBa+CotUzAPf5b7YMdMR/8CQoeYE5LX3W4wj6RYTgonm1b9DA==, tarball: https://registry.npmjs.org/vite/-/vite-7.3.1.tgz}
+  vite@7.3.2:
+    resolution: {integrity: sha512-Bby3NOsna2jsjfLVOHKes8sGwgl4TT0E6vvpYgnAYDIF/tie7MRaFthmKuHx1NSXjiTueXH3do80FMQgvEktRg==, tarball: https://registry.npmjs.org/vite/-/vite-7.3.2.tgz}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -2110,7 +2118,7 @@ packages:
       '@vitest/ui': 4.1.1
       happy-dom: '*'
       jsdom: '*'
-      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+      vite: 7.3.2
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -3309,7 +3317,7 @@ snapshots:
       '@typescript-eslint/types': 8.58.0
       eslint-visitor-keys: 5.0.1
 
-  '@vitest/coverage-v8@4.1.1(vitest@4.1.1(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)))':
+  '@vitest/coverage-v8@4.1.1(vitest@4.1.1(@types/node@25.5.0)(vite@7.3.2(@types/node@25.5.0)))':
     dependencies:
       '@bcoe/v8-coverage': 1.0.2
       '@vitest/utils': 4.1.1
@@ -3321,7 +3329,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.0.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.1(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0))
+      vitest: 4.1.1(@types/node@25.5.0)(vite@7.3.2(@types/node@25.5.0))
 
   '@vitest/expect@4.1.1':
     dependencies:
@@ -3332,13 +3340,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.1(vite@7.3.1(@types/node@25.5.0))':
+  '@vitest/mocker@4.1.1(vite@7.3.2(@types/node@25.5.0))':
     dependencies:
       '@vitest/spy': 4.1.1
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 7.3.1(@types/node@25.5.0)
+      vite: 7.3.2(@types/node@25.5.0)
 
   '@vitest/pretty-format@4.1.1':
     dependencies:
@@ -4143,7 +4151,7 @@ snapshots:
 
   picomatch@4.0.4: {}
 
-  postcss@8.5.8:
+  postcss@8.5.9:
     dependencies:
       nanoid: 3.3.11
       picocolors: 1.1.1
@@ -4384,6 +4392,11 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
 
+  tinyglobby@0.2.16:
+    dependencies:
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+
   tinyrainbow@3.1.0: {}
 
   to-regex-range@5.0.1:
@@ -4459,22 +4472,22 @@ snapshots:
 
   v8-compile-cache-lib@3.0.1: {}
 
-  vite@7.3.1(@types/node@25.5.0):
+  vite@7.3.2(@types/node@25.5.0):
     dependencies:
       esbuild: 0.27.7
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
-      postcss: 8.5.8
+      postcss: 8.5.9
       rollup: 4.60.1
-      tinyglobby: 0.2.15
+      tinyglobby: 0.2.16
     optionalDependencies:
       '@types/node': 25.5.0
       fsevents: 2.3.3
 
-  vitest@4.1.1(@types/node@25.5.0)(vite@7.3.1(@types/node@25.5.0)):
+  vitest@4.1.1(@types/node@25.5.0)(vite@7.3.2(@types/node@25.5.0)):
     dependencies:
       '@vitest/expect': 4.1.1
-      '@vitest/mocker': 4.1.1(vite@7.3.1(@types/node@25.5.0))
+      '@vitest/mocker': 4.1.1(vite@7.3.2(@types/node@25.5.0))
       '@vitest/pretty-format': 4.1.1
       '@vitest/runner': 4.1.1
       '@vitest/snapshot': 4.1.1
@@ -4491,7 +4504,7 @@ snapshots:
       tinyexec: 1.0.4
       tinyglobby: 0.2.15
       tinyrainbow: 3.1.0
-      vite: 7.3.1(@types/node@25.5.0)
+      vite: 7.3.2(@types/node@25.5.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 25.5.0
