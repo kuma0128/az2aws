@@ -76,7 +76,7 @@
     "cheerio": "^1.2.0",
     "commander": "^14.0.3",
     "debug": "^4.4.3",
-    "https-proxy-agent": "^8.0.0",
+    "https-proxy-agent": "^9.0.0",
     "ini": "^6.0.0",
     "inquirer": "^13.3.2",
     "puppeteer": "^24.39.1"
