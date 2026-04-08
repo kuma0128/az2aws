@@ -1622,7 +1622,7 @@ describe("login", () => {
       );
     });
 
-    it("should call mkdirp and use chromium path when rememberMe=true and userDataDir is not set", async () => {
+    it("should create directory recursively and use chromium path when rememberMe=true and userDataDir is not set", async () => {
       mockFsMkdir.mockResolvedValue(undefined);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (paths as any).userDataDir = undefined;
