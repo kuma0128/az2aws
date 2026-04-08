@@ -1,9 +1,9 @@
-import Bluebird from "bluebird";
+import { setTimeout } from "node:timers/promises";
+import crypto from "node:crypto";
 import inquirer from "inquirer";
 import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
 import { load } from "cheerio";
-import { v4 } from "uuid";
 import puppeteer from "puppeteer";
 import type { Browser, BrowserContext, HTTPRequest, Page } from "puppeteer";
 import querystring from "querystring";
@@ -11,7 +11,6 @@ import _debug from "debug";
 import { CLIError } from "./CLIError";
 import { awsConfig, ProfileConfig } from "./awsConfig";
 import { paths } from "./paths";
-import { mkdirp } from "mkdirp";
 import fs from "fs/promises";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
@@ -256,7 +255,7 @@ export const login = {
     assertionConsumerServiceURL: string,
   ): Promise<string> {
     debug("Generating UUID for SAML request");
-    const id = v4();
+    const id = crypto.randomUUID();
 
     const samlRequest = `
         <samlp:AuthnRequest xmlns="urn:oasis:names:tc:SAML:2.0:metadata" ID="id${id}" Version="2.0" IssueInstant="${new Date().toISOString()}" IsPassive="false" AssertionConsumerServiceURL="${assertionConsumerServiceURL}" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
@@ -344,7 +343,7 @@ export const login = {
         if (paths.userDataDir) {
           args.push(`--user-data-dir=${paths.userDataDir}`);
         } else {
-          await mkdirp(paths.chromium);
+          await fs.mkdir(paths.chromium, { recursive: true });
           args.push(`--user-data-dir=${paths.chromium}`);
         }
 
@@ -404,7 +403,7 @@ export const login = {
             "Browser profile appears incompatible. Resetting profile data and retrying...",
           );
           await fs.rm(paths.chromium, { recursive: true, force: true });
-          await mkdirp(paths.chromium);
+          await fs.mkdir(paths.chromium, { recursive: true });
           browser = await puppeteer.launch(launchParams);
         } else {
           throw e;
@@ -412,7 +411,7 @@ export const login = {
       }
 
       // Wait for a bit as sometimes the browser isn't ready.
-      await Bluebird.delay(200);
+      await setTimeout(200);
 
       let page: Page;
       if (incognito) {
@@ -547,7 +546,7 @@ export const login = {
             }
 
             totalUnrecognizedDelay += DELAY_ON_UNRECOGNIZED_PAGE;
-            await Bluebird.delay(DELAY_ON_UNRECOGNIZED_PAGE);
+            await setTimeout(DELAY_ON_UNRECOGNIZED_PAGE);
           }
         }
       } else {

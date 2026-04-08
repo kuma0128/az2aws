@@ -8,10 +8,8 @@ vi.mock("inquirer", () => ({
   },
 }));
 
-vi.mock("bluebird", () => ({
-  default: {
-    delay: vi.fn().mockResolvedValue(undefined),
-  },
+vi.mock("node:timers/promises", () => ({
+  setTimeout: vi.fn().mockResolvedValue(undefined),
 }));
 
 import inquirer from "inquirer";
