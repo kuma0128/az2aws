@@ -2,7 +2,7 @@
   "name": "az2aws",
   "version": "1.6.1",
   "description": "Use Azure AD SSO to log into the AWS CLI. A modern, actively maintained alternative to aws-azure-login.",
-  "main": "index.js",
+  "main": "lib/index.js",
   "author": {
     "name": "az2aws devs",
     "url": "https://github.com/az2aws"
@@ -43,17 +43,7 @@
       "esbuild",
       "puppeteer"
     ],
-    "overrides": {
-      "brace-expansion@<1.1.12": "1.1.12",
-      "brace-expansion@>=2.0.0 <2.0.2": "2.0.2",
-      "brace-expansion@>=3.0.0 <3.0.1": "3.0.1",
-      "brace-expansion@>=4.0.0 <4.0.1": "4.0.1",
-      "flatted@<3.4.2": "3.4.2",
-      "minimatch@>=9.0.0 <9.0.7": "9.0.7",
-      "picomatch@<2.3.2": "2.3.2",
-      "picomatch@>=4.0.0 <4.0.4": "4.0.4",
-      "yauzl@<3.2.1": "3.2.1"
-    }
+    "overrides": {}
   },
   "bin": {
     "az2aws": "lib/index.js"
