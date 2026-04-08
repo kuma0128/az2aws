@@ -14,7 +14,6 @@ overrides:
   picomatch@<2.3.2: 2.3.2
   picomatch@>=4.0.0 <4.0.4: 4.0.4
   yauzl@<3.2.1: 3.2.1
-  vite@<7.3.2: 7.3.2
 
 importers:
 
@@ -1021,7 +1020,7 @@ packages:
     resolution: {integrity: sha512-h3BOylsfsCLPeceuCPAAJ+BvNwSENgJa4hXoXu4im0bs9Lyp4URc4JYK4pWLZ4pG/UQn7AT92K6IByi6rE6g3A==}
     peerDependencies:
       msw: ^2.4.9
-      vite: 7.3.2
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
     peerDependenciesMeta:
       msw:
         optional: true
@@ -2118,7 +2117,7 @@ packages:
       '@vitest/ui': 4.1.1
       happy-dom: '*'
       jsdom: '*'
-      vite: 7.3.2
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
