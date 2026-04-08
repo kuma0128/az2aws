@@ -1,4 +1,4 @@
-import Bluebird from "bluebird";
+import { setTimeout } from "node:timers/promises";
 import inquirer from "inquirer";
 import { Page, ElementHandle } from "puppeteer";
 import _debug from "debug";
@@ -87,7 +87,7 @@ export const states: State[] = [
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await page.keyboard.type(username);
 
-      await Bluebird.delay(500);
+      await setTimeout(500);
 
       debug("Waiting for submit button to be visible");
       await page.waitForSelector(`input[type=submit]`, {
@@ -98,7 +98,7 @@ export const states: State[] = [
       debug("Submitting form");
       await page.click("input[type=submit]");
 
-      await Bluebird.delay(500);
+      await setTimeout(500);
 
       debug("Waiting for submission to finish");
       await Promise.race([
@@ -107,7 +107,7 @@ export const states: State[] = [
           { timeout: 60000 },
         ),
         (async (): Promise<void> => {
-          await Bluebird.delay(1000);
+          await setTimeout(1000);
           await page.waitForSelector(`input[name=loginfmt]`, {
             hidden: true,
             timeout: 60000,
@@ -171,7 +171,7 @@ export const states: State[] = [
 
       debug(`Proceeding with account ${account.selector}`);
       await page.click(account.selector);
-      await Bluebird.delay(500);
+      await setTimeout(500);
     },
   },
   {
@@ -267,7 +267,7 @@ export const states: State[] = [
       await page.click("span[class=submit],input[type=submit]");
 
       debug("Waiting for a delay");
-      await Bluebird.delay(500);
+      await setTimeout(500);
     },
   },
   {
@@ -381,7 +381,7 @@ export const states: State[] = [
           { timeout: 60000 },
         ),
         (async (): Promise<void> => {
-          await Bluebird.delay(1000);
+          await setTimeout(1000);
           await page.waitForSelector(`input[name=otc]`, {
             hidden: true,
             timeout: 60000,
@@ -410,7 +410,7 @@ export const states: State[] = [
       }
 
       debug("Waiting for a delay");
-      await Bluebird.delay(500);
+      await setTimeout(500);
     },
   },
   {

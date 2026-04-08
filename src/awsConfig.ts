@@ -1,7 +1,7 @@
 import ini from "ini";
 import _debug from "debug";
 import { paths } from "./paths";
-import { mkdirp } from "mkdirp";
+import { mkdir } from "node:fs/promises";
 import fs from "fs";
 import util from "util";
 
@@ -168,7 +168,7 @@ export const awsConfig = {
     const text = ini.stringify(data);
 
     debug(`Creating AWS config directory '${paths.awsDir}' if not exists.`);
-    await mkdirp(paths.awsDir);
+    await mkdir(paths.awsDir, { recursive: true });
 
     debug(`Writing '${type}' INI to file '${paths[type]}'`);
     await writeFile(paths[type], text);

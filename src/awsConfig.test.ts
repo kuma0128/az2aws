@@ -3,8 +3,8 @@ import fs from "fs";
 import { awsConfig } from "./awsConfig";
 
 vi.mock("fs");
-vi.mock("mkdirp", () => ({
-  mkdirp: vi.fn().mockResolvedValue(undefined),
+vi.mock("node:fs/promises", () => ({
+  mkdir: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe("awsConfig", () => {

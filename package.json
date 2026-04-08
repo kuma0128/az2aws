@@ -73,19 +73,15 @@
   "dependencies": {
     "@aws-sdk/client-sts": "^3.1009.0",
     "@smithy/node-http-handler": "^4.4.16",
-    "bluebird": "^3.7.2",
     "cheerio": "^1.2.0",
     "commander": "^14.0.3",
     "debug": "^4.4.3",
     "https-proxy-agent": "^8.0.0",
     "ini": "^6.0.0",
     "inquirer": "^13.3.2",
-    "mkdirp": "^3.0.1",
-    "puppeteer": "^24.39.1",
-    "uuid": "^13.0.0"
+    "puppeteer": "^24.39.1"
   },
   "devDependencies": {
-    "@types/bluebird": "^3.5.42",
     "@types/debug": "^4.1.12",
     "@types/ini": "^4.1.1",
     "@types/node": "^25.5.0",

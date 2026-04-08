@@ -21,19 +21,19 @@ const {
   mockSend,
   mockHttpsProxyAgent,
   mockPuppeteerLaunch,
-  mockMkdirp,
+  mockFsMkdir,
   mockFsRm,
 } = vi.hoisted(() => {
   const mockSend = vi.fn();
   const mockHttpsProxyAgent = vi.fn();
   const mockPuppeteerLaunch = vi.fn();
-  const mockMkdirp = vi.fn();
+  const mockFsMkdir = vi.fn();
   const mockFsRm = vi.fn();
   return {
     mockSend,
     mockHttpsProxyAgent,
     mockPuppeteerLaunch,
-    mockMkdirp,
+    mockFsMkdir,
     mockFsRm,
   };
 });
@@ -56,23 +56,15 @@ vi.mock("puppeteer", () => ({
   },
 }));
 
-vi.mock("mkdirp", () => ({
-  mkdirp: mockMkdirp,
-}));
-
 vi.mock("fs/promises", () => ({
   default: {
     rm: mockFsRm,
+    mkdir: mockFsMkdir,
   },
 }));
 
-// Mock Bluebird.delay to resolve immediately for faster test execution.
-// Note: This means timing-sensitive behavior in cliProxy loops won't be tested
-// in real-time. For timing-critical tests, consider using vi.useFakeTimers().
-vi.mock("bluebird", () => ({
-  default: {
-    delay: vi.fn().mockResolvedValue(undefined),
-  },
+vi.mock("node:timers/promises", () => ({
+  setTimeout: vi.fn().mockResolvedValue(undefined),
 }));
 
 import inquirer from "inquirer";
@@ -1631,7 +1623,7 @@ describe("login", () => {
     });
 
     it("should call mkdirp and use chromium path when rememberMe=true and userDataDir is not set", async () => {
-      mockMkdirp.mockResolvedValue(undefined);
+      mockFsMkdir.mockResolvedValue(undefined);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (paths as any).userDataDir = undefined;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1656,7 +1648,9 @@ describe("login", () => {
         // Expected to throw
       }
 
-      expect(mockMkdirp).toHaveBeenCalledWith("/default/chromium/path");
+      expect(mockFsMkdir).toHaveBeenCalledWith("/default/chromium/path", {
+        recursive: true,
+      });
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
           args: expect.arrayContaining([
@@ -1728,7 +1722,7 @@ describe("login", () => {
         // Expected to throw
       }
 
-      expect(mockMkdirp).not.toHaveBeenCalled();
+      expect(mockFsMkdir).not.toHaveBeenCalled();
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
           args: expect.not.arrayContaining([
@@ -2254,7 +2248,7 @@ describe("login", () => {
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
       mockFsRm.mockResolvedValue(undefined);
-      mockMkdirp.mockResolvedValue(undefined);
+      mockFsMkdir.mockResolvedValue(undefined);
       Object.keys(paths).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
@@ -2315,7 +2309,9 @@ describe("login", () => {
         recursive: true,
         force: true,
       });
-      expect(mockMkdirp).toHaveBeenCalledWith("/mock/chromium/path");
+      expect(mockFsMkdir).toHaveBeenCalledWith("/mock/chromium/path", {
+        recursive: true,
+      });
       // Verify puppeteer.launch was called twice (initial + retry)
       expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
       expect(console.warn).toHaveBeenCalledWith(
@@ -2385,7 +2381,7 @@ describe("login", () => {
     it("should re-throw non-TargetCloseError even when rememberMe=true", async () => {
       const otherError = new Error("Some other launch error");
       mockPuppeteerLaunch.mockRejectedValueOnce(otherError);
-      mockMkdirp.mockResolvedValue(undefined);
+      mockFsMkdir.mockResolvedValue(undefined);
 
       const error = await login
         ._performLoginAsync(
