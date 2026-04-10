@@ -7,6 +7,17 @@
 
 Log in to AWS CLI using [Azure Active Directory](https://azure.microsoft.com) SSO. Supports MFA and places temporary credentials in the proper location for AWS CLI and SDKs.
 
+> **💡 Tip:** Let's be honest — typing `az2aws` correctly on the first try is harder than the AWS certification exam. Save your sanity:
+>
+> ```sh
+> # Add to your ~/.zshrc or ~/.bashrc
+> alias a2='az2aws'
+> # or
+> alias aa='az2aws'
+> ```
+>
+> Your fingers will thank you. Your keyboard will thank you. Your coworkers will stop hearing you swear.
+
 ## Installation
 
 ### mise (Recommended)
