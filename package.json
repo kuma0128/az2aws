@@ -43,7 +43,9 @@
       "esbuild",
       "puppeteer"
     ],
-    "overrides": {}
+    "overrides": {
+      "yauzl@<3.2.1": "3.2.1"
+    }
   },
   "bin": {
     "az2aws": "lib/index.js"
@@ -68,7 +70,7 @@
     "debug": "^4.4.3",
     "https-proxy-agent": "^9.0.0",
     "ini": "^6.0.0",
-    "inquirer": "^13.3.2",
+    "inquirer": "^13.4.0",
     "puppeteer": "^24.39.1"
   },
   "devDependencies": {
