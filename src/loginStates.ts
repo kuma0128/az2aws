@@ -21,6 +21,9 @@ export interface State {
   handler: StateHandler;
 }
 
+const PASSWORD_SELECTOR =
+  'input[name="Password"]:not(.moveOffScreen),input[name="passwd"]:not(.moveOffScreen)';
+
 /**
  * To proxy the input/output of the Azure login page, it's easiest to run a loop that
  * monitors the state of the page and then perform the corresponding CLI behavior.
@@ -218,7 +221,7 @@ export const states: State[] = [
   },
   {
     name: "password input",
-    selector: `input[name="Password"]:not(.moveOffScreen),input[name="passwd"]:not(.moveOffScreen)`,
+    selector: PASSWORD_SELECTOR,
     async handler(
       page: Page,
       _selected: ElementHandle,
@@ -257,7 +260,13 @@ export const states: State[] = [
       }
 
       debug("Focusing on password input");
-      await page.focus(`input[name="Password"],input[name="passwd"]`);
+      await page.focus(PASSWORD_SELECTOR);
+
+      debug("Clearing input");
+      await page.$eval(PASSWORD_SELECTOR, (el) => {
+        el.select();
+      });
+      await page.keyboard.press("Backspace");
 
       debug("Typing password");
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
