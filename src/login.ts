@@ -751,11 +751,14 @@ export const login = {
    * Assume the role.
    * @param {string} profileName - The profile name
    * @param {string} assertion - The SAML assertion
-   * @param {string} role - The role to assume
+   * @param {Role} role - The role to assume
    * @param {number} durationHours - The session duration in hours
-   * @param {bool} awsNoVerifySsl - Whether to have the AWS CLI verify SSL
+   * @param {boolean} awsNoVerifySsl - Whether to have the AWS CLI verify SSL
    * @param {string} region - AWS region, if specified
-   * @returns {Promise} A promise
+   * @param {boolean} writeProfile - Whether to persist the credentials to the
+   * AWS shared credentials file
+   * @returns {Promise<AwsCredentials | undefined>} Retrieved credentials, or
+   * undefined when STS does not return them
    * @private
    */
   async _assumeRoleAsync(

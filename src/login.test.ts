@@ -963,6 +963,88 @@ describe("login", () => {
     });
   });
 
+  describe("loginAsync credential_process mode", () => {
+    const role = {
+      roleArn: "arn:aws:iam::123456789012:role/TestRole",
+      principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+    };
+    const credentials = {
+      aws_access_key_id: "AKIAIOSFODNN7EXAMPLE",
+      aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+      aws_session_token: "session-token",
+      aws_expiration: "2024-01-01T00:00:00.000Z",
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should force noPrompt, avoid profile writes, and emit JSON to stdout", async () => {
+      const performLoginSpy = vi
+        .spyOn(login, "_performLoginAsync")
+        .mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([role]);
+      const askUserSpy = vi
+        .spyOn(login, "_askUserForRoleAndDurationAsync")
+        .mockResolvedValue({
+          role,
+          durationHours: 1,
+        });
+      const assumeRoleSpy = vi
+        .spyOn(login, "_assumeRoleAsync")
+        .mockResolvedValue(credentials);
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+      );
+
+      expect(performLoginSpy.mock.calls[0][4]).toBe(true);
+      expect(askUserSpy.mock.calls[0][1]).toBe(true);
+      expect(assumeRoleSpy.mock.calls[0][6]).toBe(false);
+      expect(console.error).toHaveBeenCalledWith("Using AWS region us-east-1");
+      expect(console.error).toHaveBeenCalledWith(
+        "Using AWS SAML endpoint",
+        "https://signin.aws.amazon.com/saml",
+      );
+      expect(console.log).toHaveBeenCalledTimes(1);
+      expect(
+        JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string),
+      ).toEqual({
+        Version: 1,
+        AccessKeyId: credentials.aws_access_key_id,
+        SecretAccessKey: credentials.aws_secret_access_key,
+        SessionToken: credentials.aws_session_token,
+        Expiration: credentials.aws_expiration,
+      });
+    });
+  });
+
   describe("loginAll", () => {
     beforeEach(() => {
       vi.clearAllMocks();
