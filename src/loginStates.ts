@@ -259,6 +259,12 @@ export const states: State[] = [
       debug("Focusing on password input");
       await page.focus(`input[name="Password"],input[name="passwd"]`);
 
+      debug("Clearing input");
+      await page.$eval('input[name="Password"],input[name="passwd"]', (el) => {
+        el.select();
+      });
+      await page.keyboard.press("Backspace");
+
       debug("Typing password");
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await page.keyboard.type(password);
