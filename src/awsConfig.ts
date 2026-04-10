@@ -21,7 +21,7 @@ const ignoredChmodErrorCodes = new Set([
 ]);
 
 async function hardenPathPermissions(
-  path: string,
+  fsPath: string,
   mode: number,
 ): Promise<void> {
   if (process.platform === "win32") {
@@ -29,11 +29,11 @@ async function hardenPathPermissions(
   }
 
   try {
-    await chmod(path, mode);
+    await chmod(fsPath, mode);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (typeof code === "string" && ignoredChmodErrorCodes.has(code)) {
-      debug(`Skipping permission hardening for '${path}' due to ${code}`);
+      debug(`Skipping permission hardening for '${fsPath}' due to ${code}`);
       return;
     }
 
@@ -201,9 +201,15 @@ export const awsConfig = {
     const text = ini.stringify(data);
     const targetDir = path.dirname(targetPath);
 
-    debug(`Creating target directory '${targetDir}' if not exists.`);
-    await mkdir(targetDir, { recursive: true, mode: awsDirMode });
-    await hardenPathPermissions(targetDir, awsDirMode);
+    if (targetDir !== ".") {
+      debug(`Creating target directory '${targetDir}' if not exists.`);
+      await mkdir(targetDir, { recursive: true, mode: awsDirMode });
+      await hardenPathPermissions(targetDir, awsDirMode);
+    } else {
+      debug(
+        `Skipping target directory creation for '${targetPath}' because it uses the current working directory.`,
+      );
+    }
 
     debug(`Writing '${type}' INI to file '${targetPath}'`);
     await writeFile(targetPath, text);

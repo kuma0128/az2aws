@@ -648,6 +648,33 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
       expect(chmod).toHaveBeenNthCalledWith(2, customCredentialsPath, 0o600);
     });
 
+    it("should not harden the current working directory for relative target paths", async () => {
+      paths.config = "config";
+
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          callback(null);
+        },
+      );
+
+      await expect(
+        awsConfig._saveAsync("config", {
+          default: {
+            azure_tenant_id: "test-tenant",
+            azure_app_id_uri: "https://app.example.com",
+          } as never,
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(mkdir).not.toHaveBeenCalled();
+      expect(chmod).toHaveBeenCalledTimes(1);
+      expect(chmod).toHaveBeenCalledWith("config", 0o600);
+    });
+
     it("should ignore permission-related chmod errors", async () => {
       vi.mocked(fs.writeFile).mockImplementation(
         (
