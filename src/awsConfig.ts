@@ -166,7 +166,9 @@ export const awsConfig = {
     return profiles;
   },
 
-  async _loadAsync<T>(type: string): Promise<T | undefined> {
+  async _loadAsync<T extends Record<string, unknown>>(
+    type: string,
+  ): Promise<T | undefined> {
     if (!paths[type]) throw new Error(`Unknown config type: '${type}'`);
 
     return new Promise<T | undefined>((resolve, reject) => {
@@ -182,10 +184,7 @@ export const awsConfig = {
         }
 
         debug("Parsing data");
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const parsedIni: any = ini.parse(data);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        const parsedIni = ini.parse(data) as T;
         return resolve(parsedIni);
       });
     });

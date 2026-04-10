@@ -1,6 +1,6 @@
 import { setTimeout } from "node:timers/promises";
 import inquirer from "inquirer";
-import { Page, ElementHandle } from "puppeteer";
+import type { ElementHandle, Page } from "puppeteer";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
 
@@ -19,6 +19,22 @@ export interface State {
   name: string;
   selector: string;
   handler: StateHandler;
+}
+
+type AccountChoice = {
+  message: string;
+  selector: string;
+};
+
+async function readTextContent<T extends Node>(
+  page: Page,
+  element: ElementHandle<T> | null,
+): Promise<string> {
+  if (!element) {
+    return "";
+  }
+
+  return page.evaluate((node) => node.textContent ?? "", element);
 }
 
 /**
@@ -41,24 +57,18 @@ export const states: State[] = [
       const error = await page.$(".alert-error");
       if (error) {
         debug("Found error message. Displaying");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const errorMessage = await page.evaluate(
-          // eslint-disable-next-line
-          (err) => err?.textContent ?? "",
-          error,
-        );
+        const errorMessage = await readTextContent(page, error);
         console.log(errorMessage);
       }
 
-      let username;
+      let username: string;
 
       if (noPrompt && defaultUsername) {
         debug("Not prompting user for username");
         username = defaultUsername;
       } else {
         debug("Prompting user for username");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        ({ username } = await inquirer.prompt([
+        ({ username } = await inquirer.prompt<{ username: string }>([
           {
             type: "input" as const,
             name: "username",
@@ -84,7 +94,6 @@ export const states: State[] = [
       await page.keyboard.press("Backspace");
 
       debug("Typing username");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await page.keyboard.type(username);
 
       await setTimeout(500);
@@ -122,27 +131,17 @@ export const states: State[] = [
     async handler(page: Page): Promise<void> {
       debug("Multiple accounts associated with username.");
       const aadTile = await page.$("#aadTileTitle");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const aadTileMessage: string = await page.evaluate(
-        // eslint-disable-next-line
-        (a) => a?.textContent ?? "",
-        aadTile,
-      );
+      const aadTileMessage = await readTextContent(page, aadTile);
 
       const msaTile = await page.$("#msaTileTitle");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const msaTileMessage: string = await page.evaluate(
-        // eslint-disable-next-line
-        (m) => m?.textContent ?? "",
-        msaTile,
-      );
+      const msaTileMessage = await readTextContent(page, msaTile);
 
-      const accounts = [
+      const accounts: AccountChoice[] = [
         aadTile ? { message: aadTileMessage, selector: "#aadTileTitle" } : null,
         msaTile ? { message: msaTileMessage, selector: "#msaTileTitle" } : null,
-      ].filter((a): a is { message: string; selector: string } => a !== null);
+      ].filter((account): account is AccountChoice => account !== null);
 
-      let account;
+      let account: AccountChoice | undefined;
       if (accounts.length === 0) {
         throw new CLIError("No accounts found on account selection screen.");
       } else if (accounts.length === 1) {
@@ -152,7 +151,9 @@ export const states: State[] = [
         console.log(
           "It looks like this Username is used with more than one account from Microsoft. Which one do you want to use?",
         );
-        const answers = await inquirer.prompt([
+        const { account: selectedAccount } = await inquirer.prompt<{
+          account: string;
+        }>([
           {
             name: "account",
             message: "Account:",
@@ -162,7 +163,9 @@ export const states: State[] = [
           },
         ]);
 
-        account = accounts.find((a) => a.message === answers.account);
+        account = accounts.find((candidate) => {
+          return candidate.message === selectedAccount;
+        });
       }
 
       if (!account) {
@@ -179,35 +182,21 @@ export const states: State[] = [
     selector: `input[value='Send notification']`,
     async handler(page: Page) {
       debug("Sending notification");
-      // eslint-disable-next-line
       await page.click("input[value='Send notification']");
       debug("Waiting for auth code");
-      // eslint-disable-next-line
       await page.waitForSelector(`#idRemoteNGC_DisplaySign`, {
         visible: true,
         timeout: 60000,
       });
       debug("Printing the message displayed");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const messageElement = await page.$(
         "#idDiv_RemoteNGC_PollingDescription",
       );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const codeElement = await page.$("#idRemoteNGC_DisplaySign");
-      // eslint-disable-next-line
-      const message = await page.evaluate(
-        // eslint-disable-next-line
-        (el) => el?.textContent ?? "",
-        messageElement,
-      );
+      const message = await readTextContent(page, messageElement);
       console.log(message);
       debug("Printing the auth code");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const authCode = await page.evaluate(
-        // eslint-disable-next-line
-        (el) => el?.textContent ?? "",
-        codeElement,
-      );
+      const authCode = await readTextContent(page, codeElement);
       console.log(authCode);
       debug("Waiting for response");
       await page.waitForSelector(`#idRemoteNGC_DisplaySign`, {
@@ -229,25 +218,19 @@ export const states: State[] = [
       const error = await page.$(".alert-error");
       if (error) {
         debug("Found error message. Displaying");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const errorMessage = await page.evaluate(
-          // eslint-disable-next-line
-          (err) => err?.textContent ?? "",
-          error,
-        );
+        const errorMessage = await readTextContent(page, error);
         console.log(errorMessage);
         defaultPassword = ""; // Password error. Unset the default and allow user to enter it.
       }
 
-      let password;
+      let password: string;
 
       if (noPrompt && defaultPassword) {
         debug("Not prompting user for password");
         password = defaultPassword;
       } else {
         debug("Prompting user for password");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        ({ password } = await inquirer.prompt([
+        ({ password } = await inquirer.prompt<{ password: string }>([
           {
             name: "password",
             message: "Password:",
@@ -260,7 +243,6 @@ export const states: State[] = [
       await page.focus(`input[name="Password"],input[name="passwd"]`);
 
       debug("Typing password");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await page.keyboard.type(password);
 
       debug("Submitting form");
@@ -274,11 +256,7 @@ export const states: State[] = [
     name: "TFA instructions",
     selector: `#idDiv_SAOTCAS_Description`,
     async handler(page: Page, selected: ElementHandle): Promise<void> {
-      const descriptionMessage = await page.evaluate(
-        // eslint-disable-next-line
-        (description) => description?.textContent ?? "",
-        selected,
-      );
+      const descriptionMessage = await readTextContent(page, selected);
       console.log(descriptionMessage);
 
       try {
@@ -292,10 +270,8 @@ export const states: State[] = [
           "#idRichContext_DisplaySign",
         );
         debug("Reading the authentication code");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const authenticationCode = await page.evaluate(
-          // eslint-disable-next-line
-          (d) => d?.textContent ?? "",
+        const authenticationCode = await readTextContent(
+          page,
           authenticationCodeElement,
         );
         debug("Printing the authentication code to console");
@@ -315,12 +291,7 @@ export const states: State[] = [
     name: "TFA failed",
     selector: `#idDiv_SAASDS_Description,#idDiv_SAASTO_Description`,
     async handler(page: Page, selected: ElementHandle): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const descriptionMessage = await page.evaluate(
-        // eslint-disable-next-line
-        (description) => description?.textContent ?? "",
-        selected,
-      );
+      const descriptionMessage = await readTextContent(page, selected);
       throw new CLIError(descriptionMessage);
     },
   },
@@ -331,26 +302,17 @@ export const states: State[] = [
       const error = await page.$(".alert-error");
       if (error) {
         debug("Found error message. Displaying");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const errorMessage = await page.evaluate(
-          // eslint-disable-next-line
-          (err) => err?.textContent ?? "",
-          error,
-        );
+        const errorMessage = await readTextContent(page, error);
         console.log(errorMessage);
       } else {
         const description = await page.$("#idDiv_SAOTCC_Description");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const descriptionMessage = await page.evaluate(
-          // eslint-disable-next-line
-          (d) => d?.textContent ?? "",
-          description,
-        );
+        const descriptionMessage = await readTextContent(page, description);
         console.log(descriptionMessage);
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const { verificationCode } = await inquirer.prompt([
+      const { verificationCode } = await inquirer.prompt<{
+        verificationCode: string;
+      }>([
         {
           type: "input" as const,
           name: "verificationCode",
@@ -368,7 +330,6 @@ export const states: State[] = [
       await page.keyboard.press("Backspace");
 
       debug("Typing verification code");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await page.keyboard.type(verificationCode);
 
       debug("Submitting form");
@@ -417,12 +378,7 @@ export const states: State[] = [
     name: "Service exception",
     selector: "#service_exception_message",
     async handler(page: Page, selected: ElementHandle): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const descriptionMessage = await page.evaluate(
-        // eslint-disable-next-line
-        (description) => description?.textContent ?? "",
-        selected,
-      );
+      const descriptionMessage = await readTextContent(page, selected);
       throw new CLIError(descriptionMessage);
     },
   },
