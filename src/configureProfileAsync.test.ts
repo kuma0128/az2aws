@@ -331,13 +331,19 @@ describe("configureProfileAsync", () => {
       expect(durationHoursQuestion.validate(6)).toBe(true);
       expect(durationHoursQuestion.validate("8")).toBe(true);
       expect(durationHoursQuestion.validate(0)).toBe(
-        "Duration hours must be between 1 and 12",
+        "Duration hours must be a whole number between 1 and 12",
       );
       expect(durationHoursQuestion.validate(-1)).toBe(
-        "Duration hours must be between 1 and 12",
+        "Duration hours must be a whole number between 1 and 12",
       );
       expect(durationHoursQuestion.validate(13)).toBe(
-        "Duration hours must be between 1 and 12",
+        "Duration hours must be a whole number between 1 and 12",
+      );
+      expect(durationHoursQuestion.validate("1.5")).toBe(
+        "Duration hours must be a whole number between 1 and 12",
+      );
+      expect(durationHoursQuestion.validate("1e1")).toBe(
+        "Duration hours must be a whole number between 1 and 12",
       );
     });
 
@@ -441,7 +447,7 @@ describe("configureProfileAsync", () => {
         (q: unknown) => (q as { name: string }).name === "defaultDurationHours",
       ) as { default: string | number };
 
-      expect(durationHoursQuestion.default).toBe("8");
+      expect(durationHoursQuestion.default).toBe(8);
     });
 
     it("should default defaultDurationHours to 1 when no profile exists", async () => {

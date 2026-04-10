@@ -1,5 +1,11 @@
 import inquirer from "inquirer";
+import { CLIError } from "./CLIError";
 import { awsConfig } from "./awsConfig";
+import {
+  parseSessionDurationHours,
+  sessionDurationHoursValidationMessage,
+  validateSessionDurationHours,
+} from "./sessionDuration";
 
 export async function configureProfileAsync(
   profileName: string,
@@ -54,12 +60,9 @@ export async function configureProfileAsync(
       type: "input" as const,
       name: "defaultDurationHours",
       message: "Default Session Duration Hours (up to 12):",
-      default: (profile && profile.azure_default_duration_hours) || 1,
-      validate: (input: string): boolean | string => {
-        const num = Number(input);
-        if (num > 0 && num <= 12) return true;
-        return "Duration hours must be between 1 and 12";
-      },
+      default:
+        parseSessionDurationHours(profile?.azure_default_duration_hours) ?? 1,
+      validate: validateSessionDurationHours,
     },
     {
       type: "input" as const,
@@ -70,13 +73,20 @@ export async function configureProfileAsync(
   ];
 
   const answers = await inquirer.prompt(questions);
+  const defaultDurationHours = parseSessionDurationHours(
+    answers.defaultDurationHours as string | number | undefined,
+  );
+
+  if (defaultDurationHours === null) {
+    throw new CLIError(sessionDurationHoursValidationMessage);
+  }
 
   await awsConfig.setProfileConfigValuesAsync(profileName, {
     azure_tenant_id: answers.tenantId as string,
     azure_app_id_uri: answers.appIdUri as string,
     azure_default_username: answers.username as string,
     azure_default_role_arn: answers.defaultRoleArn as string,
-    azure_default_duration_hours: answers.defaultDurationHours as string,
+    azure_default_duration_hours: String(defaultDurationHours),
     azure_default_remember_me: (answers.rememberMe as string) === "true",
     region: answers.region as string,
   });
