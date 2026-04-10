@@ -58,7 +58,7 @@ async function hardenCreatedDirectories(
     path.isAbsolute(relativeTargetDir)
   ) {
     debug(
-      `Skipping permission hardening because created directory '${createdDir}' is not within target directory '${targetDir}'.`,
+      `Skipping permission hardening because target directory '${targetDir}' is not within created directory '${createdDir}'.`,
     );
     return;
   }
