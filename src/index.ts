@@ -4,10 +4,10 @@ process.on("SIGINT", () => process.exit(1));
 process.on("SIGTERM", () => process.exit(1));
 
 import { Command } from "commander";
-import { CLIError } from "./CLIError";
 import { configureProfileAsync } from "./configureProfileAsync";
 import { login } from "./login";
 import { checkForUpdate } from "./updateNotifier";
+import { validateCliOptions } from "./validateCliOptions";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { version } = require("../package.json") as { version: string };
@@ -92,11 +92,11 @@ async function runAsync(): Promise<void> {
   let exitCode = 0;
 
   try {
-    if (options.allProfiles && credentialProcess) {
-      throw new CLIError(
-        "--credential-process cannot be used with --all-profiles.",
-      );
-    }
+    validateCliOptions({
+      allProfiles: !!options.allProfiles,
+      configure: !!options.configure,
+      credentialProcess,
+    });
 
     if (options.allProfiles) {
       await login.loginAll(
