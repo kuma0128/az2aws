@@ -1,11 +1,22 @@
 [![view on npm](http://img.shields.io/npm/v/az2aws.svg)](https://www.npmjs.org/package/az2aws)
-[![npm module downloads per month](http://img.shields.io/npm/dm/az2aws.svg)](https://www.npmjs.org/package/az2aws)
+[![npm module downloads per month](http://img.shields.io/npm/dm/az2aws.svg?cacheSeconds=86400)](https://www.npmjs.org/package/az2aws)
 [![CI](https://github.com/kuma0128/az2aws/actions/workflows/main.yml/badge.svg)](https://github.com/kuma0128/az2aws/actions/workflows/main.yml)
 [![codecov](https://codecov.io/gh/kuma0128/az2aws/graph/badge.svg)](https://codecov.io/gh/kuma0128/az2aws)
 
 # az2aws
 
 Log in to AWS CLI using [Azure Active Directory](https://azure.microsoft.com) SSO. Supports MFA and places temporary credentials in the proper location for AWS CLI and SDKs.
+
+> **💡 Tip:** Let's be honest — typing `az2aws` correctly on the first try is harder than the AWS certification exam. Save your sanity:
+>
+> ```sh
+> # Add to your ~/.zshrc or ~/.bashrc
+> alias a2='az2aws'
+> # or
+> alias aa='az2aws'
+> ```
+>
+> Your fingers will thank you. Your keyboard will thank you. Your coworkers will stop hearing you swear.
 
 ## Installation
 
@@ -101,6 +112,7 @@ https://snapcraft.io/az2aws
 | `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
 | `--no-disable-extensions` | Keep browser extensions enabled |
 | `--disable-gpu` | Disable GPU acceleration |
+| `--incognito` | Open the login flow in an incognito browser context |
 | `--version (-v)` | Show version number |
 
 ## Usage
@@ -122,12 +134,20 @@ Set the `region` in your ~/.aws/config to use non-standard AWS partitions:
 - **GovCloud**: us-gov-west-1, us-gov-east-1
 - **China**: cn-north-1, cn-northwest-1
 
+For GovCloud, make sure your AWS CLI default region is set to a GovCloud
+region if you do not set a profile region; otherwise STS calls may target the
+standard partition.
+
 #### Stay Logged In
 
 Enable "Stay logged in" during configuration to use `--no-prompt` without storing passwords:
 
     az2aws --no-prompt
     az2aws --profile foo --no-prompt
+
+`--incognito` starts the login flow in a fresh incognito browser context. This
+helps avoid reusing an existing browser session, and it overrides any saved
+"Stay logged in" browser state for that run.
 
 #### Environment Variables
 
@@ -136,6 +156,10 @@ You can set defaults via environment variables (use with `--no-prompt`):
 - `AZURE_TENANT_ID` / `AZURE_APP_ID_URI` - Azure AD settings
 - `AZURE_DEFAULT_USERNAME` / `AZURE_DEFAULT_PASSWORD` - Credentials
 - `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` - AWS role settings
+
+When using `--no-prompt` with multiple available roles, you must set
+`AZURE_DEFAULT_ROLE_ARN` (or configure `azure_default_role_arn`) so the CLI can
+select a role without prompting.
 
 To avoid storing passwords in bash history, use a leading space:
 
@@ -169,13 +193,36 @@ Example:
     az2aws                    # Default profile
     az2aws --profile foo      # Named profile
     az2aws --mode gui         # Use browser UI (more reliable)
+    az2aws --mode gui --incognito  # Open a fresh incognito login window
 
 You'll be prompted for username, password, and MFA if required. After login, use AWS CLI/SDKs as usual.
 
 **Tips:**
 - Set `AWS_PROFILE` env var instead of using `--profile`
 - Use `--mode gui --disable-gpu` on VMs or if rendering fails
-- Set `https_proxy` env var for corporate proxy
+- Set `https_proxy` or `http_proxy` env var for corporate proxy
+
+#### Troubleshooting
+
+If you see `TargetCloseError: Protocol error (Target.setAutoAttach): Target closed`,
+the browser profile may be incompatible with the bundled Chromium version
+(e.g., after upgrading or downgrading az2aws). When using the default
+managed profile (`~/.aws/chromium`) with "Stay logged in" enabled, az2aws
+will automatically reset the profile and retry. If you have set
+`BROWSER_USER_DATA_DIR` to point to an existing Chrome profile, az2aws
+will **not** modify that directory — you will need to resolve the
+incompatibility manually (e.g., update az2aws, or use a different
+`BROWSER_USER_DATA_DIR`).
+
+If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
+Try:
+ `--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
+
+If you see "Unable to recognize page state!", Azure's login pages may have
+changed. Try:
+
+- `--mode gui` or `--mode debug`
+- Filing an issue with the screenshot (`az2aws-unrecognized-state.png`) to help maintainers update selectors
 
 ## Automation
 

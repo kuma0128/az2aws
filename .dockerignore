@@ -1,1 +1,14 @@
 node_modules
+.git
+.github
+.claude
+src
+typings
+coverage
+issue
+*.md
+tsconfig.json
+vitest.config.ts
+.eslintrc.json
+.release-please-manifest.json
+release-please-config.json

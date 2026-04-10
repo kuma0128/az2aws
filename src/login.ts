@@ -1,25 +1,20 @@
-import _ from "lodash";
-import Bluebird from "bluebird";
-import inquirer, { QuestionCollection, Question } from "inquirer";
+import { setTimeout } from "node:timers/promises";
+import crypto from "node:crypto";
+import inquirer from "inquirer";
 import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
 import { load } from "cheerio";
-import { v4 } from "uuid";
-import puppeteer, {
-  Page,
-  ElementHandle,
-  Browser,
-  HTTPRequest,
-} from "puppeteer";
+import puppeteer from "puppeteer";
+import type { Browser, BrowserContext, HTTPRequest, Page } from "puppeteer";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
 import { awsConfig, ProfileConfig } from "./awsConfig";
-import { HttpsProxyAgent } from "https-proxy-agent";
 import { paths } from "./paths";
-import mkdirp from "mkdirp";
+import fs from "fs/promises";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
+import { states } from "./loginStates";
 
 const debug = _debug("az2aws");
 
@@ -34,412 +29,38 @@ const AWS_SAML_ENDPOINT = "https://signin.aws.amazon.com/saml";
 const AWS_CN_SAML_ENDPOINT = "https://signin.amazonaws.cn/saml";
 const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
 
+// Keep the runtime import as native `import()` so CommonJS output can load
+// the ESM-only https-proxy-agent package.
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const importHttpsProxyAgent = Function(
+  'return import("https-proxy-agent")',
+) as () => Promise<{
+  HttpsProxyAgent: new (
+    proxy: string,
+    opts?: Record<string, unknown>,
+  ) => import("http").Agent;
+}>;
+
+const getProxyUrl = (): string | undefined =>
+  process.env.https_proxy ||
+  process.env.HTTPS_PROXY ||
+  process.env.http_proxy ||
+  process.env.HTTP_PROXY;
+
 interface Role {
   roleArn: string;
   principalArn: string;
 }
 
-/**
- * To proxy the input/output of the Azure login page, it's easiest to run a loop that
- * monitors the state of the page and then perform the corresponding CLI behavior.
- * The states have a name that is used for the debug messages, a selector that is used
- * with puppeteer's page.$(selector) to determine if the state is active, and a handler
- * that is called if the state is active.
- */
-const states = [
-  {
-    name: "username input",
-    selector: `input[name="loginfmt"]:not(.moveOffScreen)`,
-    async handler(
-      page: Page,
-      _selected: ElementHandle,
-      noPrompt: boolean,
-      defaultUsername: string
-    ): Promise<void> {
-      const error = await page.$(".alert-error");
-      if (error) {
-        debug("Found error message. Displaying");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const errorMessage = await page.evaluate(
-          // eslint-disable-next-line
-          (err) => err?.textContent ?? "",
-          error
-        );
-        console.log(errorMessage);
-      }
-
-      let username;
-
-      if (noPrompt && defaultUsername) {
-        debug("Not prompting user for username");
-        username = defaultUsername;
-      } else {
-        debug("Prompting user for username");
-        ({ username } = await inquirer.prompt([
-          {
-            name: "username",
-            message: "Username:",
-            default: defaultUsername,
-          } as Question,
-        ]));
-      }
-
-      debug("Waiting for username input to be visible");
-      await page.waitForSelector(`input[name="loginfmt"]`, {
-        visible: true,
-        timeout: 60000,
-      });
-
-      debug("Focusing on username input");
-      await page.focus(`input[name="loginfmt"]`);
-
-      debug("Clearing input");
-      for (let i = 0; i < 100; i++) {
-        await page.keyboard.press("Backspace");
-      }
-
-      debug("Typing username");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      await page.keyboard.type(username);
-
-      await Bluebird.delay(500);
-
-      debug("Waiting for submit button to be visible");
-      await page.waitForSelector(`input[type=submit]`, {
-        visible: true,
-        timeout: 60000,
-      });
-
-      debug("Submitting form");
-      await page.click("input[type=submit]");
-
-      await Bluebird.delay(500);
-
-      debug("Waiting for submission to finish");
-      await Promise.race([
-        page.waitForSelector(
-          `input[name=loginfmt].has-error,input[name=loginfmt].moveOffScreen`,
-          { timeout: 60000 }
-        ),
-        (async (): Promise<void> => {
-          await Bluebird.delay(1000);
-          await page.waitForSelector(`input[name=loginfmt]`, {
-            hidden: true,
-            timeout: 60000,
-          });
-        })(),
-      ]);
-    },
-  },
-  {
-    name: "account selection",
-    selector: `#aadTile > div > div.table-cell.tile-img > img`,
-    async handler(page: Page): Promise<void> {
-      debug("Multiple accounts associated with username.");
-      const aadTile = await page.$("#aadTileTitle");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const aadTileMessage: string = await page.evaluate(
-        // eslint-disable-next-line
-        (a) => a?.textContent ?? "",
-        aadTile
-      );
-
-      const msaTile = await page.$("#msaTileTitle");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const msaTileMessage: string = await page.evaluate(
-        // eslint-disable-next-line
-        (m) => m?.textContent ?? "",
-        msaTile
-      );
-
-      const accounts = [
-        aadTile ? { message: aadTileMessage, selector: "#aadTileTitle" } : null,
-        msaTile ? { message: msaTileMessage, selector: "#msaTileTitle" } : null,
-      ].filter((a): a is { message: string; selector: string } => a !== null);
-
-      let account;
-      if (accounts.length === 0) {
-        throw new CLIError("No accounts found on account selection screen.");
-      } else if (accounts.length === 1) {
-        account = accounts[0];
-      } else {
-        debug("Asking user to choose account");
-        console.log(
-          "It looks like this Username is used with more than one account from Microsoft. Which one do you want to use?"
-        );
-        const answers = await inquirer.prompt([
-          {
-            name: "account",
-            message: "Account:",
-            type: "list",
-            choices: _.map(accounts, "message"),
-            default: aadTileMessage,
-          } as Question,
-        ]);
-
-        account = _.find(accounts, ["message", answers.account]);
-      }
-
-      if (!account) {
-        throw new Error("Unable to find account");
-      }
-
-      debug(`Proceeding with account ${account.selector}`);
-      await page.click(account.selector);
-      await Bluebird.delay(500);
-    },
-  },
-  {
-    name: "passwordless",
-    selector: `input[value='Send notification']`,
-    async handler(page: Page) {
-      debug("Sending notification");
-      // eslint-disable-next-line
-      await page.click("input[value='Send notification']");
-      debug("Waiting for auth code");
-      // eslint-disable-next-line
-      await page.waitForSelector(`#idRemoteNGC_DisplaySign`, {
-        visible: true,
-        timeout: 60000,
-      });
-      debug("Printing the message displayed");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const messageElement = await page.$(
-        "#idDiv_RemoteNGC_PollingDescription"
-      );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const codeElement = await page.$("#idRemoteNGC_DisplaySign");
-      // eslint-disable-next-line
-      const message = await page.evaluate(
-        // eslint-disable-next-line
-        (el) => el?.textContent ?? "",
-        messageElement
-      );
-      console.log(message);
-      debug("Printing the auth code");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const authCode = await page.evaluate(
-        // eslint-disable-next-line
-        (el) => el?.textContent ?? "",
-        codeElement
-      );
-      console.log(authCode);
-      debug("Waiting for response");
-      await page.waitForSelector(`#idRemoteNGC_DisplaySign`, {
-        hidden: true,
-        timeout: 60000,
-      });
-    },
-  },
-  {
-    name: "password input",
-    selector: `input[name="Password"]:not(.moveOffScreen),input[name="passwd"]:not(.moveOffScreen)`,
-    async handler(
-      page: Page,
-      _selected: ElementHandle,
-      noPrompt: boolean,
-      _defaultUsername: string,
-      defaultPassword: string
-    ): Promise<void> {
-      const error = await page.$(".alert-error");
-      if (error) {
-        debug("Found error message. Displaying");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const errorMessage = await page.evaluate(
-          // eslint-disable-next-line
-          (err) => err?.textContent ?? "",
-          error
-        );
-        console.log(errorMessage);
-        defaultPassword = ""; // Password error. Unset the default and allow user to enter it.
-      }
-
-      let password;
-
-      if (noPrompt && defaultPassword) {
-        debug("Not prompting user for password");
-        password = defaultPassword;
-      } else {
-        debug("Prompting user for password");
-        ({ password } = await inquirer.prompt([
-          {
-            name: "password",
-            message: "Password:",
-            type: "password",
-          } as Question,
-        ]));
-      }
-
-      debug("Focusing on password input");
-      await page.focus(`input[name="Password"],input[name="passwd"]`);
-
-      debug("Typing password");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      await page.keyboard.type(password);
-
-      debug("Submitting form");
-      await page.click("span[class=submit],input[type=submit]");
-
-      debug("Waiting for a delay");
-      await Bluebird.delay(500);
-    },
-  },
-  {
-    name: "TFA instructions",
-    selector: `#idDiv_SAOTCAS_Description`,
-    async handler(page: Page, selected: ElementHandle): Promise<void> {
-      const descriptionMessage = await page.evaluate(
-        // eslint-disable-next-line
-        (description) => description?.textContent ?? "",
-        selected
-      );
-      console.log(descriptionMessage);
-
-      try {
-        debug("Waiting for authentication code to be displayed");
-        await page.waitForSelector("#idRichContext_DisplaySign", {
-          visible: true,
-          timeout: 5000,
-        });
-        debug("Checking if authentication code is displayed");
-        const authenticationCodeElement = await page.$(
-          "#idRichContext_DisplaySign"
-        );
-        debug("Reading the authentication code");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const authenticationCode = await page.evaluate(
-          // eslint-disable-next-line
-          (d) => d?.textContent ?? "",
-          authenticationCodeElement
-        );
-        debug("Printing the authentication code to console");
-        console.log(authenticationCode);
-      } catch {
-        debug("No authentication code found on page");
-      }
-
-      debug("Waiting for response");
-      await page.waitForSelector(`#idDiv_SAOTCAS_Description`, {
-        hidden: true,
-        timeout: 60000,
-      });
-    },
-  },
-  {
-    name: "TFA failed",
-    selector: `#idDiv_SAASDS_Description,#idDiv_SAASTO_Description`,
-    async handler(page: Page, selected: ElementHandle): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const descriptionMessage = await page.evaluate(
-        // eslint-disable-next-line
-        (description) => description?.textContent ?? "",
-        selected
-      );
-      throw new CLIError(descriptionMessage);
-    },
-  },
-  {
-    name: "TFA code input",
-    selector: "input[name=otc]:not(.moveOffScreen)",
-    async handler(page: Page): Promise<void> {
-      const error = await page.$(".alert-error");
-      if (error) {
-        debug("Found error message. Displaying");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const errorMessage = await page.evaluate(
-          // eslint-disable-next-line
-          (err) => err?.textContent ?? "",
-          error
-        );
-        console.log(errorMessage);
-      } else {
-        const description = await page.$("#idDiv_SAOTCC_Description");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const descriptionMessage = await page.evaluate(
-          // eslint-disable-next-line
-          (d) => d?.textContent ?? "",
-          description
-        );
-        console.log(descriptionMessage);
-      }
-
-      const { verificationCode } = await inquirer.prompt([
-        {
-          name: "verificationCode",
-          message: "Verification Code:",
-        } as Question,
-      ]);
-
-      debug("Focusing on verification code input");
-      await page.focus(`input[name="otc"]`);
-
-      debug("Clearing input");
-      for (let i = 0; i < 100; i++) {
-        await page.keyboard.press("Backspace");
-      }
-
-      debug("Typing verification code");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      await page.keyboard.type(verificationCode);
-
-      debug("Submitting form");
-      await page.click("input[type=submit]");
-
-      debug("Waiting for submission to finish");
-      await Promise.race([
-        page.waitForSelector(
-          `input[name=otc].has-error,input[name=otc].moveOffScreen`,
-          { timeout: 60000 }
-        ),
-        (async (): Promise<void> => {
-          await Bluebird.delay(1000);
-          await page.waitForSelector(`input[name=otc]`, {
-            hidden: true,
-            timeout: 60000,
-          });
-        })(),
-      ]);
-    },
-  },
-  {
-    name: "Remember me",
-    selector: `#KmsiDescription`,
-    async handler(
-      page: Page,
-      _selected: ElementHandle,
-      _noPrompt: boolean,
-      _defaultUsername: string,
-      _defaultPassword: string | undefined,
-      rememberMe: boolean
-    ): Promise<void> {
-      if (rememberMe) {
-        debug("Clicking remember me button");
-        await page.click("#idSIButton9");
-      } else {
-        debug("Clicking don't remember button");
-        await page.click("#idBtn_Back");
-      }
-
-      debug("Waiting for a delay");
-      await Bluebird.delay(500);
-    },
-  },
-  {
-    name: "Service exception",
-    selector: "#service_exception_message",
-    async handler(page: Page, selected: ElementHandle): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const descriptionMessage = await page.evaluate(
-        // eslint-disable-next-line
-        (description) => description?.textContent ?? "",
-        selected
-      );
-      throw new CLIError(descriptionMessage);
-    },
-  },
-];
-
 export const login = {
+  async _createHttpsProxyAgentAsync(
+    proxyUrl: string,
+    proxyOptions?: Record<string, unknown>,
+  ): Promise<import("http").Agent> {
+    const { HttpsProxyAgent } = await importHttpsProxyAgent();
+    return new HttpsProxyAgent(proxyUrl, proxyOptions);
+  },
+
   async loginAsync(
     profileName: string,
     mode: string,
@@ -447,10 +68,11 @@ export const login = {
     noPrompt: boolean,
     enableChromeNetworkService: boolean,
     awsNoVerifySsl: boolean,
-    browserNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false,
+    browserNoVerifySsl = false,
   ): Promise<void> {
     let headless, cliProxy;
     if (mode === "cli") {
@@ -467,6 +89,16 @@ export const login = {
     }
 
     const profile = await this._loadProfileAsync(profileName);
+    console.log(
+      `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`,
+    );
+    if (profile.region && profile.region.startsWith("us-gov")) {
+      console.warn(
+        "GovCloud region detected in profile. Note: Other AWS CLI operations " +
+          "will use your AWS CLI default region. If needed, set it to match " +
+          "this GovCloud region (us-gov-west-1 or us-gov-east-1).",
+      );
+    }
     let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
     if (profile.region && profile.region.startsWith("us-gov")) {
       assertionConsumerServiceURL = AWS_GOV_SAML_ENDPOINT;
@@ -480,29 +112,30 @@ export const login = {
     const loginUrl = await this._createLoginUrlAsync(
       profile.azure_app_id_uri,
       profile.azure_tenant_id,
-      assertionConsumerServiceURL
+      assertionConsumerServiceURL,
     );
-    const samlResponse = await this._performLoginAsync(
-      loginUrl,
-      headless,
-      disableSandbox,
-      cliProxy,
-      noPrompt,
-      enableChromeNetworkService,
-      profile.azure_default_username,
-      profile.azure_default_password,
-      browserNoVerifySsl,
-      enableChromeSeamlessSso,
-      profile.azure_default_remember_me,
-      noDisableExtensions,
-      disableGpu
-    );
+      const samlResponse = await this._performLoginAsync(
+        loginUrl,
+        headless,
+        disableSandbox,
+        cliProxy,
+        noPrompt,
+        enableChromeNetworkService,
+        profile.azure_default_username,
+        profile.azure_default_password,
+        enableChromeSeamlessSso,
+        profile.azure_default_remember_me,
+        noDisableExtensions,
+        disableGpu,
+        incognito,
+        browserNoVerifySsl,
+      );
     const roles = this._parseRolesFromSamlResponse(samlResponse);
     const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
       roles,
       noPrompt,
       profile.azure_default_role_arn,
-      profile.azure_default_duration_hours
+      profile.azure_default_duration_hours,
     );
 
     await this._assumeRoleAsync(
@@ -511,7 +144,7 @@ export const login = {
       role,
       durationHours,
       awsNoVerifySsl,
-      profile.region
+      profile.region,
     );
   },
 
@@ -521,17 +154,14 @@ export const login = {
     noPrompt: boolean,
     enableChromeNetworkService: boolean,
     awsNoVerifySsl: boolean,
-    browserNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     forceRefresh: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false,
+    browserNoVerifySsl = false,
   ): Promise<void> {
     const profiles = await awsConfig.getAllProfileNames();
-
-    if (!profiles) {
-      return;
-    }
 
     for (const profile of profiles) {
       debug(`Check if profile ${profile} is expired or is about to expire`);
@@ -551,10 +181,11 @@ export const login = {
         noPrompt,
         enableChromeNetworkService,
         awsNoVerifySsl,
-        browserNoVerifySsl,
         enableChromeSeamlessSso,
         noDisableExtensions,
-        disableGpu
+        disableGpu,
+        incognito,
+        browserNoVerifySsl,
       );
     }
   },
@@ -595,7 +226,7 @@ export const login = {
 
     if (!profile)
       throw new CLIError(
-        `Unknown profile '${profileName}'. You must configure it first with --configure.`
+        `Unknown profile '${profileName}'. You must configure it first with --configure.`,
       );
 
     const env = this._loadProfileFromEnv();
@@ -607,7 +238,7 @@ export const login = {
 
     if (!profile.azure_tenant_id || !profile.azure_app_id_uri)
       throw new CLIError(
-        `Profile '${profileName}' is not configured properly.`
+        `Profile '${profileName}' is not configured properly.`,
       );
 
     console.log(`Logging in with profile '${profileName}'...`);
@@ -625,10 +256,10 @@ export const login = {
   _createLoginUrlAsync(
     appIdUri: string,
     tenantId: string,
-    assertionConsumerServiceURL: string
+    assertionConsumerServiceURL: string,
   ): Promise<string> {
     debug("Generating UUID for SAML request");
-    const id = v4();
+    const id = crypto.randomUUID();
 
     const samlRequest = `
         <samlp:AuthnRequest xmlns="urn:oasis:names:tc:SAML:2.0:metadata" ID="id${id}" Version="2.0" IssueInstant="${new Date().toISOString()}" IsPassive="false" AssertionConsumerServiceURL="${assertionConsumerServiceURL}" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
@@ -650,7 +281,7 @@ export const login = {
         const samlBase64 = samlBuffer.toString("base64");
 
         const url = `https://login.microsoftonline.com/${tenantId}/saml2?SAMLRequest=${encodeURIComponent(
-          samlBase64
+          samlBase64,
         )}`;
         debug("Created login URL", url);
 
@@ -669,11 +300,12 @@ export const login = {
    * @param {bool} [enableChromeNetworkService] - Enable chrome network service.
    * @param {string} [defaultUsername] - The default username
    * @param {string} [defaultPassword] - The default password
-   * @param {bool} [browserNoVerifySsl] - Disable SSL certificate verification in the browser
    * @param {bool} [enableChromeSeamlessSso] - chrome seamless SSO
    * @param {bool} [rememberMe] - Enable remembering the session
    * @param {bool} [noDisableExtensions] - True to prevent Puppeteer from disabling Chromium extensions
    * @param {bool} [disableGpu] - Disables GPU Acceleration
+   * @param {bool} [incognito] - Launch the login flow in an incognito browser context
+   * @param {bool} [browserNoVerifySsl] - Disable SSL certificate verification in the browser
    * @returns {Promise.<string>} The SAML response.
    * @private
    */
@@ -686,34 +318,38 @@ export const login = {
     enableChromeNetworkService: boolean,
     defaultUsername: string,
     defaultPassword: string | undefined,
-    browserNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     rememberMe: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false,
+    browserNoVerifySsl = false,
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
     let browser: Browser | undefined;
+    const useRememberMe = rememberMe && !incognito;
 
     try {
       const args = headless
         ? []
-        : [`--app=${url}`, `--window-size=${WIDTH},${HEIGHT}`];
+        : incognito
+          ? [`--window-size=${WIDTH},${HEIGHT}`]
+          : [`--app=${url}`, `--window-size=${WIDTH},${HEIGHT}`];
       if (disableSandbox) args.push("--no-sandbox");
       if (enableChromeNetworkService)
         args.push("--enable-features=NetworkService");
       if (enableChromeSeamlessSso)
         args.push(
           `--auth-server-whitelist=${AZURE_AD_SSO}`,
-          `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`
+          `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`,
         );
       debug(`rememberMe value: ${rememberMe} (type: ${typeof rememberMe})`);
-      if (rememberMe) {
+      if (useRememberMe) {
         if (paths.userDataDir) {
           args.push(`--user-data-dir=${paths.userDataDir}`);
         } else {
-          await mkdirp(paths.chromium);
+          await fs.mkdir(paths.chromium, { recursive: true });
           args.push(`--user-data-dir=${paths.chromium}`);
         }
 
@@ -723,8 +359,15 @@ export const login = {
         }
       }
 
-      if (process.env.https_proxy) {
-        args.push(`--proxy-server=${process.env.https_proxy}`);
+      if (incognito && rememberMe) {
+        console.warn(
+          "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles.",
+        );
+      }
+
+      const proxyUrl = getProxyUrl();
+      if (proxyUrl) {
+        args.push(`--proxy-server=${proxyUrl}`);
       }
 
       const ignoreDefaultArgs = noDisableExtensions
@@ -760,13 +403,47 @@ export const login = {
         launchParams.executablePath = paths.chromeBin;
       }
 
-      browser = await puppeteer.launch(launchParams);
+      try {
+        browser = await puppeteer.launch(launchParams);
+      } catch (e) {
+        if (
+          e instanceof Error &&
+          e.name === "TargetCloseError" &&
+          useRememberMe &&
+          !paths.userDataDir
+        ) {
+          debug(
+            `Browser launch failed with TargetCloseError. Resetting profile at ${paths.chromium}`,
+          );
+          console.warn(
+            "Browser profile appears incompatible. Resetting profile data and retrying...",
+          );
+          await fs.rm(paths.chromium, { recursive: true, force: true });
+          await fs.mkdir(paths.chromium, { recursive: true });
+          browser = await puppeteer.launch(launchParams);
+        } else {
+          throw e;
+        }
+      }
 
       // Wait for a bit as sometimes the browser isn't ready.
-      await Bluebird.delay(200);
+      await setTimeout(200);
 
-      const pages = await browser.pages();
-      const page = pages[0];
+      let page: Page;
+      if (incognito) {
+        const existingPages = await browser.pages();
+        const context: BrowserContext = await browser.createBrowserContext();
+        page = await context.newPage();
+        await Promise.all(
+          existingPages.map((existingPage) => existingPage.close()),
+        );
+        if (!headless) {
+          await page.bringToFront();
+        }
+      } else {
+        const pages = await browser.pages();
+        page = pages[0];
+      }
       await page.setExtraHTTPHeaders({
         "Accept-Language": "en",
       });
@@ -809,7 +486,7 @@ export const login = {
       await page.setRequestInterception(true);
 
       try {
-        if (headless || (!headless && cliProxy)) {
+        if (incognito || headless || cliProxy) {
           debug("Going to login page");
           await page.goto(url, { waitUntil: "domcontentloaded" });
         } else {
@@ -844,7 +521,7 @@ export const login = {
                 debug(
                   `Error when running state "${
                     state.name
-                  }". ${err.toString()}. Retrying...`
+                  }". ${err.toString()}. Retrying...`,
                 );
               }
               break;
@@ -862,7 +539,7 @@ export const login = {
                   noPrompt,
                   defaultUsername,
                   defaultPassword,
-                  rememberMe
+                  useRememberMe,
                 ),
               ]);
 
@@ -880,12 +557,12 @@ export const login = {
               const path = "az2aws-unrecognized-state.png";
               await page.screenshot({ path });
               throw new CLIError(
-                `Unable to recognize page state! A screenshot has been dumped to ${path}. If this problem persists, try running with --mode=gui or --mode=debug`
+                `Unable to recognize page state! A screenshot has been dumped to ${path}. If this problem persists, try running with --mode=gui or --mode=debug`,
               );
             }
 
             totalUnrecognizedDelay += DELAY_ON_UNRECOGNIZED_PAGE;
-            await Bluebird.delay(DELAY_ON_UNRECOGNIZED_PAGE);
+            await setTimeout(DELAY_ON_UNRECOGNIZED_PAGE);
           }
         }
       } else {
@@ -932,7 +609,7 @@ export const login = {
     debug("Looking for role SAML attribute");
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const roles: Role[] = saml(
-      "Attribute[Name='https://aws.amazon.com/SAML/Attributes/Role']>AttributeValue"
+      "Attribute[Name='https://aws.amazon.com/SAML/Attributes/Role']>AttributeValue",
     )
       .map(function () {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -966,50 +643,73 @@ export const login = {
     roles: Role[],
     noPrompt: boolean,
     defaultRoleArn: string,
-    defaultDurationHours: string
+    defaultDurationHours: string,
   ): Promise<{
     role: Role;
     durationHours: number;
   }> {
     let role;
-    let durationHours = parseInt(defaultDurationHours, 10) || 1;
-    const questions: QuestionCollection[] = [];
+    let durationHours = 1;
+    if (defaultDurationHours) {
+      const parsedDuration = parseInt(defaultDurationHours, 10);
+      if (
+        !Number.isNaN(parsedDuration) &&
+        parsedDuration > 0 &&
+        parsedDuration <= 12
+      ) {
+        durationHours = parsedDuration;
+      }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const questions: any[] = [];
     if (roles.length === 0) {
       throw new CLIError("No roles found in SAML response.");
     } else if (roles.length === 1) {
       debug("Choosing the only role in response");
       role = roles[0];
     } else {
-      if (noPrompt && defaultRoleArn) {
-        role = _.find(roles, ["roleArn", defaultRoleArn]);
-      }
+      if (noPrompt) {
+        if (!defaultRoleArn) {
+          throw new CLIError(
+            "--no-prompt requires azure_default_role_arn when multiple roles are available.",
+          );
+        }
 
-      if (role) {
+        role = roles.find((r) => r.roleArn === defaultRoleArn);
+        if (!role) {
+          throw new CLIError(
+            `Default role ARN '${defaultRoleArn}' was not found in the SAML response.`,
+          );
+        }
         debug("Valid role found. No need to ask.");
       } else {
         debug("Asking user to choose role");
         questions.push({
           name: "role",
           message: "Role:",
-          type: "list",
-          choices: _.sortBy(_.map(roles, "roleArn")),
+          type: "select",
+          choices: roles.map((r) => r.roleArn).sort(),
           default: defaultRoleArn,
         });
       }
     }
 
-    if (noPrompt && defaultDurationHours) {
-      debug("Default durationHours found. No need to ask.");
+    if (noPrompt) {
+      if (!defaultDurationHours) {
+        debug("No default durationHours set. Using 1 hour.");
+      } else {
+        debug("Default durationHours found. No need to ask.");
+      }
     } else {
       questions.push({
         name: "durationHours",
         message: "Session Duration Hours (up to 12):",
         type: "input",
         default: defaultDurationHours || 1,
-        validate: (input): boolean | string => {
-          input = Number(input);
-          if (input > 0 && input <= 12) return true;
-          return "Duration hours must be between 0 and 12";
+        validate: (input: string): boolean | string => {
+          const num = Number(input);
+          if (num > 0 && num <= 12) return true;
+          return "Duration hours must be between 1 and 12";
         },
       });
     }
@@ -1018,7 +718,7 @@ export const login = {
     // user is logged in and using multiple profiles --all-profiles and --no-prompt
     if (questions.length > 0) {
       const answers = await inquirer.prompt(questions);
-      if (!role) role = _.find(roles, ["roleArn", answers.role]);
+      if (!role) role = roles.find((r) => r.roleArn === answers.role);
       if (answers.durationHours) {
         durationHours = parseInt(answers.durationHours as string, 10);
       }
@@ -1048,7 +748,7 @@ export const login = {
     role: Role,
     durationHours: number,
     awsNoVerifySsl: boolean,
-    region: string
+    region: string,
   ): Promise<void> {
     console.log(`Assuming role ${role.roleArn} in region ${region}...`);
     let stsOptions: STSClientConfig = {};
@@ -1057,18 +757,19 @@ export const login = {
       console.warn(
         "WARNING: SSL certificate verification is disabled. " +
           "This makes the connection vulnerable to MITM attacks. " +
-          "Consider using NODE_EXTRA_CA_CERTS environment variable instead."
+          "Consider using NODE_EXTRA_CA_CERTS environment variable instead.",
       );
     }
 
-    if (process.env.https_proxy) {
+    const proxyUrl = getProxyUrl();
+    if (proxyUrl) {
       const proxyOptions = awsNoVerifySsl ? { rejectUnauthorized: false } : {};
       stsOptions = {
         ...stsOptions,
         requestHandler: new NodeHttpHandler({
-          httpsAgent: new HttpsProxyAgent(
-            process.env.https_proxy,
-            proxyOptions
+          httpsAgent: await this._createHttpsProxyAgentAsync(
+            proxyUrl,
+            proxyOptions,
           ),
         }),
       };
