@@ -3,6 +3,7 @@ import _debug from "debug";
 import { paths } from "./paths";
 import { chmod, mkdir } from "node:fs/promises";
 import fs from "fs";
+import path from "path";
 import util from "util";
 
 const debug = _debug("az2aws");
@@ -169,11 +170,12 @@ export const awsConfig = {
   async _loadAsync<T extends Record<string, unknown>>(
     type: string,
   ): Promise<T | undefined> {
-    if (!paths[type]) throw new Error(`Unknown config type: '${type}'`);
+    const targetPath = paths[type];
+    if (!targetPath) throw new Error(`Unknown config type: '${type}'`);
 
     return new Promise<T | undefined>((resolve, reject) => {
-      debug(`Loading '${type}' file at '${paths[type]}'`);
-      fs.readFile(paths[type]!, "utf8", (err, data) => {
+      debug(`Loading '${type}' file at '${targetPath}'`);
+      fs.readFile(targetPath, "utf8", (err, data) => {
         if (err) {
           if (err.code === "ENOENT") {
             debug(`File not found. Returning undefined.`);
@@ -191,18 +193,20 @@ export const awsConfig = {
   },
 
   async _saveAsync(type: string, data: SaveData): Promise<void> {
-    if (!paths[type]) throw new Error(`Unknown config type: '${type}'`);
+    const targetPath = paths[type];
+    if (!targetPath) throw new Error(`Unknown config type: '${type}'`);
     if (!data) throw new Error(`You must provide data for saving.`);
 
     debug(`Stringifying ${type} INI data`);
     const text = ini.stringify(data);
+    const targetDir = path.dirname(targetPath);
 
-    debug(`Creating AWS config directory '${paths.awsDir}' if not exists.`);
-    await mkdir(paths.awsDir, { recursive: true, mode: awsDirMode });
-    await hardenPathPermissions(paths.awsDir, awsDirMode);
+    debug(`Creating target directory '${targetDir}' if not exists.`);
+    await mkdir(targetDir, { recursive: true, mode: awsDirMode });
+    await hardenPathPermissions(targetDir, awsDirMode);
 
-    debug(`Writing '${type}' INI to file '${paths[type]}'`);
-    await writeFile(paths[type], text);
-    await hardenPathPermissions(paths[type], awsFileMode);
+    debug(`Writing '${type}' INI to file '${targetPath}'`);
+    await writeFile(targetPath, text);
+    await hardenPathPermissions(targetPath, awsFileMode);
   },
 };
