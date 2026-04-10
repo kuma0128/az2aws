@@ -1,13 +1,15 @@
 import ini from "ini";
 import _debug from "debug";
 import { paths } from "./paths";
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import fs from "fs";
 import util from "util";
 
 const debug = _debug("az2aws");
 
 const writeFile = util.promisify(fs.writeFile);
+const awsDirMode = 0o700;
+const awsFileMode = 0o600;
 
 // Autorefresh credential time limit in milliseconds
 const refreshLimitInMs = 11 * 60 * 1000;
@@ -168,9 +170,11 @@ export const awsConfig = {
     const text = ini.stringify(data);
 
     debug(`Creating AWS config directory '${paths.awsDir}' if not exists.`);
-    await mkdir(paths.awsDir, { recursive: true });
+    await mkdir(paths.awsDir, { recursive: true, mode: awsDirMode });
+    await chmod(paths.awsDir, awsDirMode);
 
     debug(`Writing '${type}' INI to file '${paths[type]}'`);
     await writeFile(paths[type], text);
+    await chmod(paths[type], awsFileMode);
   },
 };

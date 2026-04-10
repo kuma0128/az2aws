@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
+import { chmod, mkdir } from "node:fs/promises";
 import { awsConfig } from "./awsConfig";
+import { paths } from "./paths";
 
 vi.mock("fs");
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn().mockResolvedValue(undefined),
+  chmod: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe("awsConfig", () => {
@@ -551,6 +554,12 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
       ).resolves.toBeUndefined();
 
       expect(fs.writeFile).toHaveBeenCalled();
+      expect(mkdir).toHaveBeenCalledWith(paths.awsDir, {
+        recursive: true,
+        mode: 0o700,
+      });
+      expect(chmod).toHaveBeenNthCalledWith(1, paths.awsDir, 0o700);
+      expect(chmod).toHaveBeenNthCalledWith(2, paths.config, 0o600);
     });
   });
 
