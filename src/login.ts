@@ -63,6 +63,16 @@ type RoleDurationAnswers = {
   durationHours?: string | number;
 };
 
+function handleBackgroundPromise(
+  promise: Promise<unknown>,
+  description: string,
+): void {
+  void promise.catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    debug(`${description}: ${message}`);
+  });
+}
+
 export const login = {
   async _createHttpsProxyAgentAsync(
     proxyUrl: string,
@@ -488,19 +498,28 @@ export const login = {
           ) {
             resolve(undefined);
             samlResponseData = req.postData();
-            void req.respond({
-              status: 200,
-              contentType: "text/plain",
-              headers: {},
-              body: "",
-            });
+            handleBackgroundPromise(
+              req.respond({
+                status: 200,
+                contentType: "text/plain",
+                headers: {},
+                body: "",
+              }),
+              `Failed to respond to intercepted request ${reqURL}`,
+            );
             if (browser) {
-              void browser.close();
+              handleBackgroundPromise(
+                browser.close(),
+                "Failed to close browser after receiving SAML response",
+              );
             }
             browser = undefined;
             debug(`Received SAML response, browser closed`);
           } else {
-            void req.continue();
+            handleBackgroundPromise(
+              req.continue(),
+              `Failed to continue intercepted request ${reqURL}`,
+            );
           }
         });
       });
