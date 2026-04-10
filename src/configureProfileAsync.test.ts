@@ -30,7 +30,7 @@ describe("configureProfileAsync", () => {
   it("should configure a new profile when no existing config", async () => {
     vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
     vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-      undefined
+      undefined,
     );
     vi.mocked(inquirer.prompt).mockResolvedValue({
       tenantId: "new-tenant-id",
@@ -55,7 +55,7 @@ describe("configureProfileAsync", () => {
         azure_default_duration_hours: "8",
         azure_default_remember_me: false,
         region: "us-west-2",
-      }
+      },
     );
   });
 
@@ -70,7 +70,7 @@ describe("configureProfileAsync", () => {
       region: "eu-west-1",
     });
     vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-      undefined
+      undefined,
     );
     vi.mocked(inquirer.prompt).mockResolvedValue({
       tenantId: "updated-tenant",
@@ -85,7 +85,7 @@ describe("configureProfileAsync", () => {
     await configureProfileAsync("existingprofile");
 
     expect(awsConfig.getProfileConfigAsync).toHaveBeenCalledWith(
-      "existingprofile"
+      "existingprofile",
     );
     expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
       "existingprofile",
@@ -97,14 +97,14 @@ describe("configureProfileAsync", () => {
         azure_default_duration_hours: "12",
         azure_default_remember_me: true,
         region: "ap-northeast-1",
-      }
+      },
     );
   });
 
   it("should configure default profile", async () => {
     vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
     vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-      undefined
+      undefined,
     );
     vi.mocked(inquirer.prompt).mockResolvedValue({
       tenantId: "default-tenant",
@@ -123,14 +123,14 @@ describe("configureProfileAsync", () => {
       "default",
       expect.objectContaining({
         azure_tenant_id: "default-tenant",
-      })
+      }),
     );
   });
 
   it("should set rememberMe to true when answer is 'true'", async () => {
     vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
     vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-      undefined
+      undefined,
     );
     vi.mocked(inquirer.prompt).mockResolvedValue({
       tenantId: "tenant",
@@ -148,14 +148,14 @@ describe("configureProfileAsync", () => {
       "testprofile",
       expect.objectContaining({
         azure_default_remember_me: true,
-      })
+      }),
     );
   });
 
   it("should set rememberMe to false when answer is 'false'", async () => {
     vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
     vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-      undefined
+      undefined,
     );
     vi.mocked(inquirer.prompt).mockResolvedValue({
       tenantId: "tenant",
@@ -173,14 +173,14 @@ describe("configureProfileAsync", () => {
       "testprofile",
       expect.objectContaining({
         azure_default_remember_me: false,
-      })
+      }),
     );
   });
 
   it("should log profile name and completion message", async () => {
     vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
     vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-      undefined
+      undefined,
     );
     vi.mocked(inquirer.prompt).mockResolvedValue({
       tenantId: "tenant",
@@ -202,7 +202,7 @@ describe("configureProfileAsync", () => {
     it("should validate tenantId - empty string returns false", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
       vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-        undefined
+        undefined,
       );
 
       let capturedQuestions: unknown[] = [];
@@ -222,19 +222,18 @@ describe("configureProfileAsync", () => {
       await configureProfileAsync("test");
 
       const tenantIdQuestion = capturedQuestions.find(
-        (q: unknown) => (q as { name: string }).name === "tenantId"
+        (q: unknown) => (q as { name: string }).name === "tenantId",
       ) as { validate: (input: string) => boolean };
 
       expect(tenantIdQuestion.validate("")).toBe(false);
       expect(tenantIdQuestion.validate("valid-tenant")).toBe(true);
-      // Note: whitespace-only strings currently pass validation (truthy)
-      expect(tenantIdQuestion.validate("   ")).toBe(true);
+      expect(tenantIdQuestion.validate("   ")).toBe(false);
     });
 
     it("should validate appIdUri - empty string returns false", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
       vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-        undefined
+        undefined,
       );
 
       let capturedQuestions: unknown[] = [];
@@ -254,17 +253,18 @@ describe("configureProfileAsync", () => {
       await configureProfileAsync("test");
 
       const appIdUriQuestion = capturedQuestions.find(
-        (q: unknown) => (q as { name: string }).name === "appIdUri"
+        (q: unknown) => (q as { name: string }).name === "appIdUri",
       ) as { validate: (input: string) => boolean };
 
       expect(appIdUriQuestion.validate("")).toBe(false);
       expect(appIdUriQuestion.validate("https://app.example.com")).toBe(true);
+      expect(appIdUriQuestion.validate("   ")).toBe(false);
     });
 
     it("should validate rememberMe - only accepts true or false", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
       vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-        undefined
+        undefined,
       );
 
       let capturedQuestions: unknown[] = [];
@@ -284,26 +284,26 @@ describe("configureProfileAsync", () => {
       await configureProfileAsync("test");
 
       const rememberMeQuestion = capturedQuestions.find(
-        (q: unknown) => (q as { name: string }).name === "rememberMe"
+        (q: unknown) => (q as { name: string }).name === "rememberMe",
       ) as { validate: (input: string) => boolean | string };
 
       expect(rememberMeQuestion.validate("true")).toBe(true);
       expect(rememberMeQuestion.validate("false")).toBe(true);
       expect(rememberMeQuestion.validate("yes")).toBe(
-        "Remember me must be either true or false"
+        "Remember me must be either true or false",
       );
       expect(rememberMeQuestion.validate("invalid")).toBe(
-        "Remember me must be either true or false"
+        "Remember me must be either true or false",
       );
       expect(rememberMeQuestion.validate("")).toBe(
-        "Remember me must be either true or false"
+        "Remember me must be either true or false",
       );
     });
 
     it("should validate defaultDurationHours - must be between 1 and 12", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
       vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-        undefined
+        undefined,
       );
 
       let capturedQuestions: unknown[] = [];
@@ -323,7 +323,7 @@ describe("configureProfileAsync", () => {
       await configureProfileAsync("test");
 
       const durationHoursQuestion = capturedQuestions.find(
-        (q: unknown) => (q as { name: string }).name === "defaultDurationHours"
+        (q: unknown) => (q as { name: string }).name === "defaultDurationHours",
       ) as { validate: (input: string | number) => boolean | string };
 
       expect(durationHoursQuestion.validate(1)).toBe(true);
@@ -331,13 +331,13 @@ describe("configureProfileAsync", () => {
       expect(durationHoursQuestion.validate(6)).toBe(true);
       expect(durationHoursQuestion.validate("8")).toBe(true);
       expect(durationHoursQuestion.validate(0)).toBe(
-        "Duration hours must be between 1 and 12"
+        "Duration hours must be between 1 and 12",
       );
       expect(durationHoursQuestion.validate(-1)).toBe(
-        "Duration hours must be between 1 and 12"
+        "Duration hours must be between 1 and 12",
       );
       expect(durationHoursQuestion.validate(13)).toBe(
-        "Duration hours must be between 1 and 12"
+        "Duration hours must be between 1 and 12",
       );
     });
 
@@ -352,7 +352,7 @@ describe("configureProfileAsync", () => {
         region: "",
       });
       vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-        undefined
+        undefined,
       );
 
       let capturedQuestions: unknown[] = [];
@@ -372,7 +372,7 @@ describe("configureProfileAsync", () => {
       await configureProfileAsync("test");
 
       const rememberMeQuestion = capturedQuestions.find(
-        (q: unknown) => (q as { name: string }).name === "rememberMe"
+        (q: unknown) => (q as { name: string }).name === "rememberMe",
       ) as { default: string };
 
       expect(rememberMeQuestion.default).toBe("true");
@@ -381,7 +381,7 @@ describe("configureProfileAsync", () => {
     it("should default rememberMe to 'false' when no profile exists", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
       vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-        undefined
+        undefined,
       );
 
       let capturedQuestions: unknown[] = [];
@@ -401,7 +401,7 @@ describe("configureProfileAsync", () => {
       await configureProfileAsync("test");
 
       const rememberMeQuestion = capturedQuestions.find(
-        (q: unknown) => (q as { name: string }).name === "rememberMe"
+        (q: unknown) => (q as { name: string }).name === "rememberMe",
       ) as { default: string };
 
       expect(rememberMeQuestion.default).toBe("false");
@@ -418,7 +418,7 @@ describe("configureProfileAsync", () => {
         region: "",
       });
       vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-        undefined
+        undefined,
       );
 
       let capturedQuestions: unknown[] = [];
@@ -438,7 +438,7 @@ describe("configureProfileAsync", () => {
       await configureProfileAsync("test");
 
       const durationHoursQuestion = capturedQuestions.find(
-        (q: unknown) => (q as { name: string }).name === "defaultDurationHours"
+        (q: unknown) => (q as { name: string }).name === "defaultDurationHours",
       ) as { default: string | number };
 
       expect(durationHoursQuestion.default).toBe("8");
@@ -447,7 +447,7 @@ describe("configureProfileAsync", () => {
     it("should default defaultDurationHours to 1 when no profile exists", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
       vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
-        undefined
+        undefined,
       );
 
       let capturedQuestions: unknown[] = [];
@@ -467,7 +467,7 @@ describe("configureProfileAsync", () => {
       await configureProfileAsync("test");
 
       const durationHoursQuestion = capturedQuestions.find(
-        (q: unknown) => (q as { name: string }).name === "defaultDurationHours"
+        (q: unknown) => (q as { name: string }).name === "defaultDurationHours",
       ) as { default: string | number };
 
       expect(durationHoursQuestion.default).toBe(1);

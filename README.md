@@ -7,6 +7,17 @@
 
 Log in to AWS CLI using [Azure Active Directory](https://azure.microsoft.com) SSO. Supports MFA and places temporary credentials in the proper location for AWS CLI and SDKs.
 
+> **💡 Tip:** Let's be honest — typing `az2aws` correctly on the first try is harder than the AWS certification exam. Save your sanity:
+>
+> ```sh
+> # Add to your ~/.zshrc or ~/.bashrc
+> alias a2='az2aws'
+> # or
+> alias aa='az2aws'
+> ```
+>
+> Your fingers will thank you. Your keyboard will thank you. Your coworkers will stop hearing you swear.
+
 ## Installation
 
 ### mise (Recommended)
@@ -100,6 +111,7 @@ https://snapcraft.io/az2aws
 | `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
 | `--no-disable-extensions` | Keep browser extensions enabled |
 | `--disable-gpu` | Disable GPU acceleration |
+| `--incognito` | Open the login flow in an incognito browser context |
 | `--credential-process` | Output credentials for AWS CLI credential_process |
 | `--version (-v)` | Show version number |
 
@@ -132,6 +144,10 @@ Enable "Stay logged in" during configuration to use `--no-prompt` without storin
 
     az2aws --no-prompt
     az2aws --profile foo --no-prompt
+
+`--incognito` starts the login flow in a fresh incognito browser context. This
+helps avoid reusing an existing browser session, and it overrides any saved
+"Stay logged in" browser state for that run.
 
 #### Environment Variables
 
@@ -177,6 +193,7 @@ Example:
     az2aws                    # Default profile
     az2aws --profile foo      # Named profile
     az2aws --mode gui         # Use browser UI (more reliable)
+    az2aws --mode gui --incognito  # Open a fresh incognito login window
 
 You'll be prompted for username, password, and MFA if required. After login, use AWS CLI/SDKs as usual.
 

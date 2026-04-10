@@ -1,5 +1,5 @@
-import Bluebird from "bluebird";
-import inquirer, { Question } from "inquirer";
+import { setTimeout } from "node:timers/promises";
+import inquirer from "inquirer";
 import { Page, ElementHandle } from "puppeteer";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
@@ -12,7 +12,7 @@ export type StateHandler = (
   noPrompt: boolean,
   defaultUsername: string,
   defaultPassword: string | undefined,
-  rememberMe: boolean
+  rememberMe: boolean,
 ) => Promise<void>;
 
 export interface State {
@@ -36,7 +36,7 @@ export const states: State[] = [
       page: Page,
       _selected: ElementHandle,
       noPrompt: boolean,
-      defaultUsername: string
+      defaultUsername: string,
     ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
@@ -45,7 +45,7 @@ export const states: State[] = [
         const errorMessage = await page.evaluate(
           // eslint-disable-next-line
           (err) => err?.textContent ?? "",
-          error
+          error,
         );
         console.log(errorMessage);
       }
@@ -57,12 +57,14 @@ export const states: State[] = [
         username = defaultUsername;
       } else {
         debug("Prompting user for username");
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         ({ username } = await inquirer.prompt([
           {
+            type: "input" as const,
             name: "username",
             message: "Username:",
             default: defaultUsername,
-          } as Question,
+          },
         ]));
       }
 
@@ -85,7 +87,7 @@ export const states: State[] = [
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await page.keyboard.type(username);
 
-      await Bluebird.delay(500);
+      await setTimeout(500);
 
       debug("Waiting for submit button to be visible");
       await page.waitForSelector(`input[type=submit]`, {
@@ -96,16 +98,16 @@ export const states: State[] = [
       debug("Submitting form");
       await page.click("input[type=submit]");
 
-      await Bluebird.delay(500);
+      await setTimeout(500);
 
       debug("Waiting for submission to finish");
       await Promise.race([
         page.waitForSelector(
           `input[name=loginfmt].has-error,input[name=loginfmt].moveOffScreen`,
-          { timeout: 60000 }
+          { timeout: 60000 },
         ),
         (async (): Promise<void> => {
-          await Bluebird.delay(1000);
+          await setTimeout(1000);
           await page.waitForSelector(`input[name=loginfmt]`, {
             hidden: true,
             timeout: 60000,
@@ -124,7 +126,7 @@ export const states: State[] = [
       const aadTileMessage: string = await page.evaluate(
         // eslint-disable-next-line
         (a) => a?.textContent ?? "",
-        aadTile
+        aadTile,
       );
 
       const msaTile = await page.$("#msaTileTitle");
@@ -132,7 +134,7 @@ export const states: State[] = [
       const msaTileMessage: string = await page.evaluate(
         // eslint-disable-next-line
         (m) => m?.textContent ?? "",
-        msaTile
+        msaTile,
       );
 
       const accounts = [
@@ -148,16 +150,16 @@ export const states: State[] = [
       } else {
         debug("Asking user to choose account");
         console.log(
-          "It looks like this Username is used with more than one account from Microsoft. Which one do you want to use?"
+          "It looks like this Username is used with more than one account from Microsoft. Which one do you want to use?",
         );
         const answers = await inquirer.prompt([
           {
             name: "account",
             message: "Account:",
-            type: "list",
+            type: "select",
             choices: accounts.map((a) => a.message),
             default: aadTileMessage,
-          } as Question,
+          },
         ]);
 
         account = accounts.find((a) => a.message === answers.account);
@@ -169,7 +171,7 @@ export const states: State[] = [
 
       debug(`Proceeding with account ${account.selector}`);
       await page.click(account.selector);
-      await Bluebird.delay(500);
+      await setTimeout(500);
     },
   },
   {
@@ -188,7 +190,7 @@ export const states: State[] = [
       debug("Printing the message displayed");
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const messageElement = await page.$(
-        "#idDiv_RemoteNGC_PollingDescription"
+        "#idDiv_RemoteNGC_PollingDescription",
       );
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const codeElement = await page.$("#idRemoteNGC_DisplaySign");
@@ -196,7 +198,7 @@ export const states: State[] = [
       const message = await page.evaluate(
         // eslint-disable-next-line
         (el) => el?.textContent ?? "",
-        messageElement
+        messageElement,
       );
       console.log(message);
       debug("Printing the auth code");
@@ -204,7 +206,7 @@ export const states: State[] = [
       const authCode = await page.evaluate(
         // eslint-disable-next-line
         (el) => el?.textContent ?? "",
-        codeElement
+        codeElement,
       );
       console.log(authCode);
       debug("Waiting for response");
@@ -222,7 +224,7 @@ export const states: State[] = [
       _selected: ElementHandle,
       noPrompt: boolean,
       _defaultUsername: string,
-      defaultPassword: string | undefined
+      defaultPassword: string | undefined,
     ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
@@ -231,7 +233,7 @@ export const states: State[] = [
         const errorMessage = await page.evaluate(
           // eslint-disable-next-line
           (err) => err?.textContent ?? "",
-          error
+          error,
         );
         console.log(errorMessage);
         defaultPassword = ""; // Password error. Unset the default and allow user to enter it.
@@ -244,12 +246,13 @@ export const states: State[] = [
         password = defaultPassword;
       } else {
         debug("Prompting user for password");
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         ({ password } = await inquirer.prompt([
           {
             name: "password",
             message: "Password:",
             type: "password",
-          } as Question,
+          },
         ]));
       }
 
@@ -264,7 +267,7 @@ export const states: State[] = [
       await page.click("span[class=submit],input[type=submit]");
 
       debug("Waiting for a delay");
-      await Bluebird.delay(500);
+      await setTimeout(500);
     },
   },
   {
@@ -274,7 +277,7 @@ export const states: State[] = [
       const descriptionMessage = await page.evaluate(
         // eslint-disable-next-line
         (description) => description?.textContent ?? "",
-        selected
+        selected,
       );
       console.log(descriptionMessage);
 
@@ -286,14 +289,14 @@ export const states: State[] = [
         });
         debug("Checking if authentication code is displayed");
         const authenticationCodeElement = await page.$(
-          "#idRichContext_DisplaySign"
+          "#idRichContext_DisplaySign",
         );
         debug("Reading the authentication code");
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const authenticationCode = await page.evaluate(
           // eslint-disable-next-line
           (d) => d?.textContent ?? "",
-          authenticationCodeElement
+          authenticationCodeElement,
         );
         debug("Printing the authentication code to console");
         console.log(authenticationCode);
@@ -316,7 +319,7 @@ export const states: State[] = [
       const descriptionMessage = await page.evaluate(
         // eslint-disable-next-line
         (description) => description?.textContent ?? "",
-        selected
+        selected,
       );
       throw new CLIError(descriptionMessage);
     },
@@ -332,7 +335,7 @@ export const states: State[] = [
         const errorMessage = await page.evaluate(
           // eslint-disable-next-line
           (err) => err?.textContent ?? "",
-          error
+          error,
         );
         console.log(errorMessage);
       } else {
@@ -341,16 +344,18 @@ export const states: State[] = [
         const descriptionMessage = await page.evaluate(
           // eslint-disable-next-line
           (d) => d?.textContent ?? "",
-          description
+          description,
         );
         console.log(descriptionMessage);
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const { verificationCode } = await inquirer.prompt([
         {
+          type: "input" as const,
           name: "verificationCode",
           message: "Verification Code:",
-        } as Question,
+        },
       ]);
 
       debug("Focusing on verification code input");
@@ -373,10 +378,10 @@ export const states: State[] = [
       await Promise.race([
         page.waitForSelector(
           `input[name=otc].has-error,input[name=otc].moveOffScreen`,
-          { timeout: 60000 }
+          { timeout: 60000 },
         ),
         (async (): Promise<void> => {
-          await Bluebird.delay(1000);
+          await setTimeout(1000);
           await page.waitForSelector(`input[name=otc]`, {
             hidden: true,
             timeout: 60000,
@@ -394,7 +399,7 @@ export const states: State[] = [
       _noPrompt: boolean,
       _defaultUsername: string,
       _defaultPassword: string | undefined,
-      rememberMe: boolean
+      rememberMe: boolean,
     ): Promise<void> {
       if (rememberMe) {
         debug("Clicking remember me button");
@@ -405,7 +410,7 @@ export const states: State[] = [
       }
 
       debug("Waiting for a delay");
-      await Bluebird.delay(500);
+      await setTimeout(500);
     },
   },
   {
@@ -416,7 +421,7 @@ export const states: State[] = [
       const descriptionMessage = await page.evaluate(
         // eslint-disable-next-line
         (description) => description?.textContent ?? "",
-        selected
+        selected,
       );
       throw new CLIError(descriptionMessage);
     },

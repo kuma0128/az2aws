@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import { awsConfig } from "./awsConfig";
 
 vi.mock("fs");
-vi.mock("mkdirp", () => ({
-  default: vi.fn().mockResolvedValue(undefined),
+vi.mock("node:fs/promises", () => ({
+  mkdir: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe("awsConfig", () => {
@@ -18,12 +18,12 @@ describe("awsConfig", () => {
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           const error = new Error("ENOENT") as NodeJS.ErrnoException;
           error.code = "ENOENT";
           callback(error);
-        }
+        },
       );
 
       const result = await awsConfig.getProfileConfigAsync("default");
@@ -42,10 +42,10 @@ region = us-east-1
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, configContent);
-        }
+        },
       );
 
       const result = await awsConfig.getProfileConfigAsync("default");
@@ -70,10 +70,10 @@ region = eu-west-1
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, configContent);
-        }
+        },
       );
 
       const result = await awsConfig.getProfileConfigAsync("myprofile");
@@ -92,10 +92,10 @@ region = us-east-1
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, configContent);
-        }
+        },
       );
 
       const result = await awsConfig.getProfileConfigAsync("nonexistent");
@@ -109,12 +109,12 @@ region = us-east-1
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           const error = new Error("ENOENT") as NodeJS.ErrnoException;
           error.code = "ENOENT";
           callback(error);
-        }
+        },
       );
 
       const result = await awsConfig.isProfileAboutToExpireAsync("default");
@@ -132,10 +132,10 @@ aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, credentialsContent);
-        }
+        },
       );
 
       const result = await awsConfig.isProfileAboutToExpireAsync("default");
@@ -155,10 +155,10 @@ aws_expiration = ${futureDate.toISOString()}
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, credentialsContent);
-        }
+        },
       );
 
       const result = await awsConfig.isProfileAboutToExpireAsync("default");
@@ -178,10 +178,10 @@ aws_expiration = ${futureDate.toISOString()}
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, credentialsContent);
-        }
+        },
       );
 
       const result = await awsConfig.isProfileAboutToExpireAsync("default");
@@ -216,10 +216,13 @@ aws_expiration = ${futureDate.toISOString()}
           (
             _path: fs.PathOrFileDescriptor,
             _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-            callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+            callback: (
+              err: NodeJS.ErrnoException | null,
+              data?: string,
+            ) => void,
           ) => {
             callback(null, credentialsContent);
-          }
+          },
         );
 
         const result = await awsConfig.isProfileAboutToExpireAsync("default");
@@ -240,10 +243,13 @@ aws_expiration = ${futureDate.toISOString()}
           (
             _path: fs.PathOrFileDescriptor,
             _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-            callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+            callback: (
+              err: NodeJS.ErrnoException | null,
+              data?: string,
+            ) => void,
           ) => {
             callback(null, credentialsContent);
-          }
+          },
         );
 
         const result = await awsConfig.isProfileAboutToExpireAsync("default");
@@ -263,10 +269,13 @@ aws_expiration = ${futureDate.toISOString()}
           (
             _path: fs.PathOrFileDescriptor,
             _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-            callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+            callback: (
+              err: NodeJS.ErrnoException | null,
+              data?: string,
+            ) => void,
           ) => {
             callback(null, credentialsContent);
-          }
+          },
         );
 
         const result = await awsConfig.isProfileAboutToExpireAsync("default");
@@ -286,10 +295,10 @@ aws_expiration = invalid-date-string
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, credentialsContent);
-        }
+        },
       );
 
       const result = await awsConfig.isProfileAboutToExpireAsync("default");
@@ -309,10 +318,10 @@ aws_expiration =
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, credentialsContent);
-        }
+        },
       );
 
       const result = await awsConfig.isProfileAboutToExpireAsync("default");
@@ -327,12 +336,12 @@ aws_expiration =
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           const error = new Error("ENOENT") as NodeJS.ErrnoException;
           error.code = "ENOENT";
           callback(error);
-        }
+        },
       );
 
       const result = await awsConfig.getAllProfileNames();
@@ -355,10 +364,10 @@ region = eu-west-1
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, configContent);
-        }
+        },
       );
 
       const result = await awsConfig.getAllProfileNames();
@@ -371,7 +380,7 @@ region = eu-west-1
   describe("_loadAsync", () => {
     it("should throw error for unknown config type", async () => {
       await expect(awsConfig._loadAsync("unknown")).rejects.toThrow(
-        "Unknown config type: 'unknown'"
+        "Unknown config type: 'unknown'",
       );
     });
 
@@ -380,16 +389,16 @@ region = eu-west-1
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           const error = new Error("Permission denied") as NodeJS.ErrnoException;
           error.code = "EACCES";
           callback(error);
-        }
+        },
       );
 
       await expect(awsConfig._loadAsync("config")).rejects.toThrow(
-        "Permission denied"
+        "Permission denied",
       );
     });
 
@@ -414,15 +423,16 @@ region = eu-west-1
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, configContent);
-        }
+        },
       );
 
-      const result = await awsConfig._loadAsync<
-        Record<string, Record<string, string>>
-      >("config");
+      const result =
+        await awsConfig._loadAsync<Record<string, Record<string, string>>>(
+          "config",
+        );
 
       expect(result).toBeDefined();
       expect(result?.default).toEqual({
@@ -446,15 +456,14 @@ region = eu-west-1
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, "");
-        }
+        },
       );
 
-      const result = await awsConfig._loadAsync<Record<string, unknown>>(
-        "config"
-      );
+      const result =
+        await awsConfig._loadAsync<Record<string, unknown>>("config");
       expect(result).toEqual({});
     });
 
@@ -470,22 +479,23 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, credentialsContent);
-        }
+        },
       );
 
-      const result = await awsConfig._loadAsync<
-        Record<string, Record<string, string>>
-      >("credentials");
+      const result =
+        await awsConfig._loadAsync<Record<string, Record<string, string>>>(
+          "credentials",
+        );
 
       expect(result?.default.aws_access_key_id).toBe("AKIAIOSFODNN7EXAMPLE");
       expect(result?.default.aws_secret_access_key).toBe(
-        "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
       );
       expect(result?.default.aws_session_token).toBe(
-        "FwoGZXIvYXdzEBYaDH+token/with+special==chars"
+        "FwoGZXIvYXdzEBYaDH+token/with+special==chars",
       );
     });
 
@@ -494,12 +504,12 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           const error = new Error("ENOENT") as NodeJS.ErrnoException;
           error.code = "ENOENT";
           callback(error);
-        }
+        },
       );
 
       const result = await awsConfig._loadAsync("config");
@@ -510,13 +520,13 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
   describe("_saveAsync", () => {
     it("should throw error for unknown config type", async () => {
       await expect(
-        awsConfig._saveAsync("unknown", { test: {} as never })
+        awsConfig._saveAsync("unknown", { test: {} as never }),
       ).rejects.toThrow("Unknown config type: 'unknown'");
     });
 
     it("should throw error when data is not provided", async () => {
       await expect(
-        awsConfig._saveAsync("config", undefined as never)
+        awsConfig._saveAsync("config", undefined as never),
       ).rejects.toThrow("You must provide data for saving.");
     });
 
@@ -525,10 +535,10 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _data: string | NodeJS.ArrayBufferView,
-          callback: fs.NoParamCallback
+          callback: fs.NoParamCallback,
         ) => {
           callback(null);
-        }
+        },
       );
 
       await expect(
@@ -537,7 +547,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
             azure_tenant_id: "test-tenant",
             azure_app_id_uri: "https://app.example.com",
           } as never,
-        })
+        }),
       ).resolves.toBeUndefined();
 
       expect(fs.writeFile).toHaveBeenCalled();
@@ -552,21 +562,21 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, "");
-        }
+        },
       );
 
       vi.mocked(fs.writeFile).mockImplementation(
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
-          callback: fs.NoParamCallback
+          callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
           callback(null);
-        }
+        },
       );
 
       await awsConfig.setProfileConfigValuesAsync("default", {
@@ -585,7 +595,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
       expect(writtenData).not.toContain("[profile default]");
       expect(writtenData).toContain("azure_tenant_id=new-tenant");
       expect(writtenData).toContain(
-        "azure_app_id_uri=https://new-app.example.com"
+        "azure_app_id_uri=https://new-app.example.com",
       );
       expect(writtenData).toContain("azure_default_remember_me=true");
     });
@@ -601,21 +611,21 @@ region = us-east-1
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, existingConfig);
-        }
+        },
       );
 
       vi.mocked(fs.writeFile).mockImplementation(
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
-          callback: fs.NoParamCallback
+          callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
           callback(null);
-        }
+        },
       );
 
       await awsConfig.setProfileConfigValuesAsync("myprofile", {
@@ -649,21 +659,21 @@ custom_field = should-be-preserved
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, existingConfig);
-        }
+        },
       );
 
       vi.mocked(fs.writeFile).mockImplementation(
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
-          callback: fs.NoParamCallback
+          callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
           callback(null);
-        }
+        },
       );
 
       await awsConfig.setProfileConfigValuesAsync("existing", {
@@ -680,7 +690,7 @@ custom_field = should-be-preserved
       // Should update existing values
       expect(writtenData).toContain("azure_tenant_id=updated-tenant");
       expect(writtenData).toContain(
-        "azure_app_id_uri=https://updated-app.example.com"
+        "azure_app_id_uri=https://updated-app.example.com",
       );
       // Should preserve custom fields
       expect(writtenData).toContain("custom_field=should-be-preserved");
@@ -696,21 +706,21 @@ custom_field = should-be-preserved
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, "");
-        }
+        },
       );
 
       vi.mocked(fs.writeFile).mockImplementation(
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
-          callback: fs.NoParamCallback
+          callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
           callback(null);
-        }
+        },
       );
 
       await awsConfig.setProfileCredentialsAsync("default", {
@@ -725,7 +735,7 @@ custom_field = should-be-preserved
       expect(writtenData).toContain("[default]");
       expect(writtenData).toContain("aws_access_key_id=AKIAIOSFODNN7EXAMPLE");
       expect(writtenData).toContain(
-        "aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        "aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
       );
       expect(writtenData).toContain("aws_session_token=token123");
       expect(writtenData).toContain(`aws_expiration=${expiration}`);
@@ -743,21 +753,21 @@ aws_secret_access_key = existingsecret
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
-          callback: (err: NodeJS.ErrnoException | null, data?: string) => void
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
         ) => {
           callback(null, existingCredentials);
-        }
+        },
       );
 
       vi.mocked(fs.writeFile).mockImplementation(
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
-          callback: fs.NoParamCallback
+          callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
           callback(null);
-        }
+        },
       );
 
       await awsConfig.setProfileCredentialsAsync("newprofile", {
