@@ -2867,6 +2867,45 @@ describe("login", () => {
       expect(mockBrowser.close).toHaveBeenCalled();
     });
 
+    it("should tolerate rejected respond promise when SAML response is received", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=validBase64EncodedSaml",
+          respond: vi.fn().mockRejectedValue(new Error("request closed")),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      await Promise.resolve();
+
+      const result = await promise;
+      expect(result).toBe("validBase64EncodedSaml");
+      expect(mockBrowser.close).toHaveBeenCalled();
+    });
+
     it("should close browser when puppeteer launch succeeds but SAML response is missing", async () => {
       const mockPage = createMockPage();
       const mockBrowser = createMockBrowser(mockPage);
@@ -3201,6 +3240,55 @@ describe("login", () => {
       expect(continueMocks[0]).toHaveBeenCalled();
       expect(continueMocks[1]).toHaveBeenCalled();
       expect(continueMocks[2]).toHaveBeenCalled();
+    });
+
+    it("should tolerate rejected continue promise before a later SAML response", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const continueMock = vi
+        .fn()
+        .mockRejectedValue(new Error("request already handled"));
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://login.microsoftonline.com/common/oauth2",
+          postData: () => undefined,
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: continueMock,
+        });
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=validSamlResponse",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      await Promise.resolve();
+
+      const result = await promise;
+      expect(result).toBe("validSamlResponse");
+      expect(continueMock).toHaveBeenCalled();
     });
 
     it("should handle GovCloud SAML endpoint correctly", async () => {

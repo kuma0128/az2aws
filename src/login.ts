@@ -1,6 +1,6 @@
 import { setTimeout } from "node:timers/promises";
 import crypto from "node:crypto";
-import inquirer from "inquirer";
+import inquirer, { type DistinctQuestion } from "inquirer";
 import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
 import { load } from "cheerio";
@@ -58,6 +58,20 @@ interface Role {
 }
 
 type AwsCredentials = ProfileCredentials;
+type RoleDurationAnswers = {
+  role?: string;
+  durationHours?: string | number;
+};
+
+function handleBackgroundPromise(
+  promise: Promise<unknown>,
+  description: string,
+): void {
+  void promise.catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    debug(`${description}: ${message}`);
+  });
+}
 
 export const login = {
   async _createHttpsProxyAgentAsync(
@@ -484,22 +498,28 @@ export const login = {
           ) {
             resolve(undefined);
             samlResponseData = req.postData();
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
-            req.respond({
-              status: 200,
-              contentType: "text/plain",
-              headers: {},
-              body: "",
-            });
+            handleBackgroundPromise(
+              req.respond({
+                status: 200,
+                contentType: "text/plain",
+                headers: {},
+                body: "",
+              }),
+              `Failed to respond to intercepted request ${reqURL}`,
+            );
             if (browser) {
-              // eslint-disable-next-line @typescript-eslint/no-floating-promises
-              browser.close();
+              handleBackgroundPromise(
+                browser.close(),
+                "Failed to close browser after receiving SAML response",
+              );
             }
             browser = undefined;
             debug(`Received SAML response, browser closed`);
           } else {
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
-            req.continue();
+            handleBackgroundPromise(
+              req.continue(),
+              `Failed to continue intercepted request ${reqURL}`,
+            );
           }
         });
       });
@@ -525,8 +545,7 @@ export const login = {
 
       if (cliProxy) {
         let totalUnrecognizedDelay = 0;
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
+        for (;;) {
           if (samlResponseData) break;
 
           let foundState = false;
@@ -629,25 +648,22 @@ export const login = {
     const saml = load(samlText, { xmlMode: true });
 
     debug("Looking for role SAML attribute");
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const roles: Role[] = saml(
+    const roleSelection = saml(
       "Attribute[Name='https://aws.amazon.com/SAML/Attributes/Role']>AttributeValue",
-    )
-      .map(function () {
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        const roleAndPrincipal = saml(this).text();
-        const parts = roleAndPrincipal.split(",");
+    );
+    const roleNodes = roleSelection.toArray();
+    const roles = roleNodes.map((roleNode) => {
+      const roleAndPrincipal = saml(roleNode).text();
+      const parts = roleAndPrincipal.split(",");
 
-        // Role / Principal claims may be in either order
-        const [roleIdx, principalIdx] = parts[0].includes(":role/")
-          ? [0, 1]
-          : [1, 0];
-        const roleArn = parts[roleIdx].trim();
-        const principalArn = parts[principalIdx].trim();
-        return { roleArn, principalArn };
-      })
-      .get();
+      // Role / Principal claims may be in either order
+      const [roleIdx, principalIdx] = parts[0].includes(":role/")
+        ? [0, 1]
+        : [1, 0];
+      const roleArn = parts[roleIdx].trim();
+      const principalArn = parts[principalIdx].trim();
+      return { roleArn, principalArn };
+    });
     debug("Found roles", roles);
     return roles;
   },
@@ -673,10 +689,9 @@ export const login = {
     role: Role;
     durationHours: number;
   }> {
-    let role;
+    let role: Role | undefined;
     let durationHours = parseSessionDurationHours(defaultDurationHours) ?? 1;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const questions: any[] = [];
+    const questions: DistinctQuestion<RoleDurationAnswers>[] = [];
     if (roles.length === 0) {
       throw new CLIError("No roles found in SAML response.");
     } else if (roles.length === 1) {
@@ -720,7 +735,7 @@ export const login = {
         name: "durationHours",
         message: "Session Duration Hours (up to 12):",
         type: "input",
-        default: durationHours,
+        default: String(durationHours),
         validate: validateSessionDurationHours,
       });
     }
@@ -728,11 +743,13 @@ export const login = {
     // Don't prompt for questions if not needed, an unneeded TTYWRAP prevents node from exiting when
     // user is logged in and using multiple profiles --all-profiles and --no-prompt
     if (questions.length > 0) {
-      const answers = await inquirer.prompt(questions);
-      if (!role) role = roles.find((r) => r.roleArn === answers.role);
+      const answers = await inquirer.prompt<RoleDurationAnswers>(questions);
+      if (!role && answers.role) {
+        role = roles.find((r) => r.roleArn === answers.role);
+      }
       if (answers.durationHours) {
         const parsedDurationHours = parseSessionDurationHours(
-          answers.durationHours as string | number | undefined,
+          answers.durationHours,
         );
         if (parsedDurationHours === null) {
           throw new CLIError(sessionDurationHoursValidationMessage);
