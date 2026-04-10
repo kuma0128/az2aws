@@ -1,17 +1,16 @@
-import Bluebird from "bluebird";
-import inquirer, { QuestionCollection } from "inquirer";
+import { setTimeout } from "node:timers/promises";
+import crypto from "node:crypto";
+import inquirer from "inquirer";
 import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
 import { load } from "cheerio";
-import { v4 } from "uuid";
-import puppeteer, { Browser, HTTPRequest } from "puppeteer";
+import puppeteer from "puppeteer";
+import type { Browser, BrowserContext, HTTPRequest, Page } from "puppeteer";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
 import { awsConfig, ProfileConfig } from "./awsConfig";
-import { HttpsProxyAgent } from "https-proxy-agent";
 import { paths } from "./paths";
-import mkdirp from "mkdirp";
 import fs from "fs/promises";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
@@ -30,6 +29,18 @@ const AWS_SAML_ENDPOINT = "https://signin.aws.amazon.com/saml";
 const AWS_CN_SAML_ENDPOINT = "https://signin.amazonaws.cn/saml";
 const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
 
+// Keep the runtime import as native `import()` so CommonJS output can load
+// the ESM-only https-proxy-agent package.
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const importHttpsProxyAgent = Function(
+  'return import("https-proxy-agent")',
+) as () => Promise<{
+  HttpsProxyAgent: new (
+    proxy: string,
+    opts?: Record<string, unknown>,
+  ) => import("http").Agent;
+}>;
+
 const getProxyUrl = (): string | undefined =>
   process.env.https_proxy ||
   process.env.HTTPS_PROXY ||
@@ -42,6 +53,14 @@ interface Role {
 }
 
 export const login = {
+  async _createHttpsProxyAgentAsync(
+    proxyUrl: string,
+    proxyOptions?: Record<string, unknown>,
+  ): Promise<import("http").Agent> {
+    const { HttpsProxyAgent } = await importHttpsProxyAgent();
+    return new HttpsProxyAgent(proxyUrl, proxyOptions);
+  },
+
   async loginAsync(
     profileName: string,
     mode: string,
@@ -51,7 +70,8 @@ export const login = {
     awsNoVerifySsl: boolean,
     enableChromeSeamlessSso: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false,
   ): Promise<void> {
     let headless, cliProxy;
     if (mode === "cli") {
@@ -69,13 +89,13 @@ export const login = {
 
     const profile = await this._loadProfileAsync(profileName);
     console.log(
-      `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`
+      `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`,
     );
     if (profile.region && profile.region.startsWith("us-gov")) {
       console.warn(
         "GovCloud region detected in profile. Note: Other AWS CLI operations " +
           "will use your AWS CLI default region. If needed, set it to match " +
-          "this GovCloud region (us-gov-west-1 or us-gov-east-1)."
+          "this GovCloud region (us-gov-west-1 or us-gov-east-1).",
       );
     }
     let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
@@ -91,7 +111,7 @@ export const login = {
     const loginUrl = await this._createLoginUrlAsync(
       profile.azure_app_id_uri,
       profile.azure_tenant_id,
-      assertionConsumerServiceURL
+      assertionConsumerServiceURL,
     );
     const samlResponse = await this._performLoginAsync(
       loginUrl,
@@ -105,14 +125,15 @@ export const login = {
       enableChromeSeamlessSso,
       profile.azure_default_remember_me,
       noDisableExtensions,
-      disableGpu
+      disableGpu,
+      incognito,
     );
     const roles = this._parseRolesFromSamlResponse(samlResponse);
     const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
       roles,
       noPrompt,
       profile.azure_default_role_arn,
-      profile.azure_default_duration_hours
+      profile.azure_default_duration_hours,
     );
 
     await this._assumeRoleAsync(
@@ -121,7 +142,7 @@ export const login = {
       role,
       durationHours,
       awsNoVerifySsl,
-      profile.region
+      profile.region,
     );
   },
 
@@ -134,13 +155,10 @@ export const login = {
     enableChromeSeamlessSso: boolean,
     forceRefresh: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false,
   ): Promise<void> {
     const profiles = await awsConfig.getAllProfileNames();
-
-    if (!profiles) {
-      return;
-    }
 
     for (const profile of profiles) {
       debug(`Check if profile ${profile} is expired or is about to expire`);
@@ -162,7 +180,8 @@ export const login = {
         awsNoVerifySsl,
         enableChromeSeamlessSso,
         noDisableExtensions,
-        disableGpu
+        disableGpu,
+        incognito,
       );
     }
   },
@@ -203,7 +222,7 @@ export const login = {
 
     if (!profile)
       throw new CLIError(
-        `Unknown profile '${profileName}'. You must configure it first with --configure.`
+        `Unknown profile '${profileName}'. You must configure it first with --configure.`,
       );
 
     const env = this._loadProfileFromEnv();
@@ -215,7 +234,7 @@ export const login = {
 
     if (!profile.azure_tenant_id || !profile.azure_app_id_uri)
       throw new CLIError(
-        `Profile '${profileName}' is not configured properly.`
+        `Profile '${profileName}' is not configured properly.`,
       );
 
     console.log(`Logging in with profile '${profileName}'...`);
@@ -233,10 +252,10 @@ export const login = {
   _createLoginUrlAsync(
     appIdUri: string,
     tenantId: string,
-    assertionConsumerServiceURL: string
+    assertionConsumerServiceURL: string,
   ): Promise<string> {
     debug("Generating UUID for SAML request");
-    const id = v4();
+    const id = crypto.randomUUID();
 
     const samlRequest = `
         <samlp:AuthnRequest xmlns="urn:oasis:names:tc:SAML:2.0:metadata" ID="id${id}" Version="2.0" IssueInstant="${new Date().toISOString()}" IsPassive="false" AssertionConsumerServiceURL="${assertionConsumerServiceURL}" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
@@ -258,7 +277,7 @@ export const login = {
         const samlBase64 = samlBuffer.toString("base64");
 
         const url = `https://login.microsoftonline.com/${tenantId}/saml2?SAMLRequest=${encodeURIComponent(
-          samlBase64
+          samlBase64,
         )}`;
         debug("Created login URL", url);
 
@@ -281,6 +300,7 @@ export const login = {
    * @param {bool} [rememberMe] - Enable remembering the session
    * @param {bool} [noDisableExtensions] - True to prevent Puppeteer from disabling Chromium extensions
    * @param {bool} [disableGpu] - Disables GPU Acceleration
+   * @param {bool} [incognito] - Launch the login flow in an incognito browser context
    * @returns {Promise.<string>} The SAML response.
    * @private
    */
@@ -296,30 +316,34 @@ export const login = {
     enableChromeSeamlessSso: boolean,
     rememberMe: boolean,
     noDisableExtensions: boolean,
-    disableGpu: boolean
+    disableGpu: boolean,
+    incognito = false,
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
     let browser: Browser | undefined;
+    const useRememberMe = rememberMe && !incognito;
 
     try {
       const args = headless
         ? []
-        : [`--app=${url}`, `--window-size=${WIDTH},${HEIGHT}`];
+        : incognito
+          ? [`--window-size=${WIDTH},${HEIGHT}`]
+          : [`--app=${url}`, `--window-size=${WIDTH},${HEIGHT}`];
       if (disableSandbox) args.push("--no-sandbox");
       if (enableChromeNetworkService)
         args.push("--enable-features=NetworkService");
       if (enableChromeSeamlessSso)
         args.push(
           `--auth-server-whitelist=${AZURE_AD_SSO}`,
-          `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`
+          `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`,
         );
       debug(`rememberMe value: ${rememberMe} (type: ${typeof rememberMe})`);
-      if (rememberMe) {
+      if (useRememberMe) {
         if (paths.userDataDir) {
           args.push(`--user-data-dir=${paths.userDataDir}`);
         } else {
-          await mkdirp(paths.chromium);
+          await fs.mkdir(paths.chromium, { recursive: true });
           args.push(`--user-data-dir=${paths.chromium}`);
         }
 
@@ -327,6 +351,12 @@ export const login = {
         if (paths.profileDir) {
           args.push(`--profile-directory=${paths.profileDir}`);
         }
+      }
+
+      if (incognito && rememberMe) {
+        console.warn(
+          "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles.",
+        );
       }
 
       const proxyUrl = getProxyUrl();
@@ -363,17 +393,17 @@ export const login = {
         if (
           e instanceof Error &&
           e.name === "TargetCloseError" &&
-          rememberMe &&
+          useRememberMe &&
           !paths.userDataDir
         ) {
           debug(
-            `Browser launch failed with TargetCloseError. Resetting profile at ${paths.chromium}`
+            `Browser launch failed with TargetCloseError. Resetting profile at ${paths.chromium}`,
           );
           console.warn(
-            "Browser profile appears incompatible. Resetting profile data and retrying..."
+            "Browser profile appears incompatible. Resetting profile data and retrying...",
           );
           await fs.rm(paths.chromium, { recursive: true, force: true });
-          await mkdirp(paths.chromium);
+          await fs.mkdir(paths.chromium, { recursive: true });
           browser = await puppeteer.launch(launchParams);
         } else {
           throw e;
@@ -381,10 +411,23 @@ export const login = {
       }
 
       // Wait for a bit as sometimes the browser isn't ready.
-      await Bluebird.delay(200);
+      await setTimeout(200);
 
-      const pages = await browser.pages();
-      const page = pages[0];
+      let page: Page;
+      if (incognito) {
+        const existingPages = await browser.pages();
+        const context: BrowserContext = await browser.createBrowserContext();
+        page = await context.newPage();
+        await Promise.all(
+          existingPages.map((existingPage) => existingPage.close()),
+        );
+        if (!headless) {
+          await page.bringToFront();
+        }
+      } else {
+        const pages = await browser.pages();
+        page = pages[0];
+      }
       await page.setExtraHTTPHeaders({
         "Accept-Language": "en",
       });
@@ -427,7 +470,7 @@ export const login = {
       await page.setRequestInterception(true);
 
       try {
-        if (headless || (!headless && cliProxy)) {
+        if (incognito || headless || cliProxy) {
           debug("Going to login page");
           await page.goto(url, { waitUntil: "domcontentloaded" });
         } else {
@@ -462,7 +505,7 @@ export const login = {
                 debug(
                   `Error when running state "${
                     state.name
-                  }". ${err.toString()}. Retrying...`
+                  }". ${err.toString()}. Retrying...`,
                 );
               }
               break;
@@ -480,7 +523,7 @@ export const login = {
                   noPrompt,
                   defaultUsername,
                   defaultPassword,
-                  rememberMe
+                  useRememberMe,
                 ),
               ]);
 
@@ -498,12 +541,12 @@ export const login = {
               const path = "az2aws-unrecognized-state.png";
               await page.screenshot({ path });
               throw new CLIError(
-                `Unable to recognize page state! A screenshot has been dumped to ${path}. If this problem persists, try running with --mode=gui or --mode=debug`
+                `Unable to recognize page state! A screenshot has been dumped to ${path}. If this problem persists, try running with --mode=gui or --mode=debug`,
               );
             }
 
             totalUnrecognizedDelay += DELAY_ON_UNRECOGNIZED_PAGE;
-            await Bluebird.delay(DELAY_ON_UNRECOGNIZED_PAGE);
+            await setTimeout(DELAY_ON_UNRECOGNIZED_PAGE);
           }
         }
       } else {
@@ -550,7 +593,7 @@ export const login = {
     debug("Looking for role SAML attribute");
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const roles: Role[] = saml(
-      "Attribute[Name='https://aws.amazon.com/SAML/Attributes/Role']>AttributeValue"
+      "Attribute[Name='https://aws.amazon.com/SAML/Attributes/Role']>AttributeValue",
     )
       .map(function () {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -592,7 +635,7 @@ export const login = {
     roles: Role[],
     noPrompt: boolean,
     defaultRoleArn: string,
-    defaultDurationHours: string
+    defaultDurationHours: string,
   ): Promise<{
     role: Role;
     durationHours: number;
@@ -601,11 +644,16 @@ export const login = {
     let durationHours = 1;
     if (defaultDurationHours) {
       const parsedDuration = parseInt(defaultDurationHours, 10);
-      if (!Number.isNaN(parsedDuration) && parsedDuration > 0) {
+      if (
+        !Number.isNaN(parsedDuration) &&
+        parsedDuration > 0 &&
+        parsedDuration <= 12
+      ) {
         durationHours = parsedDuration;
       }
     }
-    const questions: QuestionCollection[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const questions: any[] = [];
     if (roles.length === 0) {
       throw new CLIError("No roles found in SAML response.");
     } else if (roles.length === 1) {
@@ -615,14 +663,14 @@ export const login = {
       if (noPrompt) {
         if (!defaultRoleArn) {
           throw new CLIError(
-            "--no-prompt requires azure_default_role_arn when multiple roles are available."
+            "--no-prompt requires azure_default_role_arn when multiple roles are available.",
           );
         }
 
         role = roles.find((r) => r.roleArn === defaultRoleArn);
         if (!role) {
           throw new CLIError(
-            `Default role ARN '${defaultRoleArn}' was not found in the SAML response.`
+            `Default role ARN '${defaultRoleArn}' was not found in the SAML response.`,
           );
         }
         debug("Valid role found. No need to ask.");
@@ -631,7 +679,7 @@ export const login = {
         questions.push({
           name: "role",
           message: "Role:",
-          type: "list",
+          type: "select",
           choices: roles.map((r) => r.roleArn).sort(),
           default: defaultRoleArn,
         });
@@ -650,9 +698,9 @@ export const login = {
         message: "Session Duration Hours (up to 12):",
         type: "input",
         default: defaultDurationHours || 1,
-        validate: (input): boolean | string => {
-          input = Number(input);
-          if (input > 0 && input <= 12) return true;
+        validate: (input: string): boolean | string => {
+          const num = Number(input);
+          if (num > 0 && num <= 12) return true;
           return "Duration hours must be between 1 and 12";
         },
       });
@@ -692,7 +740,7 @@ export const login = {
     role: Role,
     durationHours: number,
     awsNoVerifySsl: boolean,
-    region: string
+    region: string,
   ): Promise<void> {
     console.log(`Assuming role ${role.roleArn} in region ${region}...`);
     let stsOptions: STSClientConfig = {};
@@ -701,7 +749,7 @@ export const login = {
       console.warn(
         "WARNING: SSL certificate verification is disabled. " +
           "This makes the connection vulnerable to MITM attacks. " +
-          "Consider using NODE_EXTRA_CA_CERTS environment variable instead."
+          "Consider using NODE_EXTRA_CA_CERTS environment variable instead.",
       );
     }
 
@@ -711,7 +759,10 @@ export const login = {
       stsOptions = {
         ...stsOptions,
         requestHandler: new NodeHttpHandler({
-          httpsAgent: new HttpsProxyAgent(proxyUrl, proxyOptions),
+          httpsAgent: await this._createHttpsProxyAgentAsync(
+            proxyUrl,
+            proxyOptions,
+          ),
         }),
       };
     } else if (awsNoVerifySsl) {

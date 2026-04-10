@@ -22,19 +22,19 @@ const {
   mockSend,
   mockHttpsProxyAgent,
   mockPuppeteerLaunch,
-  mockMkdirp,
+  mockFsMkdir,
   mockFsRm,
 } = vi.hoisted(() => {
   const mockSend = vi.fn();
   const mockHttpsProxyAgent = vi.fn();
   const mockPuppeteerLaunch = vi.fn();
-  const mockMkdirp = vi.fn();
+  const mockFsMkdir = vi.fn();
   const mockFsRm = vi.fn();
   return {
     mockSend,
     mockHttpsProxyAgent,
     mockPuppeteerLaunch,
-    mockMkdirp,
+    mockFsMkdir,
     mockFsRm,
   };
 });
@@ -57,27 +57,20 @@ vi.mock("puppeteer", () => ({
   },
 }));
 
-vi.mock("mkdirp", () => ({
-  default: mockMkdirp,
-}));
-
 vi.mock("fs/promises", () => ({
   default: {
     rm: mockFsRm,
+    mkdir: mockFsMkdir,
   },
 }));
 
-// Mock Bluebird.delay to resolve immediately for faster test execution.
-// Note: This means timing-sensitive behavior in cliProxy loops won't be tested
-// in real-time. For timing-critical tests, consider using vi.useFakeTimers().
-vi.mock("bluebird", () => ({
-  default: {
-    delay: vi.fn().mockResolvedValue(undefined),
-  },
+vi.mock("node:timers/promises", () => ({
+  setTimeout: vi.fn().mockResolvedValue(undefined),
 }));
 
 import inquirer from "inquirer";
 import { awsConfig } from "./awsConfig";
+import { states } from "./loginStates";
 import { paths } from "./paths";
 
 describe("login", () => {
@@ -150,7 +143,7 @@ describe("login", () => {
       expect(result.azure_default_username).toBe("user@example.com");
       expect(result.azure_default_password).toBe("secret");
       expect(result.azure_default_role_arn).toBe(
-        "arn:aws:iam::123456789:role/Test"
+        "arn:aws:iam::123456789:role/Test",
       );
       expect(result.azure_default_duration_hours).toBe("8");
     });
@@ -169,7 +162,7 @@ describe("login", () => {
             </AttributeStatement>
           </Assertion>
         </samlp:Response>
-      `
+      `,
       ).toString("base64");
 
       const roles = login._parseRolesFromSamlResponse(samlAssertion);
@@ -177,7 +170,7 @@ describe("login", () => {
       expect(roles).toHaveLength(1);
       expect(roles[0].roleArn).toBe("arn:aws:iam::123456789012:role/TestRole");
       expect(roles[0].principalArn).toBe(
-        "arn:aws:iam::123456789012:saml-provider/TestProvider"
+        "arn:aws:iam::123456789012:saml-provider/TestProvider",
       );
     });
 
@@ -194,7 +187,7 @@ describe("login", () => {
             </AttributeStatement>
           </Assertion>
         </samlp:Response>
-      `
+      `,
       ).toString("base64");
 
       const roles = login._parseRolesFromSamlResponse(samlAssertion);
@@ -216,7 +209,7 @@ describe("login", () => {
             </AttributeStatement>
           </Assertion>
         </samlp:Response>
-      `
+      `,
       ).toString("base64");
 
       const roles = login._parseRolesFromSamlResponse(samlAssertion);
@@ -224,7 +217,7 @@ describe("login", () => {
       expect(roles).toHaveLength(1);
       expect(roles[0].roleArn).toBe("arn:aws:iam::123456789012:role/TestRole");
       expect(roles[0].principalArn).toBe(
-        "arn:aws:iam::123456789012:saml-provider/TestProvider"
+        "arn:aws:iam::123456789012:saml-provider/TestProvider",
       );
     });
 
@@ -240,7 +233,7 @@ describe("login", () => {
             </AttributeStatement>
           </Assertion>
         </samlp:Response>
-      `
+      `,
       ).toString("base64");
 
       const roles = login._parseRolesFromSamlResponse(samlAssertion);
@@ -307,11 +300,11 @@ describe("login", () => {
       const url = await login._createLoginUrlAsync(
         appIdUri,
         tenantId,
-        assertionConsumerServiceURL
+        assertionConsumerServiceURL,
       );
 
       expect(url).toContain(
-        `https://login.microsoftonline.com/${tenantId}/saml2`
+        `https://login.microsoftonline.com/${tenantId}/saml2`,
       );
       expect(url).toContain("SAMLRequest=");
     });
@@ -324,7 +317,7 @@ describe("login", () => {
       const url = await login._createLoginUrlAsync(
         appIdUri,
         tenantId,
-        assertionConsumerServiceURL
+        assertionConsumerServiceURL,
       );
 
       // Extract and decode SAMLRequest
@@ -360,11 +353,11 @@ describe("login", () => {
       const url = await login._createLoginUrlAsync(
         appIdUri,
         tenantId,
-        assertionConsumerServiceURL
+        assertionConsumerServiceURL,
       );
 
       expect(url).toContain(
-        `https://login.microsoftonline.com/${tenantId}/saml2`
+        `https://login.microsoftonline.com/${tenantId}/saml2`,
       );
     });
 
@@ -376,11 +369,11 @@ describe("login", () => {
       const url = await login._createLoginUrlAsync(
         appIdUri,
         tenantId,
-        assertionConsumerServiceURL
+        assertionConsumerServiceURL,
       );
 
       expect(url).toContain(
-        `https://login.microsoftonline.com/${tenantId}/saml2`
+        `https://login.microsoftonline.com/${tenantId}/saml2`,
       );
     });
 
@@ -401,7 +394,7 @@ describe("login", () => {
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toBe(
-        "No roles found in SAML response."
+        "No roles found in SAML response.",
       );
     });
 
@@ -419,11 +412,11 @@ describe("login", () => {
         roles,
         false,
         "",
-        ""
+        "",
       );
 
       expect(result.role.roleArn).toBe(
-        "arn:aws:iam::123456789012:role/SingleRole"
+        "arn:aws:iam::123456789012:role/SingleRole",
       );
     });
 
@@ -443,7 +436,7 @@ describe("login", () => {
         roles,
         true,
         "arn:aws:iam::123456789012:role/Role2",
-        "8"
+        "8",
       );
 
       expect(result.role.roleArn).toBe("arn:aws:iam::123456789012:role/Role2");
@@ -471,7 +464,7 @@ describe("login", () => {
         roles,
         false,
         "",
-        ""
+        "",
       );
 
       expect(result.role.roleArn).toBe("arn:aws:iam::123456789012:role/Role1");
@@ -493,11 +486,11 @@ describe("login", () => {
         roles,
         false,
         "",
-        ""
+        "",
       );
 
       expect(result.role.roleArn).toBe(
-        "arn:aws:iam::123456789012:role/OnlyRole"
+        "arn:aws:iam::123456789012:role/OnlyRole",
       );
       expect(result.durationHours).toBe(6);
     });
@@ -514,11 +507,11 @@ describe("login", () => {
         roles,
         true,
         "arn:aws:iam::123456789012:role/DefaultRole",
-        "12"
+        "12",
       );
 
       expect(result.role.roleArn).toBe(
-        "arn:aws:iam::123456789012:role/DefaultRole"
+        "arn:aws:iam::123456789012:role/DefaultRole",
       );
       expect(result.durationHours).toBe(12);
       expect(inquirer.prompt).not.toHaveBeenCalled();
@@ -541,7 +534,7 @@ describe("login", () => {
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toBe(
-        "--no-prompt requires azure_default_role_arn when multiple roles are available."
+        "--no-prompt requires azure_default_role_arn when multiple roles are available.",
       );
       expect(inquirer.prompt).not.toHaveBeenCalled();
     });
@@ -558,7 +551,7 @@ describe("login", () => {
         roles,
         true,
         "arn:aws:iam::123456789012:role/MissingRole",
-        "1"
+        "1",
       );
 
       expect(result.role.roleArn).toBe("arn:aws:iam::123456789012:role/Role1");
@@ -577,7 +570,7 @@ describe("login", () => {
         roles,
         true,
         "",
-        ""
+        "",
       );
 
       expect(result.durationHours).toBe(1);
@@ -596,7 +589,7 @@ describe("login", () => {
         roles,
         true,
         "",
-        "invalid"
+        "invalid",
       );
 
       expect(result.durationHours).toBe(1);
@@ -615,7 +608,7 @@ describe("login", () => {
         roles,
         true,
         "",
-        "0"
+        "0",
       );
       expect(result.durationHours).toBe(1);
 
@@ -624,8 +617,26 @@ describe("login", () => {
         roles,
         true,
         "",
-        "-5"
+        "-5",
       );
+      expect(result.durationHours).toBe(1);
+    });
+
+    it("should default duration to 1 hour when defaultDurationHours exceeds 12", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "13",
+      );
+
       expect(result.durationHours).toBe(1);
     });
 
@@ -678,7 +689,7 @@ describe("login", () => {
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toBe(
-        "Unknown profile 'nonexistent'. You must configure it first with --configure."
+        "Unknown profile 'nonexistent'. You must configure it first with --configure.",
       );
     });
 
@@ -698,7 +709,7 @@ describe("login", () => {
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toBe(
-        "Profile 'incomplete' is not configured properly."
+        "Profile 'incomplete' is not configured properly.",
       );
     });
 
@@ -786,11 +797,12 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
 
       expect(console.log).toHaveBeenCalledWith(
-        "Using AWS region (from AWS SDK defaults)"
+        "Using AWS region (from AWS SDK defaults)",
       );
       expect(console.warn).not.toHaveBeenCalled();
     });
@@ -815,14 +827,15 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
 
       expect(console.log).toHaveBeenCalledWith(
-        "Using AWS region us-gov-west-1"
+        "Using AWS region us-gov-west-1",
       );
       expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining("GovCloud region detected in profile")
+        expect.stringContaining("GovCloud region detected in profile"),
       );
     });
 
@@ -846,7 +859,8 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
 
       expect(console.log).toHaveBeenCalledWith("Using AWS region us-east-1");
@@ -901,7 +915,7 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         )
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
@@ -928,12 +942,13 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
 
       expect(console.log).toHaveBeenCalledWith(
         "Using AWS SAML endpoint",
-        "https://signin.amazonaws.cn/saml"
+        "https://signin.amazonaws.cn/saml",
       );
     });
 
@@ -957,12 +972,13 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
 
       expect(console.log).toHaveBeenCalledWith(
         "Using AWS SAML endpoint",
-        "https://signin.amazonaws-us-gov.com/saml"
+        "https://signin.amazonaws-us-gov.com/saml",
       );
     });
 
@@ -986,12 +1002,13 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
 
       expect(console.log).toHaveBeenCalledWith(
         "Using AWS SAML endpoint",
-        "https://signin.aws.amazon.com/saml"
+        "https://signin.aws.amazon.com/saml",
       );
     });
   });
@@ -1007,8 +1024,8 @@ describe("login", () => {
       vi.restoreAllMocks();
     });
 
-    it("should return early when profiles is undefined", async () => {
-      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(undefined);
+    it("should not call loginAsync when no profiles are configured", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([]);
       const loginAsyncSpy = vi
         .spyOn(login, "loginAsync")
         .mockResolvedValue(undefined);
@@ -1022,7 +1039,8 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
 
       expect(loginAsyncSpy).not.toHaveBeenCalled();
@@ -1047,7 +1065,8 @@ describe("login", () => {
         false,
         true, // forceRefresh
         false,
-        false
+        false,
+        false,
       );
 
       // When forceRefresh is true, isProfileAboutToExpireAsync should not be called
@@ -1062,7 +1081,8 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
         "profile2",
@@ -1073,7 +1093,8 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
     });
 
@@ -1100,7 +1121,8 @@ describe("login", () => {
         false,
         false, // forceRefresh
         false,
-        false
+        false,
+        false,
       );
 
       expect(loginAsyncSpy).toHaveBeenCalledTimes(2);
@@ -1113,7 +1135,8 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
         "profile3",
@@ -1124,7 +1147,8 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
+        false,
       );
     });
 
@@ -1147,7 +1171,8 @@ describe("login", () => {
         false,
         false, // forceRefresh
         false,
-        false
+        false,
+        false,
       );
 
       expect(loginAsyncSpy).not.toHaveBeenCalled();
@@ -1160,7 +1185,18 @@ describe("login", () => {
       vi.spyOn(login, "loginAsync").mockRejectedValue(loginError);
 
       const error = await login
-        .loginAll("cli", true, true, false, false, false, true, false, false)
+        .loginAll(
+          "cli",
+          true,
+          true,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+        )
         .catch((e: unknown) => e);
 
       expect(error).toBe(loginError);
@@ -1171,14 +1207,25 @@ describe("login", () => {
       vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(["profile1"]);
       const expireError = new Error("Failed to check expiration");
       vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockRejectedValue(
-        expireError
+        expireError,
       );
       const loginAsyncSpy = vi
         .spyOn(login, "loginAsync")
         .mockResolvedValue(undefined);
 
       const error = await login
-        .loginAll("cli", true, true, false, false, false, false, false, false)
+        .loginAll(
+          "cli",
+          true,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+        )
         .catch((e: unknown) => e);
 
       expect(error).toBe(expireError);
@@ -1213,12 +1260,12 @@ describe("login", () => {
           roles,
           true,
           "arn:aws:iam::123456789012:role/NonExistentRole",
-          "1"
+          "1",
         )
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toContain(
-        "was not found in the SAML response"
+        "was not found in the SAML response",
       );
     });
   });
@@ -1235,6 +1282,14 @@ describe("login", () => {
       delete process.env.HTTP_PROXY;
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(login, "_createHttpsProxyAgentAsync").mockImplementation(
+        async (proxyUrl, proxyOptions) => {
+          mockHttpsProxyAgent(proxyUrl, proxyOptions);
+          return {} as Awaited<
+            ReturnType<typeof login._createHttpsProxyAgentAsync>
+          >;
+        },
+      );
       mockSend.mockResolvedValue({
         Credentials: {
           AccessKeyId: "AKIAIOSFODNN7EXAMPLE",
@@ -1262,12 +1317,12 @@ describe("login", () => {
         },
         1,
         true, // awsNoVerifySsl
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
         "http://proxy.example.com:8080",
-        { rejectUnauthorized: false }
+        { rejectUnauthorized: false },
       );
     });
 
@@ -1283,12 +1338,12 @@ describe("login", () => {
         },
         1,
         false, // awsNoVerifySsl
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
         "http://proxy.example.com:8080",
-        {}
+        {},
       );
     });
 
@@ -1304,12 +1359,12 @@ describe("login", () => {
         },
         1,
         false,
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
         "http://proxy.example.com:8081",
-        {}
+        {},
       );
     });
 
@@ -1326,12 +1381,12 @@ describe("login", () => {
         },
         1,
         false,
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
         "http://proxy.example.com:8080",
-        {}
+        {},
       );
     });
 
@@ -1347,12 +1402,12 @@ describe("login", () => {
         },
         1,
         false,
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
         "http://proxy.example.com:8082",
-        {}
+        {},
       );
     });
 
@@ -1369,12 +1424,12 @@ describe("login", () => {
         },
         1,
         false,
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(mockHttpsProxyAgent).toHaveBeenCalledWith(
         "http://proxy.example.com:8080",
-        {}
+        {},
       );
     });
 
@@ -1388,7 +1443,7 @@ describe("login", () => {
         },
         1,
         false,
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(mockHttpsProxyAgent).not.toHaveBeenCalled();
@@ -1404,11 +1459,11 @@ describe("login", () => {
         },
         1,
         true, // awsNoVerifySsl
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining("SSL certificate verification is disabled")
+        expect.stringContaining("SSL certificate verification is disabled"),
       );
     });
 
@@ -1422,7 +1477,7 @@ describe("login", () => {
         },
         1,
         true, // awsNoVerifySsl
-        "us-east-1"
+        "us-east-1",
       );
 
       // When noVerifySsl is true without proxy, it uses https.Agent instead of HttpsProxyAgent
@@ -1442,7 +1497,7 @@ describe("login", () => {
         },
         1,
         false,
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
@@ -1458,7 +1513,7 @@ describe("login", () => {
         },
         2,
         false,
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(awsConfig.setProfileCredentialsAsync).toHaveBeenCalledWith(
@@ -1468,7 +1523,7 @@ describe("login", () => {
           aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
           aws_session_token: "session-token",
           aws_expiration: "2024-01-01T00:00:00.000Z",
-        }
+        },
       );
     });
 
@@ -1482,7 +1537,7 @@ describe("login", () => {
         },
         4, // 4 hours
         false,
-        "ap-northeast-1"
+        "ap-northeast-1",
       );
 
       expect(mockSend).toHaveBeenCalledWith({
@@ -1508,7 +1563,7 @@ describe("login", () => {
           },
           1,
           false,
-          "us-east-1"
+          "us-east-1",
         )
         .catch((e: unknown) => e);
 
@@ -1536,7 +1591,7 @@ describe("login", () => {
         },
         1,
         false,
-        "us-east-1"
+        "us-east-1",
       );
 
       expect(awsConfig.setProfileCredentialsAsync).toHaveBeenCalledWith(
@@ -1546,7 +1601,7 @@ describe("login", () => {
           aws_secret_access_key: "",
           aws_session_token: "",
           aws_expiration: "",
-        }
+        },
       );
     });
   });
@@ -1582,6 +1637,7 @@ describe("login", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
       });
+      vi.restoreAllMocks();
     });
 
     it("should include --user-data-dir when rememberMe=true and userDataDir is set", async () => {
@@ -1601,7 +1657,7 @@ describe("login", () => {
           false, // enableChromeSeamlessSso
           true, // rememberMe
           false, // noDisableExtensions
-          false // disableGpu
+          false, // disableGpu
         );
       } catch {
         // Expected to throw
@@ -1612,12 +1668,12 @@ describe("login", () => {
           args: expect.arrayContaining([
             "--user-data-dir=/custom/user/data/dir",
           ]),
-        })
+        }),
       );
     });
 
-    it("should call mkdirp and use chromium path when rememberMe=true and userDataDir is not set", async () => {
-      mockMkdirp.mockResolvedValue(undefined);
+    it("should create directory recursively and use chromium path when rememberMe=true and userDataDir is not set", async () => {
+      mockFsMkdir.mockResolvedValue(undefined);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (paths as any).userDataDir = undefined;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1636,19 +1692,21 @@ describe("login", () => {
           false,
           true, // rememberMe
           false,
-          false
+          false,
         );
       } catch {
         // Expected to throw
       }
 
-      expect(mockMkdirp).toHaveBeenCalledWith("/default/chromium/path");
+      expect(mockFsMkdir).toHaveBeenCalledWith("/default/chromium/path", {
+        recursive: true,
+      });
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
           args: expect.arrayContaining([
             "--user-data-dir=/default/chromium/path",
           ]),
-        })
+        }),
       );
     });
 
@@ -1671,7 +1729,7 @@ describe("login", () => {
           false,
           true, // rememberMe
           false,
-          false
+          false,
         );
       } catch {
         // Expected to throw
@@ -1683,8 +1741,47 @@ describe("login", () => {
             "--user-data-dir=/user/data",
             "--profile-directory=CustomProfile",
           ]),
-        })
+        }),
       );
+    });
+
+    it("should ignore saved profile arguments when incognito=true and rememberMe=true", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = "/user/data";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).profileDir = "CustomProfile";
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false,
+          true, // incognito
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(mockFsMkdir).not.toHaveBeenCalled();
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.not.arrayContaining([
+            "--user-data-dir=/user/data",
+            "--profile-directory=CustomProfile",
+          ]),
+        }),
+      );
+      expect(warnSpy).toHaveBeenCalledTimes(1);
     });
 
     it("should include auth whitelist args when enableChromeSeamlessSso=true", async () => {
@@ -1701,7 +1798,7 @@ describe("login", () => {
           true, // enableChromeSeamlessSso
           false,
           false,
-          false
+          false,
         );
       } catch {
         // Expected to throw
@@ -1713,7 +1810,7 @@ describe("login", () => {
             "--auth-server-whitelist=autologon.microsoftazuread-sso.com",
             "--auth-negotiate-delegate-whitelist=autologon.microsoftazuread-sso.com",
           ]),
-        })
+        }),
       );
     });
 
@@ -1731,7 +1828,7 @@ describe("login", () => {
           false,
           false,
           false,
-          true // disableGpu
+          true, // disableGpu
         );
       } catch {
         // Expected to throw
@@ -1740,7 +1837,7 @@ describe("login", () => {
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
           args: expect.arrayContaining(["--disable-gpu"]),
-        })
+        }),
       );
     });
 
@@ -1760,7 +1857,7 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         );
       } catch {
         // Expected to throw
@@ -1771,7 +1868,7 @@ describe("login", () => {
           args: expect.arrayContaining([
             "--proxy-server=http://proxy.example.com:8080",
           ]),
-        })
+        }),
       );
     });
 
@@ -1789,7 +1886,7 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         );
       } catch {
         // Expected to throw
@@ -1798,7 +1895,7 @@ describe("login", () => {
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
           args: expect.arrayContaining(["--no-sandbox"]),
-        })
+        }),
       );
     });
 
@@ -1816,7 +1913,7 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         );
       } catch {
         // Expected to throw
@@ -1825,7 +1922,7 @@ describe("login", () => {
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
           args: expect.arrayContaining(["--enable-features=NetworkService"]),
-        })
+        }),
       );
     });
 
@@ -1843,7 +1940,7 @@ describe("login", () => {
           false,
           false,
           true, // noDisableExtensions
-          false
+          false,
         );
       } catch {
         // Expected to throw
@@ -1852,7 +1949,7 @@ describe("login", () => {
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
           ignoreDefaultArgs: ["--disable-extensions"],
-        })
+        }),
       );
     });
 
@@ -1870,7 +1967,7 @@ describe("login", () => {
           false,
           false,
           false, // noDisableExtensions
-          false
+          false,
         );
       } catch {
         // Expected to throw
@@ -1879,7 +1976,7 @@ describe("login", () => {
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
           ignoreDefaultArgs: [],
-        })
+        }),
       );
     });
 
@@ -1900,7 +1997,7 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         );
       } catch {
         // Expected to throw
@@ -1909,7 +2006,7 @@ describe("login", () => {
       expect(capturedLaunchArgs).toEqual(
         expect.objectContaining({
           executablePath: "/custom/chrome/bin",
-        })
+        }),
       );
     });
 
@@ -1927,7 +2024,7 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         );
       } catch {
         // Expected to throw
@@ -1939,8 +2036,234 @@ describe("login", () => {
             "--app=https://login.example.com",
             "--window-size=425,550",
           ]),
-        })
+        }),
       );
+    });
+
+    it("should omit --app when incognito=true in non-headless mode", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false, // headless=false
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+          true, // incognito
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining(["--window-size=425,550"]),
+        }),
+      );
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.not.arrayContaining(["--app=https://login.example.com"]),
+        }),
+      );
+    });
+
+    it("should warn when incognito=true and rememberMe=true", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false,
+          true, // incognito
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles.",
+      );
+    });
+  });
+
+  describe("_performLoginAsync incognito mode", () => {
+    const createMockPage = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let requestHandler: ((req: any) => void) | null = null;
+      let resolveRequestInterception: (() => void) | null = null;
+      const requestInterceptionReady = new Promise<void>((resolve) => {
+        resolveRequestInterception = resolve;
+      });
+
+      return {
+        setExtraHTTPHeaders: vi.fn().mockResolvedValue(undefined),
+        setViewport: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn().mockImplementation((event: string, handler: unknown) => {
+          if (event === "request") {
+            requestHandler = handler as typeof requestHandler;
+          }
+        }),
+        setRequestInterception: vi.fn().mockImplementation(() => {
+          if (resolveRequestInterception) resolveRequestInterception();
+          return Promise.resolve();
+        }),
+        goto: vi.fn().mockResolvedValue(undefined),
+        waitForNavigation: vi.fn().mockResolvedValue(undefined),
+        bringToFront: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        $: vi.fn().mockResolvedValue(null),
+        screenshot: vi.fn().mockResolvedValue(undefined),
+        getRequestHandler: () => requestHandler,
+        waitForRequestInterception: () => requestInterceptionReady,
+      };
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should use a new browser context and close default pages when incognito=true", async () => {
+      const defaultPage = createMockPage();
+      const incognitoPage = createMockPage();
+      const mockContext = {
+        newPage: vi.fn().mockResolvedValue(incognitoPage),
+      };
+      const mockBrowser = {
+        pages: vi.fn().mockResolvedValue([defaultPage]),
+        createBrowserContext: vi.fn().mockResolvedValue(mockContext),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        false, // headless=false
+        false,
+        false, // cliProxy=false
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false,
+        true, // incognito
+      );
+
+      await incognitoPage.waitForRequestInterception();
+      await Promise.resolve();
+
+      const requestHandler = incognitoPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=incognitoSaml",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      const result = await promise;
+      expect(result).toBe("incognitoSaml");
+      expect(mockContext.newPage.mock.invocationCallOrder[0]).toBeLessThan(
+        defaultPage.close.mock.invocationCallOrder[0],
+      );
+      expect(defaultPage.close).toHaveBeenCalledTimes(1);
+      expect(mockBrowser.createBrowserContext).toHaveBeenCalledTimes(1);
+      expect(mockContext.newPage).toHaveBeenCalledTimes(1);
+      expect(incognitoPage.goto).toHaveBeenCalledWith(
+        "https://login.example.com",
+        { waitUntil: "domcontentloaded" },
+      );
+      expect(incognitoPage.bringToFront).toHaveBeenCalledTimes(1);
+    });
+
+    it("should disable rememberMe automation when incognito=true", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const defaultPage = createMockPage();
+      const incognitoPage = createMockPage();
+      const selectedElement = {};
+      let receivedRememberMe: boolean | undefined;
+      const mockContext = {
+        newPage: vi.fn().mockResolvedValue(incognitoPage),
+      };
+      const mockBrowser = {
+        pages: vi.fn().mockResolvedValue([defaultPage]),
+        createBrowserContext: vi.fn().mockResolvedValue(mockContext),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      incognitoPage.$.mockImplementation((selector: string) =>
+        Promise.resolve(
+          selector === "#remember-me-check" ? selectedElement : null,
+        ),
+      );
+
+      const state = {
+        name: "incognito remember me check",
+        selector: "#remember-me-check",
+        async handler(
+          _page: unknown,
+          _selected: unknown,
+          _noPrompt: boolean,
+          _defaultUsername: string,
+          _defaultPassword: string | undefined,
+          rememberMe: boolean,
+        ): Promise<void> {
+          receivedRememberMe = rememberMe;
+          throw new Error("stop test");
+        },
+      };
+      states.unshift(state);
+
+      let error: unknown;
+      try {
+        error = await login
+          ._performLoginAsync(
+            "https://login.example.com",
+            true,
+            false,
+            true,
+            false,
+            false,
+            "",
+            undefined,
+            false,
+            true,
+            false,
+            false,
+            true,
+          )
+          .catch((e: unknown) => e);
+      } finally {
+        states.shift();
+      }
+
+      expect((error as Error).message).toBe("stop test");
+      expect(receivedRememberMe).toBe(false);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1964,7 +2287,7 @@ describe("login", () => {
     });
 
     const createMockBrowser = (
-      mockPage: ReturnType<typeof createMockPage>
+      mockPage: ReturnType<typeof createMockPage>,
     ) => ({
       pages: vi.fn().mockResolvedValue([mockPage]),
       close: vi.fn().mockResolvedValue(undefined),
@@ -1975,7 +2298,7 @@ describe("login", () => {
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
       mockFsRm.mockResolvedValue(undefined);
-      mockMkdirp.mockResolvedValue(undefined);
+      mockFsMkdir.mockResolvedValue(undefined);
       Object.keys(paths).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
@@ -2002,8 +2325,8 @@ describe("login", () => {
       mockPuppeteerLaunch
         .mockRejectedValueOnce(
           new TargetCloseError(
-            "Protocol error (Target.setAutoAttach): Target closed"
-          )
+            "Protocol error (Target.setAutoAttach): Target closed",
+          ),
         )
         .mockResolvedValueOnce(mockBrowser);
 
@@ -2025,7 +2348,7 @@ describe("login", () => {
           false,
           true, // rememberMe
           false,
-          false
+          false,
         );
       } catch {
         // Expected - will throw due to unrecognized page timeout
@@ -2036,11 +2359,13 @@ describe("login", () => {
         recursive: true,
         force: true,
       });
-      expect(mockMkdirp).toHaveBeenCalledWith("/mock/chromium/path");
+      expect(mockFsMkdir).toHaveBeenCalledWith("/mock/chromium/path", {
+        recursive: true,
+      });
       // Verify puppeteer.launch was called twice (initial + retry)
       expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
       expect(console.warn).toHaveBeenCalledWith(
-        "Browser profile appears incompatible. Resetting profile data and retrying..."
+        "Browser profile appears incompatible. Resetting profile data and retrying...",
       );
     });
 
@@ -2049,7 +2374,7 @@ describe("login", () => {
       (paths as any).userDataDir = "/custom/user/data";
 
       const targetCloseError = new TargetCloseError(
-        "Protocol error: Target closed"
+        "Protocol error: Target closed",
       );
       mockPuppeteerLaunch.mockRejectedValueOnce(targetCloseError);
 
@@ -2066,7 +2391,7 @@ describe("login", () => {
           false,
           true, // rememberMe
           false,
-          false
+          false,
         )
         .catch((e: unknown) => e);
 
@@ -2077,7 +2402,7 @@ describe("login", () => {
 
     it("should re-throw TargetCloseError when rememberMe=false", async () => {
       const targetCloseError = new TargetCloseError(
-        "Protocol error (Target.setAutoAttach): Target closed"
+        "Protocol error (Target.setAutoAttach): Target closed",
       );
       mockPuppeteerLaunch.mockRejectedValueOnce(targetCloseError);
 
@@ -2094,7 +2419,7 @@ describe("login", () => {
           false,
           false, // rememberMe=false
           false,
-          false
+          false,
         )
         .catch((e: unknown) => e);
 
@@ -2106,7 +2431,7 @@ describe("login", () => {
     it("should re-throw non-TargetCloseError even when rememberMe=true", async () => {
       const otherError = new Error("Some other launch error");
       mockPuppeteerLaunch.mockRejectedValueOnce(otherError);
-      mockMkdirp.mockResolvedValue(undefined);
+      mockFsMkdir.mockResolvedValue(undefined);
 
       const error = await login
         ._performLoginAsync(
@@ -2121,7 +2446,7 @@ describe("login", () => {
           false,
           true, // rememberMe=true
           false,
-          false
+          false,
         )
         .catch((e: unknown) => e);
 
@@ -2139,7 +2464,7 @@ describe("login", () => {
 
       mockPuppeteerLaunch
         .mockRejectedValueOnce(
-          new TargetCloseError("Protocol error: Target closed")
+          new TargetCloseError("Protocol error: Target closed"),
         )
         .mockRejectedValueOnce(retryError);
 
@@ -2156,7 +2481,7 @@ describe("login", () => {
           false,
           true, // rememberMe=true
           false,
-          false
+          false,
         )
         .catch((e: unknown) => e);
 
@@ -2200,7 +2525,7 @@ describe("login", () => {
     };
 
     const createMockBrowser = (
-      mockPage: ReturnType<typeof createMockPage>
+      mockPage: ReturnType<typeof createMockPage>,
     ) => ({
       pages: vi.fn().mockResolvedValue([mockPage]),
       close: vi.fn().mockResolvedValue(undefined),
@@ -2240,7 +2565,7 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
       );
 
       // Wait for the request handler to be set up
@@ -2277,7 +2602,7 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
       );
 
       await mockPage.waitForRequestInterception();
@@ -2313,7 +2638,7 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
       );
 
       await mockPage.waitForRequestInterception();
@@ -2348,7 +2673,7 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
       );
 
       await mockPage.waitForRequestInterception();
@@ -2387,7 +2712,7 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
       );
 
       await mockPage.waitForRequestInterception();
@@ -2440,7 +2765,7 @@ describe("login", () => {
     };
 
     const createMockBrowser = (
-      mockPage: ReturnType<typeof createMockPage>
+      mockPage: ReturnType<typeof createMockPage>,
     ) => ({
       pages: vi.fn().mockResolvedValue([mockPage]),
       close: vi.fn().mockResolvedValue(undefined),
@@ -2482,13 +2807,13 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         )
         .catch((e: unknown) => e);
 
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toContain(
-        "Unable to recognize page state!"
+        "Unable to recognize page state!",
       );
       expect(mockPage.screenshot).toHaveBeenCalledWith({
         path: "az2aws-unrecognized-state.png",
@@ -2523,13 +2848,13 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         )
         .catch((e: unknown) => e);
 
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toContain(
-        "Unable to recognize page state!"
+        "Unable to recognize page state!",
       );
       // Verify page.$ was called multiple times (loop continued after errors)
       expect(mockPage.$.mock.calls.length).toBeGreaterThan(3);
@@ -2557,7 +2882,7 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         )
         .catch((e: unknown) => e);
 
@@ -2615,7 +2940,7 @@ describe("login", () => {
     };
 
     const createMockBrowser = (
-      mockPage: ReturnType<typeof createMockPage>
+      mockPage: ReturnType<typeof createMockPage>,
     ) => ({
       pages: vi.fn().mockResolvedValue([mockPage]),
       close: vi.fn().mockResolvedValue(undefined),
@@ -2661,7 +2986,7 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
       );
 
       await mockPage.waitForRequestInterception();
@@ -2723,7 +3048,7 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
       );
 
       await mockPage.waitForRequestInterception();
@@ -2759,7 +3084,7 @@ describe("login", () => {
         false,
         false,
         false,
-        false
+        false,
       );
 
       await mockPage.waitForRequestInterception();
@@ -2814,7 +3139,7 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         )
         .catch((e: unknown) => e);
 
@@ -2861,7 +3186,7 @@ describe("login", () => {
           false,
           false,
           false,
-          false
+          false,
         )
         .catch((e: unknown) => e);
 
