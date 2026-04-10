@@ -15,6 +15,11 @@ import fs from "fs/promises";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { states } from "./loginStates";
+import {
+  parseSessionDurationHours,
+  sessionDurationHoursValidationMessage,
+  validateSessionDurationHours,
+} from "./sessionDuration";
 
 const debug = _debug("az2aws");
 
@@ -633,17 +638,7 @@ export const login = {
     durationHours: number;
   }> {
     let role;
-    let durationHours = 1;
-    if (defaultDurationHours) {
-      const parsedDuration = parseInt(defaultDurationHours, 10);
-      if (
-        !Number.isNaN(parsedDuration) &&
-        parsedDuration > 0 &&
-        parsedDuration <= 12
-      ) {
-        durationHours = parsedDuration;
-      }
-    }
+    let durationHours = parseSessionDurationHours(defaultDurationHours) ?? 1;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const questions: any[] = [];
     if (roles.length === 0) {
@@ -689,12 +684,8 @@ export const login = {
         name: "durationHours",
         message: "Session Duration Hours (up to 12):",
         type: "input",
-        default: defaultDurationHours || 1,
-        validate: (input: string): boolean | string => {
-          const num = Number(input);
-          if (num > 0 && num <= 12) return true;
-          return "Duration hours must be between 1 and 12";
-        },
+        default: durationHours,
+        validate: validateSessionDurationHours,
       });
     }
 
@@ -704,7 +695,13 @@ export const login = {
       const answers = await inquirer.prompt(questions);
       if (!role) role = roles.find((r) => r.roleArn === answers.role);
       if (answers.durationHours) {
-        durationHours = parseInt(answers.durationHours as string, 10);
+        const parsedDurationHours = parseSessionDurationHours(
+          answers.durationHours as string | number | undefined,
+        );
+        if (parsedDurationHours === null) {
+          throw new CLIError(sessionDurationHoursValidationMessage);
+        }
+        durationHours = parsedDurationHours;
       }
     }
 

@@ -590,6 +590,42 @@ describe("login", () => {
       expect(result.durationHours).toBe(1);
     });
 
+    it("should default duration to 1 hour when defaultDurationHours is fractional", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "1.5",
+      );
+
+      expect(result.durationHours).toBe(1);
+    });
+
+    it("should default duration to 1 hour when defaultDurationHours uses scientific notation", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "1e1",
+      );
+
+      expect(result.durationHours).toBe(1);
+    });
+
     it("should throw Error when inquirer returns unknown role", async () => {
       const roles = [
         {
@@ -614,6 +650,26 @@ describe("login", () => {
 
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toBe("Unable to find role");
+    });
+
+    it("should throw CLIError when prompted durationHours is not a whole number", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      vi.mocked(inquirer.prompt).mockResolvedValue({ durationHours: "1.5" });
+
+      const error = await login
+        ._askUserForRoleAndDurationAsync(roles, false, "", "")
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Duration hours must be a whole number between 1 and 12",
+      );
     });
   });
 
