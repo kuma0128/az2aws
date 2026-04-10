@@ -1,13 +1,44 @@
 import ini from "ini";
 import _debug from "debug";
 import { paths } from "./paths";
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import fs from "fs";
 import util from "util";
 
 const debug = _debug("az2aws");
 
 const writeFile = util.promisify(fs.writeFile);
+const awsDirMode = 0o700;
+const awsFileMode = 0o600;
+const ignoredChmodErrorCodes = new Set([
+  "EACCES",
+  "EINVAL",
+  "ENOSYS",
+  "ENOTSUP",
+  "EPERM",
+  "EROFS",
+]);
+
+async function hardenPathPermissions(
+  path: string,
+  mode: number,
+): Promise<void> {
+  if (process.platform === "win32") {
+    return;
+  }
+
+  try {
+    await chmod(path, mode);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (typeof code === "string" && ignoredChmodErrorCodes.has(code)) {
+      debug(`Skipping permission hardening for '${path}' due to ${code}`);
+      return;
+    }
+
+    throw error;
+  }
+}
 
 // Autorefresh credential time limit in milliseconds
 const refreshLimitInMs = 11 * 60 * 1000;
@@ -24,7 +55,7 @@ export interface ProfileConfig {
   [key: string]: unknown;
 }
 
-interface ProfileCredentials {
+export interface ProfileCredentials {
   aws_access_key_id: string;
   aws_secret_access_key: string;
   aws_session_token: string;
@@ -168,9 +199,11 @@ export const awsConfig = {
     const text = ini.stringify(data);
 
     debug(`Creating AWS config directory '${paths.awsDir}' if not exists.`);
-    await mkdir(paths.awsDir, { recursive: true });
+    await mkdir(paths.awsDir, { recursive: true, mode: awsDirMode });
+    await hardenPathPermissions(paths.awsDir, awsDirMode);
 
     debug(`Writing '${type}' INI to file '${paths[type]}'`);
     await writeFile(paths[type], text);
+    await hardenPathPermissions(paths[type], awsFileMode);
   },
 };

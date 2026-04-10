@@ -112,6 +112,7 @@ https://snapcraft.io/az2aws
 | `--no-disable-extensions` | Keep browser extensions enabled |
 | `--disable-gpu` | Disable GPU acceleration |
 | `--incognito` | Open the login flow in an incognito browser context |
+| `--credential-process` | Output credentials for AWS CLI credential_process |
 | `--version (-v)` | Show version number |
 
 ## Usage
@@ -147,6 +148,29 @@ Enable "Stay logged in" during configuration to use `--no-prompt` without storin
 `--incognito` starts the login flow in a fresh incognito browser context. This
 helps avoid reusing an existing browser session, and it overrides any saved
 "Stay logged in" browser state for that run.
+
+#### AWS CLI credential_process
+
+Configure the profile first so it has the defaults needed for non-interactive
+login, then point AWS CLI at `az2aws`:
+
+    [profile myprofile]
+    credential_process = az2aws --profile myprofile --credential-process
+
+`--credential-process` uses the same non-interactive defaults as `--no-prompt`,
+so make sure the profile already has the role and other required values set.
+Standard output is reserved for the AWS CLI JSON payload, while human-readable
+status messages are written to stderr.
+
+Example stdout payload:
+
+    {
+      "Version": 1,
+      "AccessKeyId": "...",
+      "SecretAccessKey": "...",
+      "SessionToken": "...",
+      "Expiration": "2026-01-01T00:00:00.000Z"
+    }
 
 #### Environment Variables
 
