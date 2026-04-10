@@ -410,6 +410,34 @@ describe("loginStates", () => {
       consoleSpy.mockRestore();
     });
 
+    it("should use default account when noPrompt is true", async () => {
+      const mockPage = createMockPage();
+      const mockAadTile = {};
+      const mockMsaTile = {};
+      mockPage.$.mockImplementation((selector: string) => {
+        if (selector === "#aadTileTitle") return Promise.resolve(mockAadTile);
+        if (selector === "#msaTileTitle") return Promise.resolve(mockMsaTile);
+        return Promise.resolve(null);
+      });
+      mockPage.evaluate.mockImplementation((_fn: unknown, el: unknown) => {
+        if (el === mockAadTile) return Promise.resolve("Work Account");
+        if (el === mockMsaTile) return Promise.resolve("Personal Account");
+        return Promise.resolve("");
+      });
+
+      await getAccountSelectionState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        true,
+        "",
+        undefined,
+        false,
+      );
+
+      expect(inquirer.prompt).not.toHaveBeenCalled();
+      expect(mockPage.click).toHaveBeenCalledWith("#aadTileTitle");
+    });
+
     it("should throw Error when inquirer returns unknown account", async () => {
       const mockPage = createMockPage();
       const mockAadTile = {};

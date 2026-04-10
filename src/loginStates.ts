@@ -131,7 +131,11 @@ export const states: State[] = [
   {
     name: "account selection",
     selector: `#aadTile > div > div.table-cell.tile-img > img`,
-    async handler(page: Page): Promise<void> {
+    async handler(
+      page: Page,
+      _selected: ElementHandle,
+      noPrompt: boolean,
+    ): Promise<void> {
       debug("Multiple accounts associated with username.");
       const aadTile = await page.$("#aadTileTitle");
       const aadTileMessage = await readTextContent(page, aadTile);
@@ -149,6 +153,11 @@ export const states: State[] = [
         throw new CLIError("No accounts found on account selection screen.");
       } else if (accounts.length === 1) {
         account = accounts[0];
+      } else if (noPrompt) {
+        debug("Skipping account prompt and using default account");
+        account = accounts.find((candidate) => {
+          return candidate.message === aadTileMessage;
+        });
       } else {
         debug("Asking user to choose account");
         console.log(
