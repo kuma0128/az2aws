@@ -273,9 +273,32 @@ describe("loginStates", () => {
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("promptedPassword");
     });
 
-    it("should focus, type password, and submit form", async () => {
+    it("should focus, clear input, type password, and submit form", async () => {
       const mockPage = createMockPage();
       mockPage.$.mockResolvedValue(null);
+
+      const callOrder: string[] = [];
+      mockPage.focus.mockImplementation(() => {
+        callOrder.push("focus");
+        return Promise.resolve();
+      });
+      mockPage.$eval.mockImplementation(() => {
+        callOrder.push("$eval");
+        return Promise.resolve();
+      });
+      mockPage.keyboard.press.mockImplementation(() => {
+        callOrder.push("press");
+        return Promise.resolve();
+      });
+      mockPage.keyboard.type.mockImplementation(() => {
+        callOrder.push("type");
+        return Promise.resolve();
+      });
+
+      const { selector } = getPasswordState();
+
+      // Guard: selector must exclude hidden inputs to avoid operating on the wrong element
+      expect(selector).toContain(":not(.moveOffScreen)");
 
       await getPasswordState().handler(
         mockPage as never,
@@ -286,10 +309,13 @@ describe("loginStates", () => {
         false,
       );
 
-      // Should focus on password input
-      expect(mockPage.focus).toHaveBeenCalledWith(
-        'input[name="Password"],input[name="passwd"]',
+      // Handler must use the same selector as the state for both focus and clear
+      expect(mockPage.focus).toHaveBeenCalledWith(selector);
+      expect(mockPage.$eval).toHaveBeenCalledWith(
+        selector,
+        expect.any(Function),
       );
+      expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
 
       // Should type password
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("testPassword");
@@ -298,6 +324,9 @@ describe("loginStates", () => {
       expect(mockPage.click).toHaveBeenCalledWith(
         "span[class=submit],input[type=submit]",
       );
+
+      // Verify clear happens before type (regression for #166)
+      expect(callOrder).toEqual(["focus", "$eval", "press", "type"]);
     });
   });
 
