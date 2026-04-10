@@ -114,22 +114,22 @@ export const login = {
       profile.azure_tenant_id,
       assertionConsumerServiceURL,
     );
-      const samlResponse = await this._performLoginAsync(
-        loginUrl,
-        headless,
-        disableSandbox,
-        cliProxy,
-        noPrompt,
-        enableChromeNetworkService,
-        profile.azure_default_username,
-        profile.azure_default_password,
-        enableChromeSeamlessSso,
-        profile.azure_default_remember_me,
-        noDisableExtensions,
-        disableGpu,
-        incognito,
-        browserNoVerifySsl,
-      );
+    const samlResponse = await this._performLoginAsync(
+      loginUrl,
+      headless,
+      disableSandbox,
+      cliProxy,
+      noPrompt,
+      enableChromeNetworkService,
+      profile.azure_default_username,
+      profile.azure_default_password,
+      enableChromeSeamlessSso,
+      profile.azure_default_remember_me,
+      noDisableExtensions,
+      disableGpu,
+      incognito,
+      browserNoVerifySsl,
+    );
     const roles = this._parseRolesFromSamlResponse(samlResponse);
     const { role, durationHours } = await this._askUserForRoleAndDurationAsync(
       roles,
@@ -381,7 +381,7 @@ export const login = {
       if (browserNoVerifySsl) {
         console.warn(
           "WARNING: Browser SSL certificate verification is disabled. " +
-            "This makes the connection vulnerable to MITM attacks."
+            "This makes the connection vulnerable to MITM attacks.",
         );
         args.push("--ignore-certificate-errors");
       }
