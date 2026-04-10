@@ -295,8 +295,7 @@ describe("loginStates", () => {
         return Promise.resolve();
       });
 
-      const passwordSelector =
-        'input[name="Password"]:not(.moveOffScreen),input[name="passwd"]:not(.moveOffScreen)';
+      const { selector } = getPasswordState();
 
       await getPasswordState().handler(
         mockPage as never,
@@ -308,11 +307,11 @@ describe("loginStates", () => {
       );
 
       // Should focus on password input with :not(.moveOffScreen) filter
-      expect(mockPage.focus).toHaveBeenCalledWith(passwordSelector);
+      expect(mockPage.focus).toHaveBeenCalledWith(selector);
 
       // Should select all text and delete with single backspace
       expect(mockPage.$eval).toHaveBeenCalledWith(
-        passwordSelector,
+        selector,
         expect.any(Function),
       );
       expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
