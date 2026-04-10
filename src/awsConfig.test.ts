@@ -561,6 +561,63 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
       expect(chmod).toHaveBeenNthCalledWith(1, paths.awsDir, 0o700);
       expect(chmod).toHaveBeenNthCalledWith(2, paths.config, 0o600);
     });
+
+    it("should ignore permission-related chmod errors", async () => {
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          callback(null);
+        },
+      );
+      vi.mocked(chmod)
+        .mockRejectedValueOnce(
+          Object.assign(new Error("Operation not permitted"), {
+            code: "EPERM",
+          }),
+        )
+        .mockRejectedValueOnce(
+          Object.assign(new Error("Invalid argument"), { code: "EINVAL" }),
+        );
+
+      await expect(
+        awsConfig._saveAsync("config", {
+          default: {
+            azure_tenant_id: "test-tenant",
+            azure_app_id_uri: "https://app.example.com",
+          } as never,
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(fs.writeFile).toHaveBeenCalled();
+      expect(chmod).toHaveBeenCalledTimes(2);
+    });
+
+    it("should still throw for unexpected chmod errors", async () => {
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          callback(null);
+        },
+      );
+      vi.mocked(chmod).mockRejectedValueOnce(
+        Object.assign(new Error("I/O error"), { code: "EIO" }),
+      );
+
+      await expect(
+        awsConfig._saveAsync("config", {
+          default: {
+            azure_tenant_id: "test-tenant",
+            azure_app_id_uri: "https://app.example.com",
+          } as never,
+        }),
+      ).rejects.toThrow("I/O error");
+    });
   });
 
   describe("setProfileConfigValuesAsync", () => {

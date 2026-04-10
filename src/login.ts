@@ -146,6 +146,7 @@ export const login = {
           effectiveNoPrompt,
           profile.azure_default_role_arn,
           profile.azure_default_duration_hours,
+          credentialProcess ? "--credential-process" : "--no-prompt",
         );
 
       const credentials = await this._assumeRoleAsync(
@@ -652,6 +653,8 @@ export const login = {
    * @param {bool} [noPrompt] - Enable skipping of user prompting
    * @param {string} [defaultRoleArn] - The default role ARN
    * @param {number} [defaultDurationHours] - The default session duration in hours
+   * @param {string} [nonInteractiveModeLabel] - CLI flag label to reference in
+   * non-interactive errors
    * @returns {Promise.<{role: string, durationHours: number}>} The selected role and duration
    * @private
    */
@@ -660,6 +663,7 @@ export const login = {
     noPrompt: boolean,
     defaultRoleArn: string,
     defaultDurationHours: string,
+    nonInteractiveModeLabel = "--no-prompt",
   ): Promise<{
     role: Role;
     durationHours: number;
@@ -687,7 +691,7 @@ export const login = {
       if (noPrompt) {
         if (!defaultRoleArn) {
           throw new CLIError(
-            "--no-prompt requires azure_default_role_arn when multiple roles are available.",
+            `${nonInteractiveModeLabel} requires azure_default_role_arn when multiple roles are available.`,
           );
         }
 

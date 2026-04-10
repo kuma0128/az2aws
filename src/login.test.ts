@@ -1043,6 +1043,49 @@ describe("login", () => {
         Expiration: credentials.aws_expiration,
       });
     });
+
+    it("should mention credential-process when a default role ARN is required", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+      });
+      vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([
+        role,
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OtherRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider2",
+        },
+      ]);
+      const assumeRoleSpy = vi.spyOn(login, "_assumeRoleAsync");
+
+      const error = await login
+        .loginAsync(
+          "default",
+          "cli",
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "--credential-process requires azure_default_role_arn when multiple roles are available.",
+      );
+      expect(assumeRoleSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe("loginAll", () => {
