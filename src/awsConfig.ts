@@ -41,6 +41,45 @@ async function hardenPathPermissions(
   }
 }
 
+async function hardenCreatedDirectories(
+  createdDir: string,
+  targetDir: string,
+): Promise<void> {
+  const resolvedCreatedDir = path.resolve(createdDir);
+  const resolvedTargetDir = path.resolve(targetDir);
+  const relativeTargetDir = path.relative(
+    resolvedCreatedDir,
+    resolvedTargetDir,
+  );
+
+  if (
+    relativeTargetDir === ".." ||
+    relativeTargetDir.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativeTargetDir)
+  ) {
+    debug(
+      `Skipping permission hardening because created directory '${createdDir}' is not within target directory '${targetDir}'.`,
+    );
+    return;
+  }
+
+  let currentDir = resolvedCreatedDir;
+  await hardenPathPermissions(currentDir, awsDirMode);
+
+  if (!relativeTargetDir) {
+    return;
+  }
+
+  for (const segment of relativeTargetDir.split(path.sep)) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+
+    currentDir = path.join(currentDir, segment);
+    await hardenPathPermissions(currentDir, awsDirMode);
+  }
+}
+
 // Autorefresh credential time limit in milliseconds
 const refreshLimitInMs = 11 * 60 * 1000;
 
@@ -200,11 +239,25 @@ export const awsConfig = {
     debug(`Stringifying ${type} INI data`);
     const text = ini.stringify(data);
     const targetDir = path.dirname(targetPath);
+    const isDefaultAwsDir =
+      path.resolve(targetDir) === path.resolve(paths.awsDir);
 
     if (targetDir !== ".") {
       debug(`Creating target directory '${targetDir}' if not exists.`);
-      await mkdir(targetDir, { recursive: true, mode: awsDirMode });
-      await hardenPathPermissions(targetDir, awsDirMode);
+      const createdDir = await mkdir(targetDir, {
+        recursive: true,
+        mode: awsDirMode,
+      });
+
+      if (isDefaultAwsDir) {
+        await hardenPathPermissions(targetDir, awsDirMode);
+      } else if (createdDir) {
+        await hardenCreatedDirectories(createdDir, targetDir);
+      } else {
+        debug(
+          `Skipping directory permission hardening for existing custom directory '${targetDir}'.`,
+        );
+      }
     } else {
       debug(
         `Skipping target directory creation for '${targetPath}' because it uses the current working directory.`,

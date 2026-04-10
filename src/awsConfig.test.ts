@@ -572,9 +572,12 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
       expect(chmod).toHaveBeenNthCalledWith(2, paths.config, 0o600);
     });
 
-    it("should create the parent directory for a custom config path", async () => {
-      const customConfigPath = path.join("/tmp", "custom-aws", "config");
+    it("should harden custom directories that are newly created", async () => {
+      const customConfigDir = path.join("/tmp", "custom-aws");
+      const nestedCustomConfigDir = path.join(customConfigDir, "nested");
+      const customConfigPath = path.join(nestedCustomConfigDir, "config");
       paths.config = customConfigPath;
+      vi.mocked(mkdir).mockResolvedValueOnce(customConfigDir);
 
       vi.mocked(fs.writeFile).mockImplementation(
         (
@@ -595,19 +598,16 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         }),
       ).resolves.toBeUndefined();
 
-      expect(mkdir).toHaveBeenCalledWith(path.dirname(customConfigPath), {
+      expect(mkdir).toHaveBeenCalledWith(nestedCustomConfigDir, {
         recursive: true,
         mode: 0o700,
       });
-      expect(chmod).toHaveBeenNthCalledWith(
-        1,
-        path.dirname(customConfigPath),
-        0o700,
-      );
-      expect(chmod).toHaveBeenNthCalledWith(2, customConfigPath, 0o600);
+      expect(chmod).toHaveBeenNthCalledWith(1, customConfigDir, 0o700);
+      expect(chmod).toHaveBeenNthCalledWith(2, nestedCustomConfigDir, 0o700);
+      expect(chmod).toHaveBeenNthCalledWith(3, customConfigPath, 0o600);
     });
 
-    it("should create the parent directory for a custom credentials path", async () => {
+    it("should not harden existing custom parent directories", async () => {
       const customCredentialsPath = path.join(
         "/tmp",
         "custom-aws",
@@ -640,12 +640,8 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         recursive: true,
         mode: 0o700,
       });
-      expect(chmod).toHaveBeenNthCalledWith(
-        1,
-        path.dirname(customCredentialsPath),
-        0o700,
-      );
-      expect(chmod).toHaveBeenNthCalledWith(2, customCredentialsPath, 0o600);
+      expect(chmod).toHaveBeenCalledTimes(1);
+      expect(chmod).toHaveBeenCalledWith(customCredentialsPath, 0o600);
     });
 
     it("should not harden the current working directory for relative target paths", async () => {
