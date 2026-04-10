@@ -968,6 +968,7 @@ describe("login", () => {
       vi.clearAllMocks();
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(console, "error").mockImplementation(() => {});
     });
 
     afterEach(() => {
@@ -994,6 +995,27 @@ describe("login", () => {
       );
 
       expect(loginAsyncSpy).not.toHaveBeenCalled();
+    });
+
+    it("should warn when --all-profiles is used without --no-prompt", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([]);
+
+      await login.loginAll(
+        "cli",
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(console.warn).toHaveBeenCalledWith(
+        "WARNING: Interactive use of --all-profiles is deprecated. Prefer --all-profiles --no-prompt with per-profile defaults configured.",
+      );
     });
 
     it("should iterate over all profiles with forceRefresh=true and skip expiration check", async () => {
@@ -1128,11 +1150,16 @@ describe("login", () => {
       expect(loginAsyncSpy).not.toHaveBeenCalled();
     });
 
-    it("should propagate error when loginAsync throws", async () => {
-      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(["profile1"]);
+    it("should continue with other profiles when loginAsync throws and report failures at the end", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([
+        "profile1",
+        "profile2",
+      ]);
       vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(true);
-      const loginError = new Error("Login failed");
-      vi.spyOn(login, "loginAsync").mockRejectedValue(loginError);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockRejectedValueOnce(new Error("Login failed"))
+        .mockResolvedValueOnce(undefined);
 
       const error = await login
         .loginAll(
@@ -1142,23 +1169,31 @@ describe("login", () => {
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
         )
         .catch((e: unknown) => e);
 
-      expect(error).toBe(loginError);
-      expect((error as Error).message).toBe("Login failed");
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(2);
+      expect(console.error).toHaveBeenCalledWith(
+        "Failed to refresh profile 'profile1': Login failed",
+      );
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as Error).message).toBe(
+        "Failed to refresh 1 profile: profile1.",
+      );
     });
 
-    it("should propagate error when isProfileAboutToExpireAsync throws", async () => {
-      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(["profile1"]);
-      const expireError = new Error("Failed to check expiration");
-      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockRejectedValue(
-        expireError,
-      );
+    it("should continue with other profiles when expiration checks fail and report failures at the end", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([
+        "profile1",
+        "profile2",
+      ]);
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync)
+        .mockRejectedValueOnce(new Error("Failed to check expiration"))
+        .mockResolvedValueOnce(true);
       const loginAsyncSpy = vi
         .spyOn(login, "loginAsync")
         .mockResolvedValue(undefined);
@@ -1178,9 +1213,26 @@ describe("login", () => {
         )
         .catch((e: unknown) => e);
 
-      expect(error).toBe(expireError);
-      expect((error as Error).message).toBe("Failed to check expiration");
-      expect(loginAsyncSpy).not.toHaveBeenCalled();
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
+      expect(loginAsyncSpy).toHaveBeenCalledWith(
+        "profile2",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+      expect(console.error).toHaveBeenCalledWith(
+        "Failed to refresh profile 'profile1': Failed to check expiration",
+      );
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as Error).message).toBe(
+        "Failed to refresh 1 profile: profile1.",
+      );
     });
   });
 

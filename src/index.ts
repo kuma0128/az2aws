@@ -19,7 +19,10 @@ program
     "-p, --profile <name>",
     "The name of the profile to log in with (or configure)",
   )
-  .option("-a, --all-profiles", "Run for all configured profiles")
+  .option(
+    "-a, --all-profiles",
+    "Run for all configured profiles (prefer with --no-prompt)",
+  )
   .option(
     "-f, --force-refresh",
     "Force a credential refresh, even if they are still valid",

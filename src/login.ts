@@ -159,29 +159,50 @@ export const login = {
     incognito = false,
   ): Promise<void> {
     const profiles = await awsConfig.getAllProfileNames();
+    const failedProfiles: string[] = [];
+
+    if (!noPrompt) {
+      console.warn(
+        "WARNING: Interactive use of --all-profiles is deprecated. Prefer --all-profiles --no-prompt with per-profile defaults configured.",
+      );
+    }
 
     for (const profile of profiles) {
-      debug(`Check if profile ${profile} is expired or is about to expire`);
-      if (
-        !forceRefresh &&
-        !(await awsConfig.isProfileAboutToExpireAsync(profile))
-      ) {
-        debug(`Profile ${profile} not yet due for refresh.`);
-        continue;
-      }
+      try {
+        debug(`Check if profile ${profile} is expired or is about to expire`);
+        if (
+          !forceRefresh &&
+          !(await awsConfig.isProfileAboutToExpireAsync(profile))
+        ) {
+          debug(`Profile ${profile} not yet due for refresh.`);
+          continue;
+        }
 
-      debug(`Run login for profile: ${profile}`);
-      await this.loginAsync(
-        profile,
-        mode,
-        disableSandbox,
-        noPrompt,
-        enableChromeNetworkService,
-        awsNoVerifySsl,
-        enableChromeSeamlessSso,
-        noDisableExtensions,
-        disableGpu,
-        incognito,
+        debug(`Run login for profile: ${profile}`);
+        await this.loginAsync(
+          profile,
+          mode,
+          disableSandbox,
+          noPrompt,
+          enableChromeNetworkService,
+          awsNoVerifySsl,
+          enableChromeSeamlessSso,
+          noDisableExtensions,
+          disableGpu,
+          incognito,
+        );
+      } catch (err: unknown) {
+        failedProfiles.push(profile);
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`Failed to refresh profile '${profile}': ${message}`);
+      }
+    }
+
+    if (failedProfiles.length > 0) {
+      throw new CLIError(
+        `Failed to refresh ${failedProfiles.length} profile${
+          failedProfiles.length === 1 ? "" : "s"
+        }: ${failedProfiles.join(", ")}.`,
       );
     }
   },

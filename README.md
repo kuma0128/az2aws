@@ -100,7 +100,7 @@ https://snapcraft.io/az2aws
 | Option | Description |
 |--------|-------------|
 | `--profile (-p)` | Profile name to use. Default: `default` or `AWS_PROFILE` |
-| `--all-profiles (-a)` | Run for all configured profiles |
+| `--all-profiles (-a)` | Run for all configured profiles. Best used with `--no-prompt` |
 | `--force-refresh (-f)` | Force refresh even if credentials are valid |
 | `--configure (-c)` | Configure the profile |
 | `--mode (-m) <mode>` | `cli` (default), `gui`, or `debug` |
@@ -227,8 +227,15 @@ changed. Try:
 
 Renew all profiles at once:
 
-    az2aws --all-profiles
-    az2aws --all-profiles --no-prompt    # With "Stay logged in" enabled
+    az2aws --all-profiles --no-prompt
+
+`--all-profiles` is intended for unattended refresh flows. Interactive use is
+deprecated and may be removed in a future release. Configure per-profile
+defaults such as `azure_default_role_arn` and `azure_default_duration_hours`
+before using `--all-profiles --no-prompt`.
+
+If one profile fails to refresh, az2aws logs the failure, continues with the
+remaining profiles, and exits non-zero with a summary at the end.
 
 Credentials are only refreshed if expiring within 11 minutes - safe to run as a cron job.
 
