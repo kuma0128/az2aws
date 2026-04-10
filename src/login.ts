@@ -757,7 +757,8 @@ export const login = {
    * @param {string} assertion - The SAML assertion
    * @param {Role} role - The role to assume
    * @param {number} durationHours - The session duration in hours
-   * @param {boolean} awsNoVerifySsl - Whether to have the AWS CLI verify SSL
+   * @param {boolean} awsNoVerifySsl - Whether the AWS SDK STS client should
+   * disable TLS certificate verification
    * @param {string} region - AWS region, if specified
    * @param {boolean} writeProfile - Whether to persist the credentials to the
    * AWS shared credentials file
