@@ -297,6 +297,9 @@ describe("loginStates", () => {
 
       const { selector } = getPasswordState();
 
+      // Guard: selector must exclude hidden inputs to avoid operating on the wrong element
+      expect(selector).toContain(":not(.moveOffScreen)");
+
       await getPasswordState().handler(
         mockPage as never,
         createMockElementHandle() as never,
@@ -306,10 +309,8 @@ describe("loginStates", () => {
         false,
       );
 
-      // Should focus on password input with :not(.moveOffScreen) filter
+      // Handler must use the same selector as the state for both focus and clear
       expect(mockPage.focus).toHaveBeenCalledWith(selector);
-
-      // Should select all text and delete with single backspace
       expect(mockPage.$eval).toHaveBeenCalledWith(
         selector,
         expect.any(Function),
