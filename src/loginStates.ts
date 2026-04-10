@@ -256,11 +256,14 @@ export const states: State[] = [
         ]));
       }
 
+      const passwordSelector =
+        'input[name="Password"]:not(.moveOffScreen),input[name="passwd"]:not(.moveOffScreen)';
+
       debug("Focusing on password input");
-      await page.focus(`input[name="Password"],input[name="passwd"]`);
+      await page.focus(passwordSelector);
 
       debug("Clearing input");
-      await page.$eval('input[name="Password"],input[name="passwd"]', (el) => {
+      await page.$eval(passwordSelector, (el) => {
         el.select();
       });
       await page.keyboard.press("Backspace");
