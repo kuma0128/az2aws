@@ -25,7 +25,8 @@ interface CheckForUpdateOptions {
 
 function getCachePath(env: NodeJS.ProcessEnv = process.env): string {
   if (process.platform === "win32") {
-    const cacheRoot = env.LOCALAPPDATA ?? env.APPDATA ?? os.homedir();
+    const cacheRoot =
+      env.LOCALAPPDATA?.trim() || env.APPDATA?.trim() || os.homedir();
     return path.win32.join(cacheRoot, PACKAGE_NAME, "update-check.json");
   }
 

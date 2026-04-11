@@ -284,6 +284,34 @@ describe("checkForUpdate", () => {
     );
   });
 
+  it("should fall back past empty-string env vars on Windows", async () => {
+    Object.defineProperty(process, "platform", {
+      value: "win32",
+      configurable: true,
+    });
+    vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
+
+    const req = createMockRequest();
+    vi.mocked(https.get).mockImplementation((_url, _opts, cb) => {
+      const callback = cb as (res: EventEmitter) => void;
+      callback(createMockResponse(JSON.stringify({ version: "2.0.0" })));
+      return req as never;
+    });
+
+    await checkForUpdate("1.5.0", {
+      env: { LOCALAPPDATA: "", APPDATA: "  " },
+    });
+
+    const expectedDir = path.win32.join("C:\\Users\\alice", "az2aws");
+    const expectedPath = path.win32.join(expectedDir, "update-check.json");
+    expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, "utf-8");
+    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      expectedPath,
+      expect.any(String),
+    );
+  });
+
   it("should silently fail on network error", async () => {
     const req = createMockRequest();
     vi.mocked(https.get).mockImplementation((_url, _opts, _cb) => {
