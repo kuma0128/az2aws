@@ -124,6 +124,11 @@ logs stream directly to the terminal. When troubleshooting a live failure, rerun
 with `AZ2AWS_E2E_MODE=debug pnpm test:e2e` to keep the browser visible while the
 CLI state machine continues driving the flow.
 
+`AZ2AWS_E2E_MODE=debug` keeps the browser visible and still auto-fills the page
+through the CLI state machine. `AZ2AWS_E2E_MODE=gui` is fully manual: it opens
+the browser and waits for you to complete the login yourself, so defaults such
+as the email address are not auto-entered.
+
 `pnpm test:e2e` does not support passkey-first accounts that require the saved
 passkey prompt for `login.microsoft.com`. That UI is rendered by the
 browser/OS passkey layer rather than the page DOM, so the current

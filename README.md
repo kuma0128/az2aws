@@ -220,9 +220,14 @@ Example:
     az2aws                    # Default profile
     az2aws --profile foo      # Named profile
     az2aws --mode gui         # Use browser UI (more reliable)
+    az2aws --mode debug       # Show the browser while az2aws still drives the flow
     az2aws --mode gui --incognito  # Open a fresh incognito login window
 
 You'll be prompted for username, password, and MFA if required. After login, use AWS CLI/SDKs as usual.
+
+`--mode gui` is fully manual and waits for you to complete the browser flow
+yourself. If you want the browser to stay visible while az2aws still auto-fills
+the login steps, use `--mode debug`.
 
 **Tips:**
 - Set `AWS_PROFILE` env var instead of using `--profile`
