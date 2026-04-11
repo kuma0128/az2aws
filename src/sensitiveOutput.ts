@@ -31,13 +31,11 @@ const SENSITIVE_JSON_PATTERN = new RegExp(
   `((?:"(?:${SENSITIVE_FIELD_NAMES.join("|")})"\\s*:\\s*))(?:"[^"]*"|null|[^\\s,}]+)`,
   "gi",
 );
-const SHARED_ENVIRONMENT_ERROR_MESSAGE =
-  "az2aws failed with an unexpected error in a shared environment. Re-run locally with DEBUG=az2aws for full details.";
 
 export function shouldAllowSensitiveOutput(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return env.CI !== "true" && env.GITHUB_ACTIONS !== "true";
+  return !env.CI && !env.GITHUB_ACTIONS;
 }
 
 export function redactUrlForLogs(url: string): string {
@@ -97,11 +95,8 @@ export function formatUnexpectedErrorMessage(
   error: unknown,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  if (shouldAllowSensitiveOutput(env)) {
-    return error instanceof Error ? error.message : String(error);
-  }
-
-  return SHARED_ENVIRONMENT_ERROR_MESSAGE;
+  const message = error instanceof Error ? error.message : String(error);
+  return shouldAllowSensitiveOutput(env) ? message : sanitizeMessage(message);
 }
 
 export function formatDebugErrorMessage(

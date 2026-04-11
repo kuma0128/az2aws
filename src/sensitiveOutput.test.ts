@@ -4,6 +4,7 @@ import {
   formatUnexpectedErrorMessage,
   redactUrlForLogs,
   sanitizeMessage,
+  shouldAllowSensitiveOutput,
 } from "./sensitiveOutput";
 
 describe("sensitiveOutput", () => {
@@ -48,13 +49,40 @@ describe("sensitiveOutput", () => {
     );
   });
 
-  it("replaces unexpected errors with a generic message in shared environments", () => {
+  it("sanitizes unexpected error messages in shared environments", () => {
     expect(
-      formatUnexpectedErrorMessage(new Error("SAMLResponse=secret-value"), {
-        GITHUB_ACTIONS: "true",
-      }),
+      formatUnexpectedErrorMessage(
+        new Error(
+          "Navigation failed: https://login.microsoftonline.com/tenant/saml2?SAMLRequest=secret",
+        ),
+        { GITHUB_ACTIONS: "true" },
+      ),
     ).toBe(
-      "az2aws failed with an unexpected error in a shared environment. Re-run locally with DEBUG=az2aws for full details.",
+      "Navigation failed: https://login.microsoftonline.com/[redacted]/saml2?SAMLRequest=%5Bredacted%5D",
     );
+  });
+
+  it("returns raw unexpected error message locally", () => {
+    expect(
+      formatUnexpectedErrorMessage(new Error("SAMLResponse=secret-value"), {}),
+    ).toBe("SAMLResponse=secret-value");
+  });
+
+  describe("shouldAllowSensitiveOutput", () => {
+    it("allows sensitive output when no CI variables are set", () => {
+      expect(shouldAllowSensitiveOutput({})).toBe(true);
+    });
+
+    it("disallows sensitive output when CI is set to any truthy value", () => {
+      expect(shouldAllowSensitiveOutput({ CI: "1" })).toBe(false);
+      expect(shouldAllowSensitiveOutput({ CI: "true" })).toBe(false);
+      expect(shouldAllowSensitiveOutput({ CI: "yes" })).toBe(false);
+    });
+
+    it("disallows sensitive output when GITHUB_ACTIONS is set", () => {
+      expect(shouldAllowSensitiveOutput({ GITHUB_ACTIONS: "true" })).toBe(
+        false,
+      );
+    });
   });
 });

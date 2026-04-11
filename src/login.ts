@@ -520,7 +520,8 @@ export const login = {
       const samlResponsePromise = new Promise((resolve) => {
         page.on("request", (req: HTTPRequest) => {
           const reqURL = req.url();
-          debug(`Request: ${this._redactUrlForDebug(reqURL)}`);
+          const redactedURL = this._redactUrlForDebug(reqURL);
+          debug(`Request: ${redactedURL}`);
           if (
             reqURL === AWS_SAML_ENDPOINT ||
             reqURL === AWS_GOV_SAML_ENDPOINT ||
@@ -535,7 +536,7 @@ export const login = {
                 headers: {},
                 body: "",
               }),
-              "Failed to respond to intercepted request",
+              `Failed to respond to intercepted request ${redactedURL}`,
             );
             if (browser) {
               handleBackgroundPromise(
@@ -548,7 +549,7 @@ export const login = {
           } else {
             handleBackgroundPromise(
               req.continue(),
-              "Failed to continue intercepted request",
+              `Failed to continue intercepted request ${redactedURL}`,
             );
           }
         });
