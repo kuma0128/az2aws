@@ -20,7 +20,11 @@ import {
   sessionDurationHoursValidationMessage,
   validateSessionDurationHours,
 } from "./sessionDuration";
-import { formatDebugErrorMessage, redactUrlForLogs } from "./sensitiveOutput";
+import {
+  formatDebugErrorMessage,
+  redactUrlForLogs,
+  shouldAllowSensitiveOutput,
+} from "./sensitiveOutput";
 
 const debug = _debug("az2aws");
 
@@ -145,6 +149,7 @@ export const login = {
         profile.azure_tenant_id,
         assertionConsumerServiceURL,
       );
+      const allowSensitiveOutput = shouldAllowSensitiveOutput();
       const samlResponse = await this._performLoginAsync(
         loginUrl,
         headless,
@@ -159,7 +164,7 @@ export const login = {
         noDisableExtensions,
         disableGpu,
         incognito,
-        !credentialProcess,
+        allowSensitiveOutput,
       );
       const roles = this._parseRolesFromSamlResponse(samlResponse);
       const { role, durationHours } =

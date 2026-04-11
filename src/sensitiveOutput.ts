@@ -24,7 +24,7 @@ const SENSITIVE_FIELD_NAMES = [
   "Set-Cookie",
 ];
 const SENSITIVE_ASSIGNMENT_PATTERN = new RegExp(
-  `((?:${SENSITIVE_FIELD_NAMES.join("|")})\\s*[=:]\\s*)(?:"[^"]*"|'[^']*'|[^\\s,;]+)`,
+  `((?:${SENSITIVE_FIELD_NAMES.join("|")})\\s*[=:]\\s*)(?:"[^"]*"|'[^']*'|.+)`,
   "gi",
 );
 const SENSITIVE_JSON_PATTERN = new RegExp(

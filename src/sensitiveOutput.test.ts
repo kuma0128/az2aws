@@ -22,8 +22,18 @@ describe("sensitiveOutput", () => {
       sanitizeMessage(
         'AccessKeyId=AKIAIOSFODNN7EXAMPLE SecretAccessKey="top-secret" SessionToken=session-token',
       ),
-    ).toBe(
-      "AccessKeyId=[redacted] SecretAccessKey=[redacted] SessionToken=[redacted]",
+    ).toBe("AccessKeyId=[redacted]");
+  });
+
+  it("redacts spaced header values like Authorization Bearer tokens", () => {
+    expect(sanitizeMessage("Authorization: Bearer abc123xyz")).toBe(
+      "Authorization: [redacted]",
+    );
+  });
+
+  it("redacts full Cookie header value including multiple pairs", () => {
+    expect(sanitizeMessage("Cookie: session=abc; token=xyz")).toBe(
+      "Cookie: [redacted]",
     );
   });
 
