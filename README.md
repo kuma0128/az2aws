@@ -67,9 +67,13 @@ You must install [puppeteer dependencies](https://github.com/GoogleChrome/puppet
 
 #### Windows Notes
 
-If you get a missing Chrome/Chromium error, install the puppeteer dependency manually:
+If you get a missing Chrome/Chromium error, reinstall the Puppeteer browser from the installed `az2aws` package directory:
 
-    node <node_modules_dir>/az2aws/node_modules/puppeteer/install.js
+    node <npm_global_node_modules>\az2aws\node_modules\puppeteer\install.mjs
+
+For an npm global install, replace `<npm_global_node_modules>` with the output of `npm root -g`.
+If you installed az2aws with pnpm or another package manager, locate `puppeteer/install.mjs`
+under the installed `az2aws` package directory and run it with `node`.
 
 ### Docker
 
