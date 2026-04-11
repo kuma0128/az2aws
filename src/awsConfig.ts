@@ -3,6 +3,7 @@ import _debug from "debug";
 import { paths } from "./paths";
 import { chmod, mkdir } from "node:fs/promises";
 import fs from "fs";
+import path from "path";
 import util from "util";
 
 const debug = _debug("az2aws");
@@ -20,7 +21,7 @@ const ignoredChmodErrorCodes = new Set([
 ]);
 
 async function hardenPathPermissions(
-  path: string,
+  fsPath: string,
   mode: number,
 ): Promise<void> {
   if (process.platform === "win32") {
@@ -28,15 +29,54 @@ async function hardenPathPermissions(
   }
 
   try {
-    await chmod(path, mode);
+    await chmod(fsPath, mode);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (typeof code === "string" && ignoredChmodErrorCodes.has(code)) {
-      debug(`Skipping permission hardening for '${path}' due to ${code}`);
+      debug(`Skipping permission hardening for '${fsPath}' due to ${code}`);
       return;
     }
 
     throw error;
+  }
+}
+
+async function hardenCreatedDirectories(
+  createdDir: string,
+  targetDir: string,
+): Promise<void> {
+  const resolvedCreatedDir = path.resolve(createdDir);
+  const resolvedTargetDir = path.resolve(targetDir);
+  const relativeTargetDir = path.relative(
+    resolvedCreatedDir,
+    resolvedTargetDir,
+  );
+
+  if (
+    relativeTargetDir === ".." ||
+    relativeTargetDir.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativeTargetDir)
+  ) {
+    debug(
+      `Skipping permission hardening because target directory '${targetDir}' is not within created directory '${createdDir}'.`,
+    );
+    return;
+  }
+
+  let currentDir = resolvedCreatedDir;
+  await hardenPathPermissions(currentDir, awsDirMode);
+
+  if (!relativeTargetDir) {
+    return;
+  }
+
+  for (const segment of relativeTargetDir.split(path.sep)) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+
+    currentDir = path.join(currentDir, segment);
+    await hardenPathPermissions(currentDir, awsDirMode);
   }
 }
 
@@ -169,11 +209,12 @@ export const awsConfig = {
   async _loadAsync<T extends Record<string, unknown>>(
     type: string,
   ): Promise<T | undefined> {
-    if (!paths[type]) throw new Error(`Unknown config type: '${type}'`);
+    const targetPath = paths[type];
+    if (!targetPath) throw new Error(`Unknown config type: '${type}'`);
 
     return new Promise<T | undefined>((resolve, reject) => {
-      debug(`Loading '${type}' file at '${paths[type]}'`);
-      fs.readFile(paths[type]!, "utf8", (err, data) => {
+      debug(`Loading '${type}' file at '${targetPath}'`);
+      fs.readFile(targetPath, "utf8", (err, data) => {
         if (err) {
           if (err.code === "ENOENT") {
             debug(`File not found. Returning undefined.`);
@@ -191,18 +232,40 @@ export const awsConfig = {
   },
 
   async _saveAsync(type: string, data: SaveData): Promise<void> {
-    if (!paths[type]) throw new Error(`Unknown config type: '${type}'`);
+    const targetPath = paths[type];
+    if (!targetPath) throw new Error(`Unknown config type: '${type}'`);
     if (!data) throw new Error(`You must provide data for saving.`);
 
     debug(`Stringifying ${type} INI data`);
     const text = ini.stringify(data);
+    const targetDir = path.dirname(targetPath);
+    const isDefaultAwsDir =
+      path.resolve(targetDir) === path.resolve(paths.awsDir);
 
-    debug(`Creating AWS config directory '${paths.awsDir}' if not exists.`);
-    await mkdir(paths.awsDir, { recursive: true, mode: awsDirMode });
-    await hardenPathPermissions(paths.awsDir, awsDirMode);
+    if (targetDir !== ".") {
+      debug(`Creating target directory '${targetDir}' if not exists.`);
+      const createdDir = await mkdir(targetDir, {
+        recursive: true,
+        mode: awsDirMode,
+      });
 
-    debug(`Writing '${type}' INI to file '${paths[type]}'`);
-    await writeFile(paths[type], text);
-    await hardenPathPermissions(paths[type], awsFileMode);
+      if (isDefaultAwsDir) {
+        await hardenPathPermissions(targetDir, awsDirMode);
+      } else if (createdDir) {
+        await hardenCreatedDirectories(createdDir, targetDir);
+      } else {
+        debug(
+          `Skipping directory permission hardening for existing custom directory '${targetDir}'.`,
+        );
+      }
+    } else {
+      debug(
+        `Skipping target directory creation for '${targetPath}' because it uses the current working directory.`,
+      );
+    }
+
+    debug(`Writing '${type}' INI to file '${targetPath}'`);
+    await writeFile(targetPath, text);
+    await hardenPathPermissions(targetPath, awsFileMode);
   },
 };

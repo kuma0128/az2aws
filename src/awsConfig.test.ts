@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import { chmod, mkdir } from "node:fs/promises";
+import os from "os";
+import path from "path";
 import { awsConfig } from "./awsConfig";
 import { paths } from "./paths";
 
@@ -10,9 +12,15 @@ vi.mock("node:fs/promises", () => ({
   chmod: vi.fn().mockResolvedValue(undefined),
 }));
 
+const defaultConfigPath = paths.config;
+const defaultCredentialsPath = paths.credentials;
+const tempDir = os.tmpdir();
+
 describe("awsConfig", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    paths.config = defaultConfigPath;
+    paths.credentials = defaultCredentialsPath;
   });
 
   describe("getProfileConfigAsync", () => {
@@ -554,12 +562,115 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
       ).resolves.toBeUndefined();
 
       expect(fs.writeFile).toHaveBeenCalled();
-      expect(mkdir).toHaveBeenCalledWith(paths.awsDir, {
+      expect(mkdir).toHaveBeenCalledWith(path.dirname(paths.config), {
         recursive: true,
         mode: 0o700,
       });
-      expect(chmod).toHaveBeenNthCalledWith(1, paths.awsDir, 0o700);
+      expect(chmod).toHaveBeenNthCalledWith(
+        1,
+        path.dirname(paths.config),
+        0o700,
+      );
       expect(chmod).toHaveBeenNthCalledWith(2, paths.config, 0o600);
+    });
+
+    it("should harden custom directories that are newly created", async () => {
+      const customConfigDir = path.join(tempDir, "custom-aws");
+      const nestedCustomConfigDir = path.join(customConfigDir, "nested");
+      const customConfigPath = path.join(nestedCustomConfigDir, "config");
+      paths.config = customConfigPath;
+      vi.mocked(mkdir).mockResolvedValueOnce(customConfigDir);
+
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          callback(null);
+        },
+      );
+
+      await expect(
+        awsConfig._saveAsync("config", {
+          default: {
+            azure_tenant_id: "test-tenant",
+            azure_app_id_uri: "https://app.example.com",
+          } as never,
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(mkdir).toHaveBeenCalledWith(nestedCustomConfigDir, {
+        recursive: true,
+        mode: 0o700,
+      });
+      expect(chmod).toHaveBeenNthCalledWith(1, customConfigDir, 0o700);
+      expect(chmod).toHaveBeenNthCalledWith(2, nestedCustomConfigDir, 0o700);
+      expect(chmod).toHaveBeenNthCalledWith(3, customConfigPath, 0o600);
+    });
+
+    it("should not harden existing custom parent directories", async () => {
+      const customCredentialsPath = path.join(
+        tempDir,
+        "custom-aws",
+        "credentials",
+      );
+      paths.credentials = customCredentialsPath;
+
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          callback(null);
+        },
+      );
+
+      await expect(
+        awsConfig._saveAsync("credentials", {
+          default: {
+            aws_access_key_id: "AKIAIOSFODNN7EXAMPLE",
+            aws_secret_access_key: "secret",
+            aws_session_token: "token",
+            aws_expiration: "2024-12-31T23:59:59.000Z",
+          },
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(mkdir).toHaveBeenCalledWith(path.dirname(customCredentialsPath), {
+        recursive: true,
+        mode: 0o700,
+      });
+      expect(chmod).toHaveBeenCalledTimes(1);
+      expect(chmod).toHaveBeenCalledWith(customCredentialsPath, 0o600);
+    });
+
+    it("should not harden the current working directory for relative target paths", async () => {
+      paths.config = "config";
+
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          callback(null);
+        },
+      );
+
+      await expect(
+        awsConfig._saveAsync("config", {
+          default: {
+            azure_tenant_id: "test-tenant",
+            azure_app_id_uri: "https://app.example.com",
+          } as never,
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(mkdir).not.toHaveBeenCalled();
+      expect(chmod).toHaveBeenCalledTimes(1);
+      expect(chmod).toHaveBeenCalledWith("config", 0o600);
     });
 
     it("should ignore permission-related chmod errors", async () => {
