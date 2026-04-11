@@ -295,6 +295,9 @@ export const awsConfig = {
 
     debug(`Writing '${type}' INI to file atomically`);
     await atomicWriteTextFile(targetPath, text);
+    // Defensive: atomicWriteTextFile already sets permissions on the temp file
+    // before rename, but we re-apply here in case rename semantics differ across
+    // platforms or file-systems.
     await hardenPathPermissions(targetPath, awsFileMode);
   },
 };

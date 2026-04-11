@@ -170,34 +170,6 @@ describe("login", () => {
     });
   });
 
-  describe("_redactUrlForDebug", () => {
-    it("should redact tenant path segments and query parameter values from login URLs", () => {
-      expect(
-        login._redactUrlForDebug(
-          "https://login.microsoftonline.com/tenant/saml2?SAMLRequest=abc123&foo=bar",
-        ),
-      ).toBe(
-        "https://login.microsoftonline.com/[redacted]/saml2?SAMLRequest=%5Bredacted%5D&foo=%5Bredacted%5D",
-      );
-    });
-
-    it("should leave URLs without query parameters unchanged", () => {
-      expect(
-        login._redactUrlForDebug("https://signin.aws.amazon.com/saml"),
-      ).toBe("https://signin.aws.amazon.com/saml");
-    });
-
-    it("should preserve known shared Microsoft login paths", () => {
-      expect(
-        login._redactUrlForDebug(
-          "https://login.microsoftonline.com/common/GetCredentialType?mkt=en",
-        ),
-      ).toBe(
-        "https://login.microsoftonline.com/common/GetCredentialType?mkt=%5Bredacted%5D",
-      );
-    });
-  });
-
   describe("_redactArnForDebug", () => {
     it("should redact the account id and resource name in IAM ARNs", () => {
       expect(

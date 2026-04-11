@@ -15,6 +15,7 @@ permissions:
 jobs:
   build:
     env:
+      # Build job does not need Chrome; skip the postinstall download.
       PUPPETEER_SKIP_DOWNLOAD: "1"
     strategy:
       fail-fast: false
@@ -56,6 +57,9 @@ jobs:
     timeout-minutes: 20
     env:
       CI: "true"
+      # Skip the postinstall download; Chrome is installed explicitly
+      # via "puppeteer browsers install chrome --install-deps" below
+      # so that --install-deps can also pull the required Linux libs.
       PUPPETEER_SKIP_DOWNLOAD: "1"
       PUPPETEER_CACHE_DIR: ${{ github.workspace }}/.cache/puppeteer
       AZ2AWS_E2E_AZURE_TENANT_ID: ${{ secrets.AZ2AWS_E2E_AZURE_TENANT_ID }}

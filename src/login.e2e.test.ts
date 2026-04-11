@@ -27,7 +27,7 @@ const originalEnv = { ...process.env };
 const USERNAME_INPUT_TIMEOUT_MESSAGE =
   'Waiting for selector `input[name="loginfmt"]` failed';
 const shouldSuppressCredentialProcessOutput =
-  process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+  !!process.env.CI || !!process.env.GITHUB_ACTIONS;
 
 function getRequiredEnv(name: keyof NodeJS.ProcessEnv): string {
   const value = process.env[name];

@@ -103,6 +103,5 @@ export function formatDebugErrorMessage(
   error: unknown,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return shouldAllowSensitiveOutput(env) ? message : sanitizeMessage(message);
+  return formatUnexpectedErrorMessage(error, env);
 }

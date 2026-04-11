@@ -98,58 +98,22 @@ pnpm build && node ./lib/index.js
 
 ### E2E Smoke Test
 
-`pnpm test:e2e` is intentionally separate from `pnpm test`. It launches a real
-Puppeteer/Chrome session, signs in through Azure AD, and verifies that az2aws
-can retrieve AWS credentials in `credential_process` mode without persisting
-them to the shared credentials file.
+`pnpm test:e2e` launches a real Puppeteer/Chrome session, signs in through
+Azure AD, and verifies that az2aws can retrieve AWS credentials via
+`credential_process` without persisting them to the shared credentials file.
 
-Required environment variables:
+Copy `.env.example` to `.env` and fill in the values. See
+[`vitest.e2e.config.ts`](vitest.e2e.config.ts) for the Vitest settings used by
+this suite.
 
-- `AZ2AWS_E2E_AZURE_TENANT_ID`
-- `AZ2AWS_E2E_AZURE_APP_ID_URI`
-- `AZ2AWS_E2E_AZURE_DEFAULT_USERNAME`
-- `AZ2AWS_E2E_AZURE_DEFAULT_PASSWORD`
-- `AZ2AWS_E2E_AZURE_DEFAULT_ROLE_ARN`
+To troubleshoot a failing run, rerun with `AZ2AWS_E2E_MODE=debug` (visible
+browser, auto-fill) or `AZ2AWS_E2E_MODE=gui` (fully manual).
 
-Optional environment variables:
+> **Note:** Passkey-first Microsoft accounts are not supported — use a dedicated
+> account with standard username/password/MFA.
 
-- `AZ2AWS_E2E_MODE` (defaults to `cli`; use `debug` or `gui` for interactive troubleshooting)
-- `AZ2AWS_E2E_PROFILE` (defaults to `e2e`)
-- `AZ2AWS_E2E_AWS_REGION` (defaults to `us-east-1`)
-- `AZ2AWS_E2E_DURATION_HOURS` (defaults to `1`)
-
-Local `pnpm test:e2e` enables `DEBUG=az2aws` by default when `DEBUG` is not
-already set, and the E2E Vitest config disables console interception so browser
-flow logs stream directly to the terminal. CI runs force `DEBUG` off by default
-to avoid leaking sensitive browser flow details into public GitHub Actions logs.
-When troubleshooting a live failure, rerun locally with
-`AZ2AWS_E2E_MODE=debug pnpm test:e2e` to keep the browser visible while the CLI
-state machine continues driving the flow.
-
-`AZ2AWS_E2E_MODE=debug` keeps the browser visible and still auto-fills the page
-through the CLI state machine. `AZ2AWS_E2E_MODE=gui` is fully manual: it opens
-the browser and waits for you to complete the login yourself, so defaults such
-as the email address are not auto-entered.
-
-Local `pnpm test:e2e` runs still print the final `credential_process` JSON so
-you can inspect the temporary credentials directly. CI runs suppress that JSON
-when `CI=true` or `GITHUB_ACTIONS=true` to avoid leaking credentials into build
-logs. GitHub Actions already provides `GITHUB_ACTIONS=true`, and
-`.github/workflows/main.yml` also sets `CI=true` explicitly for the `e2e` job
-to make that intent obvious.
-
-`pnpm test:e2e` does not support passkey-first accounts that require the saved
-passkey prompt for `login.microsoft.com`. That UI is rendered by the
-browser/OS passkey layer rather than the page DOM, so the current
-Puppeteer-driven flow cannot dismiss it in `cli` mode. Use a dedicated E2E
-account that can continue with the standard username/password/MFA page flow.
-
-If the run times out before it ever reaches `input[name="loginfmt"]`, the E2E
-test now treats that account as unsupported and surfaces a passkey-specific
-error message instead of only showing the raw selector timeout.
-
-CI only runs this smoke test on `push` to `main` and `workflow_dispatch`, so PR
-validation stays fast and does not depend on repository secrets.
+CI only runs this test on `push` to `main` and `workflow_dispatch`; PR
+validation does not depend on repository secrets.
 
 ## Development Workflow
 

@@ -284,10 +284,6 @@ export const login = {
     );
   },
 
-  _redactUrlForDebug(url: string): string {
-    return redactUrlForLogs(url);
-  },
-
   _redactArnForDebug(arn: string): string {
     const match = arn.match(/^(arn:[^:]+:iam::)[^:]+:(.+?\/).+$/);
     if (!match) {
@@ -360,7 +356,7 @@ export const login = {
         const url = `https://login.microsoftonline.com/${tenantId}/saml2?SAMLRequest=${encodeURIComponent(
           samlBase64,
         )}`;
-        debug("Created login URL", this._redactUrlForDebug(url));
+        debug("Created login URL", redactUrlForLogs(url));
 
         return resolve(url);
       });
@@ -520,7 +516,7 @@ export const login = {
       const samlResponsePromise = new Promise((resolve) => {
         page.on("request", (req: HTTPRequest) => {
           const reqURL = req.url();
-          const redactedURL = this._redactUrlForDebug(reqURL);
+          const redactedURL = redactUrlForLogs(reqURL);
           debug(`Request: ${redactedURL}`);
           if (
             reqURL === AWS_SAML_ENDPOINT ||
