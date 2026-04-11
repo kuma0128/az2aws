@@ -118,11 +118,13 @@ Optional environment variables:
 - `AZ2AWS_E2E_AWS_REGION` (defaults to `us-east-1`)
 - `AZ2AWS_E2E_DURATION_HOURS` (defaults to `1`)
 
-`pnpm test:e2e` enables `DEBUG=az2aws` by default when `DEBUG` is not already
-set, and the E2E Vitest config disables console interception so browser flow
-logs stream directly to the terminal. When troubleshooting a live failure, rerun
-with `AZ2AWS_E2E_MODE=debug pnpm test:e2e` to keep the browser visible while the
-CLI state machine continues driving the flow.
+Local `pnpm test:e2e` enables `DEBUG=az2aws` by default when `DEBUG` is not
+already set, and the E2E Vitest config disables console interception so browser
+flow logs stream directly to the terminal. CI runs force `DEBUG` off by default
+to avoid leaking sensitive browser flow details into public GitHub Actions logs.
+When troubleshooting a live failure, rerun locally with
+`AZ2AWS_E2E_MODE=debug pnpm test:e2e` to keep the browser visible while the CLI
+state machine continues driving the flow.
 
 `AZ2AWS_E2E_MODE=debug` keeps the browser visible and still auto-fills the page
 through the CLI state machine. `AZ2AWS_E2E_MODE=gui` is fully manual: it opens

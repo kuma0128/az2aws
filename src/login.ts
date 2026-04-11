@@ -20,6 +20,7 @@ import {
   sessionDurationHoursValidationMessage,
   validateSessionDurationHours,
 } from "./sessionDuration";
+import { formatDebugErrorMessage, redactUrlForLogs } from "./sensitiveOutput";
 
 const debug = _debug("az2aws");
 
@@ -34,13 +35,6 @@ const AWS_SAML_ENDPOINT = "https://signin.aws.amazon.com/saml";
 const AWS_CN_SAML_ENDPOINT = "https://signin.amazonaws.cn/saml";
 const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
 const REDACTED = "[redacted]";
-const SAFE_MICROSOFT_LOGIN_PATH_SEGMENTS = new Set([
-  "common",
-  "consumers",
-  "organizations",
-  "favicon.ico",
-  "kmsi",
-]);
 
 // Keep the runtime import as native `import()` so CommonJS output can load
 // the ESM-only https-proxy-agent package.
@@ -76,7 +70,7 @@ function handleBackgroundPromise(
   description: string,
 ): void {
   void promise.catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = formatDebugErrorMessage(error);
     debug(`${description}: ${message}`);
   });
 }
@@ -286,32 +280,7 @@ export const login = {
   },
 
   _redactUrlForDebug(url: string): string {
-    try {
-      const parsedUrl = new URL(url);
-      const pathSegments = parsedUrl.pathname.split("/");
-
-      if (
-        parsedUrl.hostname === "login.microsoftonline.com" &&
-        pathSegments[1] &&
-        !SAFE_MICROSOFT_LOGIN_PATH_SEGMENTS.has(pathSegments[1])
-      ) {
-        pathSegments[1] = REDACTED;
-        parsedUrl.pathname = pathSegments.join("/");
-      }
-
-      for (const key of new Set(parsedUrl.searchParams.keys())) {
-        parsedUrl.searchParams.set(key, REDACTED);
-      }
-
-      return parsedUrl.toString();
-    } catch {
-      const questionMarkIndex = url.indexOf("?");
-      if (questionMarkIndex === -1) {
-        return url;
-      }
-
-      return `${url.slice(0, questionMarkIndex)}?${REDACTED}`;
-    }
+    return redactUrlForLogs(url);
   },
 
   _redactArnForDebug(arn: string): string {
@@ -505,7 +474,7 @@ export const login = {
           !paths.userDataDir
         ) {
           debug(
-            `Browser launch failed with TargetCloseError. Resetting profile at ${paths.chromium}`,
+            "Browser launch failed with TargetCloseError. Resetting managed browser profile.",
           );
           console.warn(
             "Browser profile appears incompatible. Resetting profile data and retrying...",
@@ -561,7 +530,7 @@ export const login = {
                 headers: {},
                 body: "",
               }),
-              `Failed to respond to intercepted request ${reqURL}`,
+              "Failed to respond to intercepted request",
             );
             if (browser) {
               handleBackgroundPromise(
@@ -574,7 +543,7 @@ export const login = {
           } else {
             handleBackgroundPromise(
               req.continue(),
-              `Failed to continue intercepted request ${reqURL}`,
+              "Failed to continue intercepted request",
             );
           }
         });
@@ -595,7 +564,9 @@ export const login = {
         if (err instanceof Error) {
           // An error will be thrown if you're still logged in cause the page.goto ot waitForNavigation
           // will be a redirect to AWS. That's usually OK
-          debug(`Error occurred during loading the first page: ${err.message}`);
+          debug(
+            `Error occurred during loading the first page: ${formatDebugErrorMessage(err)}`,
+          );
         }
       }
 
@@ -618,7 +589,7 @@ export const login = {
                 debug(
                   `Error when running state "${
                     state.name
-                  }". ${err.toString()}. Retrying...`,
+                  }". ${formatDebugErrorMessage(err)}. Retrying...`,
                 );
               }
               break;
@@ -652,6 +623,12 @@ export const login = {
           } else {
             debug("State not recognized!");
             if (totalUnrecognizedDelay > MAX_UNRECOGNIZED_PAGE_DELAY) {
+              if (!allowSensitiveStateOutput) {
+                throw new CLIError(
+                  "Unable to recognize page state in a shared environment. Re-run locally with --mode=debug to capture a screenshot.",
+                );
+              }
+
               const path = "az2aws-unrecognized-state.png";
               await page.screenshot({ path });
               throw new CLIError(
@@ -775,7 +752,7 @@ export const login = {
         role = roles.find((r) => r.roleArn === defaultRoleArn);
         if (!role) {
           throw new CLIError(
-            `Default role ARN '${defaultRoleArn}' was not found in the SAML response.`,
+            "Configured default role ARN was not found in the SAML response.",
           );
         }
         debug("Valid role found. No need to ask.");

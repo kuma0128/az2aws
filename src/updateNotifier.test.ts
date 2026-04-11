@@ -37,6 +37,7 @@ describe("checkForUpdate", () => {
       throw new Error("ENOENT");
     });
     vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as never);
+    vi.mocked(fs.chmodSync).mockImplementation(() => undefined as never);
     vi.mocked(fs.writeFileSync).mockImplementation(() => {});
   });
 
@@ -58,6 +59,17 @@ describe("checkForUpdate", () => {
     expect(message).toContain("1.5.0 -> 2.0.0");
     expect(message).toContain("npm install -g az2aws");
     expect(message).not.toContain("mise use -g npm:az2aws");
+    expect(fs.mkdirSync).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `${process.platform === "win32" ? "\\" : "/"}az2aws`,
+      ),
+      { recursive: true, mode: 0o700 },
+    );
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("update-check.json"),
+      expect.any(String),
+      { mode: 0o600 },
+    );
     expect(consoleSpy).not.toHaveBeenCalled();
   });
 

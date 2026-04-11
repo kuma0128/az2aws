@@ -1,8 +1,9 @@
 import ini from "ini";
 import _debug from "debug";
 import { paths } from "./paths";
-import { chmod, mkdir } from "node:fs/promises";
+import { chmod, mkdir, rename, rm } from "node:fs/promises";
 import fs from "fs";
+import crypto from "node:crypto";
 import path from "path";
 import util from "util";
 
@@ -33,7 +34,7 @@ async function hardenPathPermissions(
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (typeof code === "string" && ignoredChmodErrorCodes.has(code)) {
-      debug(`Skipping permission hardening for '${fsPath}' due to ${code}`);
+      debug(`Skipping permission hardening due to ${code}`);
       return;
     }
 
@@ -58,7 +59,7 @@ async function hardenCreatedDirectories(
     path.isAbsolute(relativeTargetDir)
   ) {
     debug(
-      `Skipping permission hardening because target directory '${targetDir}' is not within created directory '${createdDir}'.`,
+      "Skipping permission hardening because the target directory is not within the created directory.",
     );
     return;
   }
@@ -77,6 +78,34 @@ async function hardenCreatedDirectories(
 
     currentDir = path.join(currentDir, segment);
     await hardenPathPermissions(currentDir, awsDirMode);
+  }
+}
+
+async function atomicWriteTextFile(
+  targetPath: string,
+  text: string,
+): Promise<void> {
+  const targetDir = path.dirname(targetPath);
+  const tempPath =
+    targetDir === "."
+      ? `.${path.basename(targetPath)}.${crypto.randomUUID()}.tmp`
+      : path.join(
+          targetDir,
+          `.${path.basename(targetPath)}.${crypto.randomUUID()}.tmp`,
+        );
+
+  let shouldCleanupTempPath = false;
+
+  try {
+    await writeFile(tempPath, text);
+    shouldCleanupTempPath = true;
+    await hardenPathPermissions(tempPath, awsFileMode);
+    await rename(tempPath, targetPath);
+    shouldCleanupTempPath = false;
+  } finally {
+    if (shouldCleanupTempPath) {
+      await rm(tempPath, { force: true }).catch(() => undefined);
+    }
   }
 }
 
@@ -213,7 +242,7 @@ export const awsConfig = {
     if (!targetPath) throw new Error(`Unknown config type: '${type}'`);
 
     return new Promise<T | undefined>((resolve, reject) => {
-      debug(`Loading '${type}' file at '${targetPath}'`);
+      debug(`Loading '${type}' file`);
       fs.readFile(targetPath, "utf8", (err, data) => {
         if (err) {
           if (err.code === "ENOENT") {
@@ -243,7 +272,7 @@ export const awsConfig = {
       path.resolve(targetDir) === path.resolve(paths.awsDir);
 
     if (targetDir !== ".") {
-      debug(`Creating target directory '${targetDir}' if not exists.`);
+      debug(`Creating target directory for '${type}' if it does not exist.`);
       const createdDir = await mkdir(targetDir, {
         recursive: true,
         mode: awsDirMode,
@@ -255,17 +284,17 @@ export const awsConfig = {
         await hardenCreatedDirectories(createdDir, targetDir);
       } else {
         debug(
-          `Skipping directory permission hardening for existing custom directory '${targetDir}'.`,
+          "Skipping directory permission hardening for existing custom directory.",
         );
       }
     } else {
       debug(
-        `Skipping target directory creation for '${targetPath}' because it uses the current working directory.`,
+        `Skipping target directory creation for '${type}' because it uses the current working directory.`,
       );
     }
 
-    debug(`Writing '${type}' INI to file '${targetPath}'`);
-    await writeFile(targetPath, text);
+    debug(`Writing '${type}' INI to file atomically`);
+    await atomicWriteTextFile(targetPath, text);
     await hardenPathPermissions(targetPath, awsFileMode);
   },
 };

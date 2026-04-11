@@ -47,6 +47,14 @@ function printPageMessage(message: string, allowSensitiveOutput = true): void {
   }
 }
 
+function createSensitiveCliError(
+  message: string,
+  sanitizedMessage: string,
+  allowSensitiveOutput = true,
+): CLIError {
+  return new CLIError(allowSensitiveOutput ? message : sanitizedMessage);
+}
+
 /**
  * To proxy the input/output of the Azure login page, it's easiest to run a loop that
  * monitors the state of the page and then perform the corresponding CLI behavior.
@@ -341,9 +349,21 @@ export const states: State[] = [
   {
     name: "TFA failed",
     selector: `#idDiv_SAASDS_Description,#idDiv_SAASTO_Description`,
-    async handler(page: Page, selected: ElementHandle): Promise<void> {
+    async handler(
+      page: Page,
+      selected: ElementHandle,
+      _noPrompt: boolean,
+      _defaultUsername: string,
+      _defaultPassword: string | undefined,
+      _rememberMe: boolean,
+      allowSensitiveOutput: boolean,
+    ): Promise<void> {
       const descriptionMessage = await readTextContent(page, selected);
-      throw new CLIError(descriptionMessage);
+      throw createSensitiveCliError(
+        descriptionMessage,
+        "Authentication failed during MFA challenge.",
+        allowSensitiveOutput,
+      );
     },
   },
   {
@@ -436,9 +456,21 @@ export const states: State[] = [
   {
     name: "Service exception",
     selector: "#service_exception_message",
-    async handler(page: Page, selected: ElementHandle): Promise<void> {
+    async handler(
+      page: Page,
+      selected: ElementHandle,
+      _noPrompt: boolean,
+      _defaultUsername: string,
+      _defaultPassword: string | undefined,
+      _rememberMe: boolean,
+      allowSensitiveOutput: boolean,
+    ): Promise<void> {
       const descriptionMessage = await readTextContent(page, selected);
-      throw new CLIError(descriptionMessage);
+      throw createSensitiveCliError(
+        descriptionMessage,
+        "Login provider returned a service exception.",
+        allowSensitiveOutput,
+      );
     },
   },
 ];

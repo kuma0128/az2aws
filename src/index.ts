@@ -6,6 +6,10 @@ process.on("SIGTERM", () => process.exit(1));
 import { Command } from "commander";
 import { configureProfileAsync } from "./configureProfileAsync";
 import { login } from "./login";
+import {
+  formatCliErrorMessage,
+  formatUnexpectedErrorMessage,
+} from "./sensitiveOutput";
 import { checkForUpdate } from "./updateNotifier";
 import { validateCliOptions } from "./validateCliOptions";
 
@@ -130,10 +134,13 @@ async function runAsync(): Promise<void> {
     }
   } catch (err: unknown) {
     if (err instanceof Error && err.name === "CLIError") {
-      console.error(err.message);
+      console.error(formatCliErrorMessage(err.message));
       exitCode = 2;
+    } else if (err instanceof Error) {
+      console.error(formatUnexpectedErrorMessage(err));
+      exitCode = 1;
     } else {
-      console.error(err);
+      console.error(formatUnexpectedErrorMessage(err));
       exitCode = 1;
     }
   }

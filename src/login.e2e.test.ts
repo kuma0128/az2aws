@@ -98,7 +98,9 @@ describe("login e2e", () => {
         ...originalEnv,
         HOME: homeDir,
         USERPROFILE: homeDir,
-        DEBUG: process.env.DEBUG?.trim() || "az2aws",
+        DEBUG: shouldSuppressCredentialProcessOutput
+          ? ""
+          : process.env.DEBUG?.trim() || "az2aws",
         AWS_CONFIG_FILE: configPath,
         AWS_SHARED_CREDENTIALS_FILE: credentialsPath,
         AZURE_TENANT_ID: e2eConfig.tenantId,

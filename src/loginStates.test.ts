@@ -728,6 +728,30 @@ describe("loginStates", () => {
         "Authentication failed. Please try again.",
       );
     });
+
+    it("should throw sanitized CLIError when sensitive output is disabled", async () => {
+      const mockPage = createMockPage();
+      const mockElement = {};
+      mockPage.evaluate.mockResolvedValue(
+        "Authentication failed. Please try again.",
+      );
+
+      const error = await getTfaFailedState()
+        .handler(
+          mockPage as never,
+          mockElement as never,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Authentication failed during MFA challenge.",
+      );
+    });
   });
 
   describe("Service exception handler", () => {
@@ -752,6 +776,28 @@ describe("loginStates", () => {
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toBe(
         "Service temporarily unavailable",
+      );
+    });
+
+    it("should throw sanitized CLIError when sensitive output is disabled", async () => {
+      const mockPage = createMockPage();
+      const mockElement = {};
+      mockPage.evaluate.mockResolvedValue("Service temporarily unavailable");
+
+      const error = await getServiceExceptionState()
+        .handler(
+          mockPage as never,
+          mockElement as never,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Login provider returned a service exception.",
       );
     });
   });

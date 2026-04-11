@@ -1459,8 +1459,8 @@ describe("login", () => {
         )
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
-      expect((error as CLIError).message).toContain(
-        "was not found in the SAML response",
+      expect((error as CLIError).message).toBe(
+        "Configured default role ARN was not found in the SAML response.",
       );
     });
   });
@@ -3173,6 +3173,38 @@ describe("login", () => {
       expect(mockPage.screenshot).toHaveBeenCalledWith({
         path: "az2aws-unrecognized-state.png",
       });
+    });
+
+    it("should avoid screenshots in shared environments when unrecognized page persists", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      mockPage.$.mockResolvedValue(null);
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Unable to recognize page state in a shared environment. Re-run locally with --mode=debug to capture a screenshot.",
+      );
+      expect(mockPage.screenshot).not.toHaveBeenCalled();
     });
 
     it("should continue loop when page.$ throws an error", async () => {
