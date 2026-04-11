@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/kuma0128/az2aws/compare/v1.6.1...v1.6.2) (2026-04-10)
+
+
+### Bug Fixes
+
+* **deps:** remove unnecessary dependency for security hardening ([#156](https://github.com/kuma0128/az2aws/issues/156)) ([b1ac64d](https://github.com/kuma0128/az2aws/commit/b1ac64d358197db094603dbc948c5f49cfa78c88))
+
 ## [1.6.1](https://github.com/kuma0128/az2aws/compare/v1.6.0...v1.6.1) (2026-04-02)
 
 

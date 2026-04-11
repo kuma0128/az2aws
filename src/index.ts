@@ -7,6 +7,7 @@ import { Command } from "commander";
 import { configureProfileAsync } from "./configureProfileAsync";
 import { login } from "./login";
 import { checkForUpdate } from "./updateNotifier";
+import { validateCliOptions } from "./validateCliOptions";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { version } = require("../package.json") as { version: string };
@@ -57,6 +58,10 @@ program
     "--disable-gpu",
     "Tell Puppeteer to pass the --disable-gpu flag to Chromium",
   )
+  .option(
+    "--credential-process",
+    "Output credentials in JSON format for AWS CLI credential_process",
+  )
   .option("--incognito", "Launch Chromium in incognito mode")
   .parse(process.argv);
 
@@ -75,6 +80,7 @@ const enableChromeSeamlessSso = !!options.enableChromeSeamlessSso;
 const forceRefresh = !!options.forceRefresh;
 const noDisableExtensions = !options.disableExtensions;
 const disableGpu = !!options.disableGpu;
+const credentialProcess = !!options.credentialProcess;
 const incognito = !!options.incognito;
 
 // Start the update lookup immediately, but only print after the main flow ends.
@@ -86,6 +92,12 @@ async function runAsync(): Promise<void> {
   let exitCode = 0;
 
   try {
+    validateCliOptions({
+      allProfiles: !!options.allProfiles,
+      configure: !!options.configure,
+      credentialProcess,
+    });
+
     if (options.allProfiles) {
       await login.loginAll(
         mode,
@@ -113,6 +125,7 @@ async function runAsync(): Promise<void> {
         noDisableExtensions,
         disableGpu,
         incognito,
+        credentialProcess,
       );
     }
   } catch (err: unknown) {

@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { states } from "./loginStates";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { generateSync } from "otplib";
+import { states, generateTotpFromSecret, getTotpFromEnv } from "./loginStates";
 import { CLIError } from "./CLIError";
 
 vi.mock("inquirer", () => ({
@@ -32,8 +33,68 @@ const createMockPage = () => ({
 const createMockElementHandle = () => ({});
 
 describe("loginStates", () => {
+  const originalEnv = process.env;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    process.env = originalEnv;
+  });
+
+  describe("TOTP helpers", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(0));
+    });
+
+    it("should generate a TOTP code for a fixed epoch", () => {
+      const secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+      const expected = generateSync({ secret, epoch: 0 });
+
+      expect(generateTotpFromSecret(secret, 0)).toBe(expected);
+    });
+
+    it("should return undefined when no TOTP secret is configured", () => {
+      expect(getTotpFromEnv()).toBeUndefined();
+    });
+
+    it("should generate a TOTP when env secret is set", () => {
+      const secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+      process.env.AZURE_DEFAULT_TFA_SECRET = secret;
+
+      expect(getTotpFromEnv()).toBe(generateTotpFromSecret(secret, 0));
+    });
+
+    it("should trim surrounding whitespace from env secret", () => {
+      const secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+      process.env.AZURE_DEFAULT_TFA_SECRET = `  ${secret}  `;
+
+      expect(getTotpFromEnv()).toBe(generateTotpFromSecret(secret, 0));
+    });
+
+    it("should throw CLIError for invalid base32 secret", () => {
+      process.env.AZURE_DEFAULT_TFA_SECRET = "invalid!@#$";
+
+      expect(() => getTotpFromEnv()).toThrowError(
+        new CLIError(
+          "AZURE_DEFAULT_TFA_SECRET must be a valid base32 string (letters A-Z, digits 2-7, optional trailing = padding).",
+        ),
+      );
+    });
+
+    it("should throw CLIError when secret decodes to fewer than 16 bytes", () => {
+      process.env.AZURE_DEFAULT_TFA_SECRET = "ABCDEFGHIJKLMNOP";
+
+      expect(() => getTotpFromEnv()).toThrowError(
+        new CLIError(
+          "AZURE_DEFAULT_TFA_SECRET must decode to at least 16 bytes (128 bits).",
+        ),
+      );
+    });
   });
 
   describe("states array", () => {
@@ -273,9 +334,32 @@ describe("loginStates", () => {
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("promptedPassword");
     });
 
-    it("should focus, type password, and submit form", async () => {
+    it("should focus, clear input, type password, and submit form", async () => {
       const mockPage = createMockPage();
       mockPage.$.mockResolvedValue(null);
+
+      const callOrder: string[] = [];
+      mockPage.focus.mockImplementation(() => {
+        callOrder.push("focus");
+        return Promise.resolve();
+      });
+      mockPage.$eval.mockImplementation(() => {
+        callOrder.push("$eval");
+        return Promise.resolve();
+      });
+      mockPage.keyboard.press.mockImplementation(() => {
+        callOrder.push("press");
+        return Promise.resolve();
+      });
+      mockPage.keyboard.type.mockImplementation(() => {
+        callOrder.push("type");
+        return Promise.resolve();
+      });
+
+      const { selector } = getPasswordState();
+
+      // Guard: selector must exclude hidden inputs to avoid operating on the wrong element
+      expect(selector).toContain(":not(.moveOffScreen)");
 
       await getPasswordState().handler(
         mockPage as never,
@@ -286,10 +370,13 @@ describe("loginStates", () => {
         false,
       );
 
-      // Should focus on password input
-      expect(mockPage.focus).toHaveBeenCalledWith(
-        'input[name="Password"],input[name="passwd"]',
+      // Handler must use the same selector as the state for both focus and clear
+      expect(mockPage.focus).toHaveBeenCalledWith(selector);
+      expect(mockPage.$eval).toHaveBeenCalledWith(
+        selector,
+        expect.any(Function),
       );
+      expect(mockPage.keyboard.press).toHaveBeenCalledWith("Backspace");
 
       // Should type password
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("testPassword");
@@ -298,6 +385,9 @@ describe("loginStates", () => {
       expect(mockPage.click).toHaveBeenCalledWith(
         "span[class=submit],input[type=submit]",
       );
+
+      // Verify clear happens before type (regression for #166)
+      expect(callOrder).toEqual(["focus", "$eval", "press", "type"]);
     });
   });
 
@@ -662,6 +752,30 @@ describe("loginStates", () => {
 
       expect(inquirer.prompt).toHaveBeenCalled();
       expect(mockPage.keyboard.type).toHaveBeenCalledWith("123456");
+      expect(mockPage.click).toHaveBeenCalledWith("input[type=submit]");
+      consoleSpy.mockRestore();
+    });
+
+    it("should use env-generated TOTP without prompting", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+      process.env.AZURE_DEFAULT_TFA_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(0));
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await getTfaCodeInputState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        false,
+        "",
+        undefined,
+        false,
+      );
+
+      expect(inquirer.prompt).not.toHaveBeenCalled();
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith("702218");
       expect(mockPage.click).toHaveBeenCalledWith("input[type=submit]");
       consoleSpy.mockRestore();
     });

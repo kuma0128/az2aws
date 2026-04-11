@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { login } from "./login";
 import { CLIError } from "./CLIError";
-import { generateSync } from "otplib";
 
 vi.mock("inquirer", () => ({
   default: {
@@ -239,55 +238,6 @@ describe("login", () => {
       const roles = login._parseRolesFromSamlResponse(samlAssertion);
 
       expect(roles).toHaveLength(0);
-    });
-  });
-
-  describe("_generateTotpFromSecret", () => {
-    it("should generate a TOTP code for a fixed epoch", () => {
-      // Use a 20-byte secret (160 bits) to meet otplib v13 minimum requirements
-      const secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
-      const expected = generateSync({ secret, epoch: 0 });
-
-      const result = login._generateTotpFromSecret(secret, 0);
-
-      expect(result).toBe(expected);
-    });
-  });
-
-  describe("_getTotpFromEnv", () => {
-    const originalEnv = process.env;
-
-    beforeEach(() => {
-      process.env = { ...originalEnv };
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date(0));
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-      process.env = originalEnv;
-    });
-
-    it("should return a generated TOTP when env secret is set", () => {
-      // Use a 20-byte secret (160 bits) to meet otplib v13 minimum requirements
-      const secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
-      process.env.AZURE_DEFAULT_TFA_SECRET = secret;
-
-      const result = login._getTotpFromEnv();
-
-      expect(result).toBe(login._generateTotpFromSecret(secret, 0));
-    });
-
-    it("should throw CLIError for invalid base32 secret", () => {
-      process.env.AZURE_DEFAULT_TFA_SECRET = "invalid!@#$";
-
-      expect(() => login._getTotpFromEnv()).toThrow(CLIError);
-    });
-
-    it("should throw CLIError for too short secret", () => {
-      process.env.AZURE_DEFAULT_TFA_SECRET = "ABCD"; // Less than 16 chars
-
-      expect(() => login._getTotpFromEnv()).toThrow(CLIError);
     });
   });
 
@@ -640,6 +590,42 @@ describe("login", () => {
       expect(result.durationHours).toBe(1);
     });
 
+    it("should default duration to 1 hour when defaultDurationHours is fractional", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "1.5",
+      );
+
+      expect(result.durationHours).toBe(1);
+    });
+
+    it("should default duration to 1 hour when defaultDurationHours uses scientific notation", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      const result = await login._askUserForRoleAndDurationAsync(
+        roles,
+        true,
+        "",
+        "1e1",
+      );
+
+      expect(result.durationHours).toBe(1);
+    });
+
     it("should throw Error when inquirer returns unknown role", async () => {
       const roles = [
         {
@@ -664,6 +650,26 @@ describe("login", () => {
 
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toBe("Unable to find role");
+    });
+
+    it("should throw CLIError when prompted durationHours is not a whole number", async () => {
+      const roles = [
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OnlyRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider",
+        },
+      ];
+
+      vi.mocked(inquirer.prompt).mockResolvedValue({ durationHours: "1.5" });
+
+      const error = await login
+        ._askUserForRoleAndDurationAsync(roles, false, "", "")
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Duration hours must be a whole number between 1 and 12",
+      );
     });
   });
 
@@ -1010,6 +1016,131 @@ describe("login", () => {
         "Using AWS SAML endpoint",
         "https://signin.aws.amazon.com/saml",
       );
+    });
+  });
+
+  describe("loginAsync credential_process mode", () => {
+    const role = {
+      roleArn: "arn:aws:iam::123456789012:role/TestRole",
+      principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+    };
+    const credentials = {
+      aws_access_key_id: "AKIAIOSFODNN7EXAMPLE",
+      aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+      aws_session_token: "session-token",
+      aws_expiration: "2024-01-01T00:00:00.000Z",
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should force noPrompt, avoid profile writes, and emit JSON to stdout", async () => {
+      const performLoginSpy = vi
+        .spyOn(login, "_performLoginAsync")
+        .mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([role]);
+      const askUserSpy = vi
+        .spyOn(login, "_askUserForRoleAndDurationAsync")
+        .mockResolvedValue({
+          role,
+          durationHours: 1,
+        });
+      const assumeRoleSpy = vi
+        .spyOn(login, "_assumeRoleAsync")
+        .mockResolvedValue(credentials);
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+      );
+
+      expect(performLoginSpy.mock.calls[0][4]).toBe(true);
+      expect(askUserSpy.mock.calls[0][1]).toBe(true);
+      expect(assumeRoleSpy.mock.calls[0][6]).toBe(false);
+      expect(console.error).toHaveBeenCalledWith("Using AWS region us-east-1");
+      expect(console.error).toHaveBeenCalledWith(
+        "Using AWS SAML endpoint",
+        "https://signin.aws.amazon.com/saml",
+      );
+      expect(console.log).toHaveBeenCalledTimes(1);
+      expect(
+        JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string),
+      ).toEqual({
+        Version: 1,
+        AccessKeyId: credentials.aws_access_key_id,
+        SecretAccessKey: credentials.aws_secret_access_key,
+        SessionToken: credentials.aws_session_token,
+        Expiration: credentials.aws_expiration,
+      });
+    });
+
+    it("should mention credential-process when a default role ARN is required", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+      });
+      vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([
+        role,
+        {
+          roleArn: "arn:aws:iam::123456789012:role/OtherRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider2",
+        },
+      ]);
+      const assumeRoleSpy = vi.spyOn(login, "_assumeRoleAsync");
+
+      const error = await login
+        .loginAsync(
+          "default",
+          "cli",
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "--credential-process requires azure_default_role_arn when multiple roles are available.",
+      );
+      expect(assumeRoleSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -1503,6 +1634,28 @@ describe("login", () => {
       expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
     });
 
+    it("should return credentials without writing when writeProfile is false", async () => {
+      const result = await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        1,
+        false,
+        "us-east-1",
+        false,
+      );
+
+      expect(result).toMatchObject({
+        aws_access_key_id: "AKIAIOSFODNN7EXAMPLE",
+        aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        aws_session_token: "session-token",
+      });
+      expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
     it("should save credentials with correct values", async () => {
       await login._assumeRoleAsync(
         "test-profile",
@@ -1572,7 +1725,7 @@ describe("login", () => {
       expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
     });
 
-    it("should handle credentials with missing optional fields", async () => {
+    it("should throw CLIError when credentials have missing required fields", async () => {
       mockSend.mockResolvedValue({
         Credentials: {
           AccessKeyId: undefined,
@@ -1582,6 +1735,25 @@ describe("login", () => {
         },
       });
 
+      await expect(
+        login._assumeRoleAsync(
+          "test-profile",
+          "base64-assertion",
+          {
+            roleArn: "arn:aws:iam::123456789012:role/TestRole",
+            principalArn:
+              "arn:aws:iam::123456789012:saml-provider/TestProvider",
+          },
+          1,
+          false,
+          "us-east-1",
+        ),
+      ).rejects.toThrow("AWS returned incomplete credentials");
+
+      expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
+    it("should handle credentials with all fields present", async () => {
       await login._assumeRoleAsync(
         "test-profile",
         "base64-assertion",
@@ -1597,10 +1769,10 @@ describe("login", () => {
       expect(awsConfig.setProfileCredentialsAsync).toHaveBeenCalledWith(
         "test-profile",
         {
-          aws_access_key_id: "",
-          aws_secret_access_key: "",
-          aws_session_token: "",
-          aws_expiration: "",
+          aws_access_key_id: "AKIAIOSFODNN7EXAMPLE",
+          aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          aws_session_token: "session-token",
+          aws_expiration: "2024-01-01T00:00:00.000Z",
         },
       );
     });
@@ -2695,6 +2867,45 @@ describe("login", () => {
       expect(mockBrowser.close).toHaveBeenCalled();
     });
 
+    it("should tolerate rejected respond promise when SAML response is received", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=validBase64EncodedSaml",
+          respond: vi.fn().mockRejectedValue(new Error("request closed")),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      await Promise.resolve();
+
+      const result = await promise;
+      expect(result).toBe("validBase64EncodedSaml");
+      expect(mockBrowser.close).toHaveBeenCalled();
+    });
+
     it("should close browser when puppeteer launch succeeds but SAML response is missing", async () => {
       const mockPage = createMockPage();
       const mockBrowser = createMockBrowser(mockPage);
@@ -3029,6 +3240,55 @@ describe("login", () => {
       expect(continueMocks[0]).toHaveBeenCalled();
       expect(continueMocks[1]).toHaveBeenCalled();
       expect(continueMocks[2]).toHaveBeenCalled();
+    });
+
+    it("should tolerate rejected continue promise before a later SAML response", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+
+      const continueMock = vi
+        .fn()
+        .mockRejectedValue(new Error("request already handled"));
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true,
+        false,
+        false,
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () => "https://login.microsoftonline.com/common/oauth2",
+          postData: () => undefined,
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: continueMock,
+        });
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=validSamlResponse",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+      }
+
+      await Promise.resolve();
+
+      const result = await promise;
+      expect(result).toBe("validSamlResponse");
+      expect(continueMock).toHaveBeenCalled();
     });
 
     it("should handle GovCloud SAML endpoint correctly", async () => {
