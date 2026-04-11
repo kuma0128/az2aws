@@ -2541,6 +2541,59 @@ describe("login", () => {
       );
     });
 
+    it("should reset a Windows managed profile path and retry on TargetCloseError", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromium = "C:\\Users\\alice\\.aws\\chromium";
+
+      mockPuppeteerLaunch
+        .mockRejectedValueOnce(
+          new TargetCloseError(
+            "Protocol error (Target.setAutoAttach): Target closed",
+          ),
+        )
+        .mockResolvedValueOnce(mockBrowser);
+
+      mockPage.$.mockResolvedValue(null);
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true,
+          false,
+          false,
+        );
+      } catch {
+        // Expected - will throw due to unrecognized page timeout
+      }
+
+      expect(mockFsRm).toHaveBeenCalledWith(
+        "C:\\Users\\alice\\.aws\\chromium",
+        {
+          recursive: true,
+          force: true,
+        },
+      );
+      expect(mockFsMkdir).toHaveBeenCalledWith(
+        "C:\\Users\\alice\\.aws\\chromium",
+        {
+          recursive: true,
+        },
+      );
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
+    });
+
     it("should re-throw TargetCloseError when userDataDir is set to avoid deleting user-provided profile", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (paths as any).userDataDir = "/custom/user/data";
