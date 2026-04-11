@@ -129,6 +129,13 @@ through the CLI state machine. `AZ2AWS_E2E_MODE=gui` is fully manual: it opens
 the browser and waits for you to complete the login yourself, so defaults such
 as the email address are not auto-entered.
 
+Local `pnpm test:e2e` runs still print the final `credential_process` JSON so
+you can inspect the temporary credentials directly. CI runs suppress that JSON
+when `CI=true` or `GITHUB_ACTIONS=true` to avoid leaking credentials into build
+logs. GitHub Actions already provides `GITHUB_ACTIONS=true`, and
+`.github/workflows/main.yml` also sets `CI=true` explicitly for the `e2e` job
+to make that intent obvious.
+
 `pnpm test:e2e` does not support passkey-first accounts that require the saved
 passkey prompt for `login.microsoft.com`. That UI is rendered by the
 browser/OS passkey layer rather than the page DOM, so the current

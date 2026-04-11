@@ -13,6 +13,7 @@ export type StateHandler = (
   defaultUsername: string,
   defaultPassword: string | undefined,
   rememberMe: boolean,
+  allowSensitiveOutput: boolean,
 ) => Promise<void>;
 
 export interface State {
@@ -40,6 +41,12 @@ async function readTextContent<T extends Node>(
 const PASSWORD_SELECTOR =
   'input[name="Password"]:not(.moveOffScreen),input[name="passwd"]:not(.moveOffScreen)';
 
+function printPageMessage(message: string, allowSensitiveOutput = true): void {
+  if (allowSensitiveOutput) {
+    console.log(message);
+  }
+}
+
 /**
  * To proxy the input/output of the Azure login page, it's easiest to run a loop that
  * monitors the state of the page and then perform the corresponding CLI behavior.
@@ -56,12 +63,15 @@ export const states: State[] = [
       _selected: ElementHandle,
       noPrompt: boolean,
       defaultUsername: string,
+      _defaultPassword: string | undefined,
+      _rememberMe: boolean,
+      allowSensitiveOutput: boolean,
     ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
         debug("Found error message. Displaying");
         const errorMessage = await readTextContent(page, error);
-        console.log(errorMessage);
+        printPageMessage(errorMessage, allowSensitiveOutput);
       }
 
       let username: string;
@@ -135,6 +145,10 @@ export const states: State[] = [
       page: Page,
       _selected: ElementHandle,
       noPrompt: boolean,
+      _defaultUsername: string,
+      _defaultPassword: string | undefined,
+      _rememberMe: boolean,
+      allowSensitiveOutput: boolean,
     ): Promise<void> {
       debug("Multiple accounts associated with username.");
       const aadTile = await page.$("#aadTileTitle");
@@ -160,8 +174,9 @@ export const states: State[] = [
         });
       } else {
         debug("Asking user to choose account");
-        console.log(
+        printPageMessage(
           "It looks like this Username is used with more than one account from Microsoft. Which one do you want to use?",
+          allowSensitiveOutput,
         );
         const { account: selectedAccount } = await inquirer.prompt<{
           account: string;
@@ -192,7 +207,15 @@ export const states: State[] = [
   {
     name: "passwordless",
     selector: `input[value='Send notification']`,
-    async handler(page: Page) {
+    async handler(
+      page: Page,
+      _selected: ElementHandle,
+      _noPrompt: boolean,
+      _defaultUsername: string,
+      _defaultPassword: string | undefined,
+      _rememberMe: boolean,
+      allowSensitiveOutput: boolean,
+    ) {
       debug("Sending notification");
       await page.click("input[value='Send notification']");
       debug("Waiting for auth code");
@@ -206,10 +229,10 @@ export const states: State[] = [
       );
       const codeElement = await page.$("#idRemoteNGC_DisplaySign");
       const message = await readTextContent(page, messageElement);
-      console.log(message);
+      printPageMessage(message, allowSensitiveOutput);
       debug("Printing the auth code");
       const authCode = await readTextContent(page, codeElement);
-      console.log(authCode);
+      printPageMessage(authCode, allowSensitiveOutput);
       debug("Waiting for response");
       await page.waitForSelector(`#idRemoteNGC_DisplaySign`, {
         hidden: true,
@@ -226,12 +249,14 @@ export const states: State[] = [
       noPrompt: boolean,
       _defaultUsername: string,
       defaultPassword: string | undefined,
+      _rememberMe: boolean,
+      allowSensitiveOutput: boolean,
     ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
         debug("Found error message. Displaying");
         const errorMessage = await readTextContent(page, error);
-        console.log(errorMessage);
+        printPageMessage(errorMessage, allowSensitiveOutput);
         defaultPassword = ""; // Password error. Unset the default and allow user to enter it.
       }
 
@@ -273,9 +298,17 @@ export const states: State[] = [
   {
     name: "TFA instructions",
     selector: `#idDiv_SAOTCAS_Description`,
-    async handler(page: Page, selected: ElementHandle): Promise<void> {
+    async handler(
+      page: Page,
+      selected: ElementHandle,
+      _noPrompt: boolean,
+      _defaultUsername: string,
+      _defaultPassword: string | undefined,
+      _rememberMe: boolean,
+      allowSensitiveOutput: boolean,
+    ): Promise<void> {
       const descriptionMessage = await readTextContent(page, selected);
-      console.log(descriptionMessage);
+      printPageMessage(descriptionMessage, allowSensitiveOutput);
 
       try {
         debug("Waiting for authentication code to be displayed");
@@ -293,7 +326,7 @@ export const states: State[] = [
           authenticationCodeElement,
         );
         debug("Printing the authentication code to console");
-        console.log(authenticationCode);
+        printPageMessage(authenticationCode, allowSensitiveOutput);
       } catch {
         debug("No authentication code found on page");
       }
@@ -316,16 +349,24 @@ export const states: State[] = [
   {
     name: "TFA code input",
     selector: "input[name=otc]:not(.moveOffScreen)",
-    async handler(page: Page): Promise<void> {
+    async handler(
+      page: Page,
+      _selected: ElementHandle,
+      _noPrompt: boolean,
+      _defaultUsername: string,
+      _defaultPassword: string | undefined,
+      _rememberMe: boolean,
+      allowSensitiveOutput: boolean,
+    ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
         debug("Found error message. Displaying");
         const errorMessage = await readTextContent(page, error);
-        console.log(errorMessage);
+        printPageMessage(errorMessage, allowSensitiveOutput);
       } else {
         const description = await page.$("#idDiv_SAOTCC_Description");
         const descriptionMessage = await readTextContent(page, description);
-        console.log(descriptionMessage);
+        printPageMessage(descriptionMessage, allowSensitiveOutput);
       }
 
       const { verificationCode } = await inquirer.prompt<{

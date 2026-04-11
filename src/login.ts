@@ -34,6 +34,13 @@ const AWS_SAML_ENDPOINT = "https://signin.aws.amazon.com/saml";
 const AWS_CN_SAML_ENDPOINT = "https://signin.amazonaws.cn/saml";
 const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
 const REDACTED = "[redacted]";
+const SAFE_MICROSOFT_LOGIN_PATH_SEGMENTS = new Set([
+  "common",
+  "consumers",
+  "organizations",
+  "favicon.ico",
+  "kmsi",
+]);
 
 // Keep the runtime import as native `import()` so CommonJS output can load
 // the ESM-only https-proxy-agent package.
@@ -158,6 +165,7 @@ export const login = {
         noDisableExtensions,
         disableGpu,
         incognito,
+        !credentialProcess,
       );
       const roles = this._parseRolesFromSamlResponse(samlResponse);
       const { role, durationHours } =
@@ -280,6 +288,16 @@ export const login = {
   _redactUrlForDebug(url: string): string {
     try {
       const parsedUrl = new URL(url);
+      const pathSegments = parsedUrl.pathname.split("/");
+
+      if (
+        parsedUrl.hostname === "login.microsoftonline.com" &&
+        pathSegments[1] &&
+        !SAFE_MICROSOFT_LOGIN_PATH_SEGMENTS.has(pathSegments[1])
+      ) {
+        pathSegments[1] = REDACTED;
+        parsedUrl.pathname = pathSegments.join("/");
+      }
 
       for (const key of new Set(parsedUrl.searchParams.keys())) {
         parsedUrl.searchParams.set(key, REDACTED);
@@ -297,7 +315,12 @@ export const login = {
   },
 
   _redactArnForDebug(arn: string): string {
-    return arn.replace(/(arn:[^:]+:iam::)([^:]+)(:.*)/, `$1${REDACTED}$3`);
+    const match = arn.match(/^(arn:[^:]+:iam::)[^:]+:(.+?\/).+$/);
+    if (!match) {
+      return arn;
+    }
+
+    return `${match[1]}${REDACTED}:${match[2]}${REDACTED}`;
   },
 
   // Load the profile
@@ -402,6 +425,7 @@ export const login = {
     noDisableExtensions: boolean,
     disableGpu: boolean,
     incognito = false,
+    allowSensitiveStateOutput = true,
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
@@ -613,6 +637,7 @@ export const login = {
                   defaultUsername,
                   defaultPassword,
                   useRememberMe,
+                  allowSensitiveStateOutput,
                 ),
               ]);
 
@@ -831,7 +856,7 @@ export const login = {
     region: string,
     writeProfile = true,
   ): Promise<AwsCredentials | undefined> {
-    console.log(`Assuming role ${role.roleArn} in region ${region}...`);
+    console.log(`Assuming selected role in region ${region}...`);
     let stsOptions: STSClientConfig = {};
 
     if (awsNoVerifySsl) {

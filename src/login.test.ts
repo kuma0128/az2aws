@@ -171,13 +171,13 @@ describe("login", () => {
   });
 
   describe("_redactUrlForDebug", () => {
-    it("should redact query parameter values from URLs", () => {
+    it("should redact tenant path segments and query parameter values from login URLs", () => {
       expect(
         login._redactUrlForDebug(
           "https://login.microsoftonline.com/tenant/saml2?SAMLRequest=abc123&foo=bar",
         ),
       ).toBe(
-        "https://login.microsoftonline.com/tenant/saml2?SAMLRequest=%5Bredacted%5D&foo=%5Bredacted%5D",
+        "https://login.microsoftonline.com/[redacted]/saml2?SAMLRequest=%5Bredacted%5D&foo=%5Bredacted%5D",
       );
     });
 
@@ -186,13 +186,23 @@ describe("login", () => {
         login._redactUrlForDebug("https://signin.aws.amazon.com/saml"),
       ).toBe("https://signin.aws.amazon.com/saml");
     });
+
+    it("should preserve known shared Microsoft login paths", () => {
+      expect(
+        login._redactUrlForDebug(
+          "https://login.microsoftonline.com/common/GetCredentialType?mkt=en",
+        ),
+      ).toBe(
+        "https://login.microsoftonline.com/common/GetCredentialType?mkt=%5Bredacted%5D",
+      );
+    });
   });
 
   describe("_redactArnForDebug", () => {
-    it("should redact the account id in IAM ARNs", () => {
+    it("should redact the account id and resource name in IAM ARNs", () => {
       expect(
         login._redactArnForDebug("arn:aws:iam::123456789012:role/TestRole"),
-      ).toBe("arn:aws:iam::[redacted]:role/TestRole");
+      ).toBe("arn:aws:iam::[redacted]:role/[redacted]");
     });
 
     it("should leave non-IAM ARNs unchanged", () => {

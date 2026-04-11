@@ -26,6 +26,8 @@ interface CredentialProcessOutput {
 const originalEnv = { ...process.env };
 const USERNAME_INPUT_TIMEOUT_MESSAGE =
   'Waiting for selector `input[name="loginfmt"]` failed';
+const shouldSuppressCredentialProcessOutput =
+  process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 
 function getRequiredEnv(name: keyof NodeJS.ProcessEnv): string {
   const value = process.env[name];
@@ -83,9 +85,14 @@ describe("login e2e", () => {
       const awsDir = path.join(homeDir, ".aws");
       const configPath = path.join(awsDir, "config");
       const credentialsPath = path.join(awsDir, "credentials");
+      const originalConsoleLog = console.log;
       const logSpy = vi
         .spyOn(console, "log")
-        .mockImplementation(() => undefined);
+        .mockImplementation((...args: unknown[]) => {
+          if (!shouldSuppressCredentialProcessOutput) {
+            originalConsoleLog(...args);
+          }
+        });
 
       process.env = {
         ...originalEnv,
@@ -115,7 +122,7 @@ describe("login e2e", () => {
         const { login } = await import("./login");
 
         console.error(
-          `[az2aws:e2e] tempDir=${tempDir} profile=${e2eConfig.profileName} mode=${e2eConfig.mode} region=${e2eConfig.region}`,
+          `[az2aws:e2e] profile=${e2eConfig.profileName} mode=${e2eConfig.mode} region=${e2eConfig.region}`,
         );
 
         const disableSandbox = true;

@@ -53,6 +53,7 @@ jobs:
     runs-on: ubuntu-slim
     timeout-minutes: 20
     env:
+      CI: "true"
       PUPPETEER_SKIP_DOWNLOAD: "1"
       PUPPETEER_CACHE_DIR: ${{ github.workspace }}/.cache/puppeteer
       AZ2AWS_E2E_AZURE_TENANT_ID: ${{ secrets.AZ2AWS_E2E_AZURE_TENANT_ID }}
