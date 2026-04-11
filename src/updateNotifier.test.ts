@@ -44,7 +44,10 @@ describe("checkForUpdate", () => {
   });
 
   afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform });
+    Object.defineProperty(process, "platform", {
+      value: originalPlatform,
+      configurable: true,
+    });
     vi.restoreAllMocks();
   });
 
@@ -194,7 +197,10 @@ describe("checkForUpdate", () => {
   });
 
   it("should use LOCALAPPDATA for the Windows update cache when available", async () => {
-    Object.defineProperty(process, "platform", { value: "win32" });
+    Object.defineProperty(process, "platform", {
+      value: "win32",
+      configurable: true,
+    });
     vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
 
     const req = createMockRequest();
@@ -212,15 +218,20 @@ describe("checkForUpdate", () => {
       "C:\\Users\\alice\\AppData\\Local",
       "az2aws",
     );
+    const expectedPath = path.win32.join(expectedDir, "update-check.json");
+    expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, "utf-8");
     expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
     expect(fs.writeFileSync).toHaveBeenCalledWith(
-      path.win32.join(expectedDir, "update-check.json"),
+      expectedPath,
       expect.any(String),
     );
   });
 
   it("should fall back to APPDATA for the Windows update cache", async () => {
-    Object.defineProperty(process, "platform", { value: "win32" });
+    Object.defineProperty(process, "platform", {
+      value: "win32",
+      configurable: true,
+    });
     vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
 
     const req = createMockRequest();
@@ -238,15 +249,20 @@ describe("checkForUpdate", () => {
       "C:\\Users\\alice\\AppData\\Roaming",
       "az2aws",
     );
+    const expectedPath = path.win32.join(expectedDir, "update-check.json");
+    expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, "utf-8");
     expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
     expect(fs.writeFileSync).toHaveBeenCalledWith(
-      path.win32.join(expectedDir, "update-check.json"),
+      expectedPath,
       expect.any(String),
     );
   });
 
   it("should fall back to the home directory for the Windows update cache", async () => {
-    Object.defineProperty(process, "platform", { value: "win32" });
+    Object.defineProperty(process, "platform", {
+      value: "win32",
+      configurable: true,
+    });
     vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
 
     const req = createMockRequest();
@@ -259,9 +275,11 @@ describe("checkForUpdate", () => {
     await checkForUpdate("1.5.0", { env: {} });
 
     const expectedDir = path.win32.join("C:\\Users\\alice", "az2aws");
+    const expectedPath = path.win32.join(expectedDir, "update-check.json");
+    expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, "utf-8");
     expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
     expect(fs.writeFileSync).toHaveBeenCalledWith(
-      path.win32.join(expectedDir, "update-check.json"),
+      expectedPath,
       expect.any(String),
     );
   });

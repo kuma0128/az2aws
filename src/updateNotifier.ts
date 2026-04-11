@@ -23,15 +23,10 @@ interface CheckForUpdateOptions {
   useColor?: boolean;
 }
 
-function getPathModule(): typeof path {
-  return process.platform === "win32" ? path.win32 : path;
-}
-
 function getCachePath(env: NodeJS.ProcessEnv = process.env): string {
   if (process.platform === "win32") {
-    const pathModule = getPathModule();
     const cacheRoot = env.LOCALAPPDATA ?? env.APPDATA ?? os.homedir();
-    return pathModule.join(cacheRoot, PACKAGE_NAME, "update-check.json");
+    return path.win32.join(cacheRoot, PACKAGE_NAME, "update-check.json");
   }
 
   return path.join(os.homedir(), ".config", PACKAGE_NAME, "update-check.json");
@@ -56,7 +51,7 @@ function writeCache(
 ): void {
   try {
     const cachePath = getCachePath(env);
-    const pathModule = getPathModule();
+    const pathModule = process.platform === "win32" ? path.win32 : path;
     const dir = pathModule.dirname(cachePath);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
