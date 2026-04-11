@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import https from "https";
+import os from "os";
+import path from "path";
 import { EventEmitter } from "events";
 import { checkForUpdate } from "./updateNotifier";
 
@@ -29,6 +31,7 @@ function createMockRequest() {
 
 describe("checkForUpdate", () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
+  const originalPlatform = process.platform;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -41,6 +44,7 @@ describe("checkForUpdate", () => {
   });
 
   afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform });
     vi.restoreAllMocks();
   });
 
@@ -187,6 +191,79 @@ describe("checkForUpdate", () => {
     expect(https.get).not.toHaveBeenCalled();
     expect(fs.readFileSync).not.toHaveBeenCalled();
     expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it("should use LOCALAPPDATA for the Windows update cache when available", async () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
+
+    const req = createMockRequest();
+    vi.mocked(https.get).mockImplementation((_url, _opts, cb) => {
+      const callback = cb as (res: EventEmitter) => void;
+      callback(createMockResponse(JSON.stringify({ version: "2.0.0" })));
+      return req as never;
+    });
+
+    await checkForUpdate("1.5.0", {
+      env: { LOCALAPPDATA: "C:\\Users\\alice\\AppData\\Local" },
+    });
+
+    const expectedDir = path.win32.join(
+      "C:\\Users\\alice\\AppData\\Local",
+      "az2aws",
+    );
+    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      path.win32.join(expectedDir, "update-check.json"),
+      expect.any(String),
+    );
+  });
+
+  it("should fall back to APPDATA for the Windows update cache", async () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
+
+    const req = createMockRequest();
+    vi.mocked(https.get).mockImplementation((_url, _opts, cb) => {
+      const callback = cb as (res: EventEmitter) => void;
+      callback(createMockResponse(JSON.stringify({ version: "2.0.0" })));
+      return req as never;
+    });
+
+    await checkForUpdate("1.5.0", {
+      env: { APPDATA: "C:\\Users\\alice\\AppData\\Roaming" },
+    });
+
+    const expectedDir = path.win32.join(
+      "C:\\Users\\alice\\AppData\\Roaming",
+      "az2aws",
+    );
+    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      path.win32.join(expectedDir, "update-check.json"),
+      expect.any(String),
+    );
+  });
+
+  it("should fall back to the home directory for the Windows update cache", async () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
+
+    const req = createMockRequest();
+    vi.mocked(https.get).mockImplementation((_url, _opts, cb) => {
+      const callback = cb as (res: EventEmitter) => void;
+      callback(createMockResponse(JSON.stringify({ version: "2.0.0" })));
+      return req as never;
+    });
+
+    await checkForUpdate("1.5.0", { env: {} });
+
+    const expectedDir = path.win32.join("C:\\Users\\alice", "az2aws");
+    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      path.win32.join(expectedDir, "update-check.json"),
+      expect.any(String),
+    );
   });
 
   it("should silently fail on network error", async () => {

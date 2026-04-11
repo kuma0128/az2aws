@@ -23,13 +23,23 @@ interface CheckForUpdateOptions {
   useColor?: boolean;
 }
 
-function getCachePath(): string {
-  return path.join(os.homedir(), ".config", "az2aws", "update-check.json");
+function getPathModule(): typeof path {
+  return process.platform === "win32" ? path.win32 : path;
 }
 
-function readCache(): CacheData | null {
+function getCachePath(env: NodeJS.ProcessEnv = process.env): string {
+  if (process.platform === "win32") {
+    const pathModule = getPathModule();
+    const cacheRoot = env.LOCALAPPDATA ?? env.APPDATA ?? os.homedir();
+    return pathModule.join(cacheRoot, PACKAGE_NAME, "update-check.json");
+  }
+
+  return path.join(os.homedir(), ".config", PACKAGE_NAME, "update-check.json");
+}
+
+function readCache(env: NodeJS.ProcessEnv = process.env): CacheData | null {
   try {
-    const data = fs.readFileSync(getCachePath(), "utf-8");
+    const data = fs.readFileSync(getCachePath(env), "utf-8");
     const cache = JSON.parse(data) as CacheData;
     if (Date.now() - cache.checkedAt < CACHE_TTL_MS) {
       return cache;
@@ -40,10 +50,14 @@ function readCache(): CacheData | null {
   return null;
 }
 
-function writeCache(latestVersion: string): void {
+function writeCache(
+  latestVersion: string,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
   try {
-    const cachePath = getCachePath();
-    const dir = path.dirname(cachePath);
+    const cachePath = getCachePath(env);
+    const pathModule = getPathModule();
+    const dir = pathModule.dirname(cachePath);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
       cachePath,
@@ -158,12 +172,12 @@ export async function checkForUpdate(
     if (forcedLatestVersion) {
       latestVersion = forcedLatestVersion;
     } else {
-      const cache = readCache();
+      const cache = readCache(env);
       if (cache) {
         latestVersion = cache.latestVersion;
       } else {
         latestVersion = await fetchLatestVersion();
-        writeCache(latestVersion);
+        writeCache(latestVersion, env);
       }
     }
 
