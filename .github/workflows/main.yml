@@ -13,7 +13,15 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-slim
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-slim
+          - windows-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v5
@@ -23,8 +31,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - run: pnpm test:coverage
+      - if: matrix.os == 'ubuntu-slim'
+        run: pnpm test:coverage
+      - if: matrix.os == 'windows-latest'
+        run: pnpm test
       - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-slim'
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

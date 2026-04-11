@@ -7,10 +7,14 @@ describe("paths", () => {
 
   beforeEach(() => {
     vi.resetModules();
+    vi.doUnmock("os");
+    vi.doUnmock("path");
     process.env = { ...originalEnv };
   });
 
   afterEach(() => {
+    vi.doUnmock("os");
+    vi.doUnmock("path");
     process.env = originalEnv;
   });
 
@@ -72,5 +76,43 @@ describe("paths", () => {
     process.env.BROWSER_PROFILE_DIR = "Default";
     const { paths } = await import("./paths");
     expect(paths.profileDir).toBe("Default");
+  });
+
+  it("should support Windows default paths and browser environment values", async () => {
+    delete process.env.AWS_CONFIG_FILE;
+    delete process.env.AWS_SHARED_CREDENTIALS_FILE;
+    process.env.BROWSER_CHROME_BIN =
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+    process.env.BROWSER_USER_DATA_DIR =
+      "C:\\Users\\alice\\AppData\\Local\\Google\\Chrome\\User Data";
+    process.env.BROWSER_PROFILE_DIR = "Profile 2";
+
+    vi.doMock("os", () => ({
+      default: {
+        homedir: () => "C:\\Users\\alice",
+      },
+    }));
+    vi.doMock("path", async () => {
+      const actual = await vi.importActual<typeof import("path")>("path");
+      return {
+        ...actual,
+        ...actual.win32,
+        default: actual.win32,
+      };
+    });
+
+    const { paths } = await import("./paths");
+
+    expect(paths.awsDir).toBe("C:\\Users\\alice\\.aws");
+    expect(paths.config).toBe("C:\\Users\\alice\\.aws\\config");
+    expect(paths.credentials).toBe("C:\\Users\\alice\\.aws\\credentials");
+    expect(paths.chromium).toBe("C:\\Users\\alice\\.aws\\chromium");
+    expect(paths.chromeBin).toBe(
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    );
+    expect(paths.userDataDir).toBe(
+      "C:\\Users\\alice\\AppData\\Local\\Google\\Chrome\\User Data",
+    );
+    expect(paths.profileDir).toBe("Profile 2");
   });
 });
