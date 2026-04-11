@@ -2527,13 +2527,24 @@ describe("login", () => {
       }
 
       // Verify profile was reset
+      expect(mockFsRm).toHaveBeenCalledTimes(1);
       expect(mockFsRm).toHaveBeenCalledWith("/mock/chromium/path", {
         recursive: true,
         force: true,
       });
-      expect(mockFsMkdir).toHaveBeenCalledWith("/mock/chromium/path", {
+      expect(mockFsMkdir).toHaveBeenCalledTimes(2);
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(1, "/mock/chromium/path", {
         recursive: true,
       });
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(2, "/mock/chromium/path", {
+        recursive: true,
+      });
+      expect(mockFsRm.mock.invocationCallOrder[0]).toBeGreaterThan(
+        mockFsMkdir.mock.invocationCallOrder[0],
+      );
+      expect(mockFsMkdir.mock.invocationCallOrder[1]).toBeGreaterThan(
+        mockFsRm.mock.invocationCallOrder[0],
+      );
       // Verify puppeteer.launch was called twice (initial + retry)
       expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
       expect(console.warn).toHaveBeenCalledWith(
@@ -2578,6 +2589,7 @@ describe("login", () => {
         // Expected - will throw due to unrecognized page timeout
       }
 
+      expect(mockFsRm).toHaveBeenCalledTimes(1);
       expect(mockFsRm).toHaveBeenCalledWith(
         "C:\\Users\\alice\\.aws\\chromium",
         {
@@ -2585,11 +2597,26 @@ describe("login", () => {
           force: true,
         },
       );
-      expect(mockFsMkdir).toHaveBeenCalledWith(
+      expect(mockFsMkdir).toHaveBeenCalledTimes(2);
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(
+        1,
         "C:\\Users\\alice\\.aws\\chromium",
         {
           recursive: true,
         },
+      );
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(
+        2,
+        "C:\\Users\\alice\\.aws\\chromium",
+        {
+          recursive: true,
+        },
+      );
+      expect(mockFsRm.mock.invocationCallOrder[0]).toBeGreaterThan(
+        mockFsMkdir.mock.invocationCallOrder[0],
+      );
+      expect(mockFsMkdir.mock.invocationCallOrder[1]).toBeGreaterThan(
+        mockFsRm.mock.invocationCallOrder[0],
       );
       expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
     });
