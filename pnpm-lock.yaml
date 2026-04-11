@@ -38,7 +38,7 @@ importers:
         specifier: ^13.4.0
         version: 13.4.1(@types/node@25.5.2)
       otplib:
-        specifier: ^13.1.1
+        specifier: ^13.4.0
         version: 13.4.0
       puppeteer:
         specifier: ^24.39.1
