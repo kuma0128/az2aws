@@ -113,9 +113,26 @@ Required environment variables:
 
 Optional environment variables:
 
+- `AZ2AWS_E2E_MODE` (defaults to `cli`; use `debug` or `gui` for interactive troubleshooting)
 - `AZ2AWS_E2E_PROFILE` (defaults to `e2e`)
 - `AZ2AWS_E2E_AWS_REGION` (defaults to `us-east-1`)
 - `AZ2AWS_E2E_DURATION_HOURS` (defaults to `1`)
+
+`pnpm test:e2e` enables `DEBUG=az2aws` by default when `DEBUG` is not already
+set, and the E2E Vitest config disables console interception so browser flow
+logs stream directly to the terminal. When troubleshooting a live failure, rerun
+with `AZ2AWS_E2E_MODE=debug pnpm test:e2e` to keep the browser visible while the
+CLI state machine continues driving the flow.
+
+`pnpm test:e2e` does not support passkey-first accounts that require the saved
+passkey prompt for `login.microsoft.com`. That UI is rendered by the
+browser/OS passkey layer rather than the page DOM, so the current
+Puppeteer-driven flow cannot dismiss it in `cli` mode. Use a dedicated E2E
+account that can continue with the standard username/password/MFA page flow.
+
+If the run times out before it ever reaches `input[name="loginfmt"]`, the E2E
+test now treats that account as unsupported and surfaces a passkey-specific
+error message instead of only showing the raw selector timeout.
 
 CI only runs this smoke test on `push` to `main` and `workflow_dispatch`, so PR
 validation stays fast and does not depend on repository secrets.

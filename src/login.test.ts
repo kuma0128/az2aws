@@ -148,6 +148,60 @@ describe("login", () => {
     });
   });
 
+  describe("_redactProfileForDebug", () => {
+    it("should redact sensitive profile fields while keeping duration visible", () => {
+      expect(
+        login._redactProfileForDebug({
+          azure_tenant_id: "tenant-id",
+          azure_app_id_uri: "https://signin.aws.amazon.com/saml#app",
+          azure_default_username: "user@example.com",
+          azure_default_password: "secret",
+          azure_default_role_arn: "arn:aws:iam::123456789012:role/Test",
+          azure_default_duration_hours: "8",
+        }),
+      ).toEqual({
+        azure_tenant_id: "[redacted]",
+        azure_app_id_uri: "[redacted]",
+        azure_default_username: "[redacted]",
+        azure_default_password: "[redacted]",
+        azure_default_role_arn: "[redacted]",
+        azure_default_duration_hours: "8",
+      });
+    });
+  });
+
+  describe("_redactUrlForDebug", () => {
+    it("should redact query parameter values from URLs", () => {
+      expect(
+        login._redactUrlForDebug(
+          "https://login.microsoftonline.com/tenant/saml2?SAMLRequest=abc123&foo=bar",
+        ),
+      ).toBe(
+        "https://login.microsoftonline.com/tenant/saml2?SAMLRequest=%5Bredacted%5D&foo=%5Bredacted%5D",
+      );
+    });
+
+    it("should leave URLs without query parameters unchanged", () => {
+      expect(
+        login._redactUrlForDebug("https://signin.aws.amazon.com/saml"),
+      ).toBe("https://signin.aws.amazon.com/saml");
+    });
+  });
+
+  describe("_redactArnForDebug", () => {
+    it("should redact the account id in IAM ARNs", () => {
+      expect(
+        login._redactArnForDebug("arn:aws:iam::123456789012:role/TestRole"),
+      ).toBe("arn:aws:iam::[redacted]:role/TestRole");
+    });
+
+    it("should leave non-IAM ARNs unchanged", () => {
+      expect(login._redactArnForDebug("arn:aws:s3:::example-bucket")).toBe(
+        "arn:aws:s3:::example-bucket",
+      );
+    });
+  });
+
   describe("_parseRolesFromSamlResponse", () => {
     it("should parse a single role from SAML response", () => {
       const samlAssertion = Buffer.from(

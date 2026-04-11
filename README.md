@@ -245,6 +245,13 @@ If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
 Try:
  `--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
 
+If your Microsoft account requires a saved passkey prompt before the username
+or password page appears, that flow is unsupported in `az2aws --mode cli`.
+The prompt is rendered by the browser/OS passkey UI instead of the page DOM,
+so az2aws cannot dismiss it automatically. Use `--mode gui` and handle it
+manually, or use an account that can continue with the standard page-based
+username/password/MFA flow.
+
 If you see "Unable to recognize page state!", Azure's login pages may have
 changed. Try:
 

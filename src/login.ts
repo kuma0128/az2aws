@@ -33,6 +33,7 @@ const AZURE_AD_SSO = "autologon.microsoftazuread-sso.com";
 const AWS_SAML_ENDPOINT = "https://signin.aws.amazon.com/saml";
 const AWS_CN_SAML_ENDPOINT = "https://signin.amazonaws.cn/saml";
 const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
+const REDACTED = "[redacted]";
 
 // Keep the runtime import as native `import()` so CommonJS output can load
 // the ESM-only https-proxy-agent package.
@@ -261,11 +262,42 @@ export const login = {
       }
     }
     debug("Environment");
-    debug({
-      ...env,
-      azure_default_password: "xxxxxxxxxx",
-    });
+    debug(this._redactProfileForDebug(env));
     return env;
+  },
+
+  _redactProfileForDebug(env: { [key: string]: string }): {
+    [key: string]: string;
+  } {
+    return Object.fromEntries(
+      Object.entries(env).map(([key, value]) => [
+        key,
+        key === "azure_default_duration_hours" ? value : REDACTED,
+      ]),
+    );
+  },
+
+  _redactUrlForDebug(url: string): string {
+    try {
+      const parsedUrl = new URL(url);
+
+      for (const key of new Set(parsedUrl.searchParams.keys())) {
+        parsedUrl.searchParams.set(key, REDACTED);
+      }
+
+      return parsedUrl.toString();
+    } catch {
+      const questionMarkIndex = url.indexOf("?");
+      if (questionMarkIndex === -1) {
+        return url;
+      }
+
+      return `${url.slice(0, questionMarkIndex)}?${REDACTED}`;
+    }
+  },
+
+  _redactArnForDebug(arn: string): string {
+    return arn.replace(/(arn:[^:]+:iam::)([^:]+)(:.*)/, `$1${REDACTED}$3`);
   },
 
   // Load the profile
@@ -315,7 +347,7 @@ export const login = {
             <samlp:NameIDPolicy Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"></samlp:NameIDPolicy>
         </samlp:AuthnRequest>
         `;
-    debug("Generated SAML request", samlRequest);
+    debug("Generated SAML request");
 
     debug("Deflating SAML");
 
@@ -331,7 +363,7 @@ export const login = {
         const url = `https://login.microsoftonline.com/${tenantId}/saml2?SAMLRequest=${encodeURIComponent(
           samlBase64,
         )}`;
-        debug("Created login URL", url);
+        debug("Created login URL", this._redactUrlForDebug(url));
 
         return resolve(url);
       });
@@ -490,7 +522,7 @@ export const login = {
       const samlResponsePromise = new Promise((resolve) => {
         page.on("request", (req: HTTPRequest) => {
           const reqURL = req.url();
-          debug(`Request: ${reqURL}`);
+          debug(`Request: ${this._redactUrlForDebug(reqURL)}`);
           if (
             reqURL === AWS_SAML_ENDPOINT ||
             reqURL === AWS_GOV_SAML_ENDPOINT ||
@@ -617,13 +649,15 @@ export const login = {
 
       const samlResponse = querystring.parse(samlResponseData).SAMLResponse;
 
-      debug("Found SAML response", samlResponse);
-
       if (!samlResponse) {
         throw new Error("SAML response not found");
       } else if (Array.isArray(samlResponse)) {
         throw new Error("SAML can't be an array");
       }
+
+      debug("Found SAML response", {
+        base64Length: samlResponse.length,
+      });
 
       return samlResponse;
     } finally {
@@ -642,7 +676,9 @@ export const login = {
   _parseRolesFromSamlResponse(assertion: string): Role[] {
     debug("Converting assertion from base64 to UTF-8");
     const samlText = Buffer.from(assertion, "base64").toString("utf8");
-    debug("Converted", samlText);
+    debug("Converted assertion from base64 to UTF-8", {
+      xmlLength: samlText.length,
+    });
 
     debug("Parsing SAML XML");
     const saml = load(samlText, { xmlMode: true });
@@ -664,7 +700,13 @@ export const login = {
       const principalArn = parts[principalIdx].trim();
       return { roleArn, principalArn };
     });
-    debug("Found roles", roles);
+    debug(
+      "Found roles",
+      roles.map((role) => ({
+        roleArn: this._redactArnForDebug(role.roleArn),
+        principalArn: this._redactArnForDebug(role.principalArn),
+      })),
+    );
     return roles;
   },
 

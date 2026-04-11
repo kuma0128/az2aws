@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 interface E2eConfig {
   appIdUri: string;
   durationHours: string;
+  mode: string;
   password: string;
   profileName: string;
   region: string;
@@ -23,6 +24,8 @@ interface CredentialProcessOutput {
 }
 
 const originalEnv = { ...process.env };
+const USERNAME_INPUT_TIMEOUT_MESSAGE =
+  'Waiting for selector `input[name="loginfmt"]` failed';
 
 function getRequiredEnv(name: keyof NodeJS.ProcessEnv): string {
   const value = process.env[name];
@@ -40,6 +43,7 @@ function loadE2eConfig(): E2eConfig {
     username: getRequiredEnv("AZ2AWS_E2E_AZURE_DEFAULT_USERNAME"),
     password: getRequiredEnv("AZ2AWS_E2E_AZURE_DEFAULT_PASSWORD"),
     roleArn: getRequiredEnv("AZ2AWS_E2E_AZURE_DEFAULT_ROLE_ARN"),
+    mode: process.env.AZ2AWS_E2E_MODE?.trim() || "cli",
     profileName: process.env.AZ2AWS_E2E_PROFILE?.trim() || "e2e",
     region: process.env.AZ2AWS_E2E_AWS_REGION?.trim() || "us-east-1",
     durationHours: process.env.AZ2AWS_E2E_DURATION_HOURS?.trim() || "1",
@@ -62,6 +66,13 @@ function buildProfileConfig(profileName: string, region: string): string {
   ].join("\n");
 }
 
+function isUsernameInputTimeout(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes(USERNAME_INPUT_TIMEOUT_MESSAGE)
+  );
+}
+
 describe("login e2e", () => {
   it(
     "retrieves live AWS credentials through the Azure SSO flow",
@@ -80,6 +91,7 @@ describe("login e2e", () => {
         ...originalEnv,
         HOME: homeDir,
         USERPROFILE: homeDir,
+        DEBUG: process.env.DEBUG?.trim() || "az2aws",
         AWS_CONFIG_FILE: configPath,
         AWS_SHARED_CREDENTIALS_FILE: credentialsPath,
         AZURE_TENANT_ID: e2eConfig.tenantId,
@@ -102,19 +114,44 @@ describe("login e2e", () => {
         vi.resetModules();
         const { login } = await import("./login");
 
-        await login.loginAsync(
-          e2eConfig.profileName,
-          "cli",
-          true,
-          true,
-          false,
-          false,
-          false,
-          false,
-          true,
-          true,
-          true,
+        console.error(
+          `[az2aws:e2e] tempDir=${tempDir} profile=${e2eConfig.profileName} mode=${e2eConfig.mode} region=${e2eConfig.region}`,
         );
+
+        const disableSandbox = true;
+        const noPrompt = true;
+        const enableChromeNetworkService = false;
+        const awsNoVerifySsl = false;
+        const enableChromeSeamlessSso = false;
+        const noDisableExtensions = false;
+        const disableGpu = true;
+        const incognito = true;
+        const credentialProcess = true;
+
+        try {
+          await login.loginAsync(
+            e2eConfig.profileName,
+            e2eConfig.mode,
+            disableSandbox,
+            noPrompt,
+            enableChromeNetworkService,
+            awsNoVerifySsl,
+            enableChromeSeamlessSso,
+            noDisableExtensions,
+            disableGpu,
+            incognito,
+            credentialProcess,
+          );
+        } catch (error) {
+          if (isUsernameInputTimeout(error)) {
+            throw new Error(
+              "Unsupported E2E account: pnpm test:e2e does not support passkey-first Microsoft accounts that require the browser/OS saved passkey prompt before the page DOM reaches the username form. Use a dedicated account that can continue with password/MFA in the page, or rerun with AZ2AWS_E2E_MODE=debug to confirm the passkey prompt manually.",
+              { cause: error },
+            );
+          }
+
+          throw error;
+        }
 
         const jsonPayload = logSpy.mock.calls.at(-1)?.[0];
 
