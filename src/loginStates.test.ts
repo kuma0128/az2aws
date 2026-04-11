@@ -759,7 +759,8 @@ describe("loginStates", () => {
     it("should use env-generated TOTP without prompting", async () => {
       const mockPage = createMockPage();
       mockPage.$.mockResolvedValue(null);
-      process.env.AZURE_DEFAULT_TFA_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+      const secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+      process.env.AZURE_DEFAULT_TFA_SECRET = secret;
       vi.useFakeTimers();
       vi.setSystemTime(new Date(0));
 
@@ -775,7 +776,9 @@ describe("loginStates", () => {
       );
 
       expect(inquirer.prompt).not.toHaveBeenCalled();
-      expect(mockPage.keyboard.type).toHaveBeenCalledWith("702218");
+      expect(mockPage.keyboard.type).toHaveBeenCalledWith(
+        generateTotpFromSecret(secret, 0),
+      );
       expect(mockPage.click).toHaveBeenCalledWith("input[type=submit]");
       consoleSpy.mockRestore();
     });

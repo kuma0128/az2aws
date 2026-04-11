@@ -6,13 +6,15 @@ import { CLIError } from "./CLIError";
 import { generateSync } from "otplib";
 
 const debug = _debug("az2aws");
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const VALID_BASE32_REMAINDERS = new Set([0, 2, 4, 5, 7]);
 
 const getTfaSecret = (): string | undefined => {
   const secret =
     process.env.azure_default_tfa_secret ??
     process.env.AZURE_DEFAULT_TFA_SECRET;
 
-  return secret?.trim() || undefined;
+  return secret?.trim().toUpperCase() || undefined;
 };
 
 export const generateTotpFromSecret = (
@@ -26,24 +28,49 @@ export const generateTotpFromSecret = (
   return generateSync(options);
 };
 
-const getTfaSecretError = (error: unknown): CLIError | undefined => {
-  if (!(error instanceof Error)) {
-    return undefined;
+const invalidTfaSecretError = (): CLIError =>
+  new CLIError(
+    "AZURE_DEFAULT_TFA_SECRET must be a valid base32 string (letters A-Z, digits 2-7, optional trailing = padding).",
+  );
+
+const decodeBase32 = (value: string): Uint8Array => {
+  const paddingStart = value.indexOf("=");
+  const unpadded = paddingStart === -1 ? value : value.slice(0, paddingStart);
+  const padding = paddingStart === -1 ? "" : value.slice(paddingStart);
+
+  if (!/^[A-Z2-7]*$/.test(unpadded) || !/^=*$/u.test(padding)) {
+    throw invalidTfaSecretError();
   }
 
-  if (error.message.startsWith("Invalid Base32 string")) {
-    return new CLIError(
-      "AZURE_DEFAULT_TFA_SECRET must be a valid base32 string (letters A-Z, digits 2-7, optional trailing = padding).",
-    );
+  if (!VALID_BASE32_REMAINDERS.has(unpadded.length % 8)) {
+    throw invalidTfaSecretError();
   }
 
-  if (error.message.startsWith("Secret must be at least")) {
-    return new CLIError(
-      "AZURE_DEFAULT_TFA_SECRET must decode to at least 16 bytes (128 bits).",
-    );
+  const bytes: number[] = [];
+  let bitBuffer = 0;
+  let bitCount = 0;
+
+  for (const char of unpadded) {
+    const decodedValue = BASE32_ALPHABET.indexOf(char);
+    if (decodedValue === -1) {
+      throw invalidTfaSecretError();
+    }
+
+    bitBuffer = (bitBuffer << 5) | decodedValue;
+    bitCount += 5;
+
+    while (bitCount >= 8) {
+      bitCount -= 8;
+      bytes.push((bitBuffer >> bitCount) & 0xff);
+      bitBuffer &= (1 << bitCount) - 1;
+    }
   }
 
-  return undefined;
+  if (bitCount > 0 && bitBuffer !== 0) {
+    throw invalidTfaSecretError();
+  }
+
+  return Uint8Array.from(bytes);
 };
 
 export const getTotpFromEnv = (): string | undefined => {
@@ -52,15 +79,14 @@ export const getTotpFromEnv = (): string | undefined => {
     return undefined;
   }
 
-  try {
-    return generateTotpFromSecret(tfaSecret);
-  } catch (error) {
-    const cliError = getTfaSecretError(error);
-    if (cliError) {
-      throw cliError;
-    }
-    throw error;
+  const decodedSecret = decodeBase32(tfaSecret);
+  if (decodedSecret.byteLength < 16) {
+    throw new CLIError(
+      "AZURE_DEFAULT_TFA_SECRET must decode to at least 16 bytes (128 bits).",
+    );
   }
+
+  return generateTotpFromSecret(tfaSecret);
 };
 
 export type StateHandler = (
