@@ -54,6 +54,7 @@ jobs:
     timeout-minutes: 20
     env:
       PUPPETEER_SKIP_DOWNLOAD: "1"
+      PUPPETEER_CACHE_DIR: ${{ github.workspace }}/.cache/puppeteer
       AZ2AWS_E2E_AZURE_TENANT_ID: ${{ secrets.AZ2AWS_E2E_AZURE_TENANT_ID }}
       AZ2AWS_E2E_AZURE_APP_ID_URI: ${{ secrets.AZ2AWS_E2E_AZURE_APP_ID_URI }}
       AZ2AWS_E2E_AZURE_DEFAULT_USERNAME: ${{ secrets.AZ2AWS_E2E_AZURE_DEFAULT_USERNAME }}
@@ -69,6 +70,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: mkdir -p "$PUPPETEER_CACHE_DIR"
       - name: Install Chrome and Linux browser dependencies
-        run: sudo env "PATH=$PATH" pnpm exec puppeteer browsers install chrome --install-deps
+        run: sudo --preserve-env=PUPPETEER_CACHE_DIR,HOME,PATH pnpm exec puppeteer browsers install chrome --install-deps
+      - name: Restore Puppeteer cache ownership
+        run: sudo chown -R "$(id -u):$(id -g)" "$PUPPETEER_CACHE_DIR"
       - run: pnpm test:e2e
