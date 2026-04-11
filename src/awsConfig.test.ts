@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import { chmod, mkdir } from "node:fs/promises";
+import os from "os";
 import path from "path";
 import { awsConfig } from "./awsConfig";
 import { paths } from "./paths";
@@ -13,6 +14,7 @@ vi.mock("node:fs/promises", () => ({
 
 const defaultConfigPath = paths.config;
 const defaultCredentialsPath = paths.credentials;
+const tempDir = os.tmpdir();
 
 describe("awsConfig", () => {
   beforeEach(() => {
@@ -573,7 +575,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
     });
 
     it("should harden custom directories that are newly created", async () => {
-      const customConfigDir = path.join("/tmp", "custom-aws");
+      const customConfigDir = path.join(tempDir, "custom-aws");
       const nestedCustomConfigDir = path.join(customConfigDir, "nested");
       const customConfigPath = path.join(nestedCustomConfigDir, "config");
       paths.config = customConfigPath;
@@ -609,7 +611,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
 
     it("should not harden existing custom parent directories", async () => {
       const customCredentialsPath = path.join(
-        "/tmp",
+        tempDir,
         "custom-aws",
         "credentials",
       );
