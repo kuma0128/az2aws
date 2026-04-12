@@ -1,3 +1,4 @@
+.env*
 .github
 .claude
 src
@@ -10,6 +11,7 @@ issue
 .release-please-manifest.json
 release-please-config.json
 vitest.config.ts
+vitest.e2e.config.ts
 docker-launch.sh
 Dockerfile
 snapcraft.yaml

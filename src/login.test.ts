@@ -148,6 +148,42 @@ describe("login", () => {
     });
   });
 
+  describe("_redactProfileForDebug", () => {
+    it("should redact sensitive profile fields while keeping duration visible", () => {
+      expect(
+        login._redactProfileForDebug({
+          azure_tenant_id: "tenant-id",
+          azure_app_id_uri: "https://signin.aws.amazon.com/saml#app",
+          azure_default_username: "user@example.com",
+          azure_default_password: "secret",
+          azure_default_role_arn: "arn:aws:iam::123456789012:role/Test",
+          azure_default_duration_hours: "8",
+        }),
+      ).toEqual({
+        azure_tenant_id: "[redacted]",
+        azure_app_id_uri: "[redacted]",
+        azure_default_username: "[redacted]",
+        azure_default_password: "[redacted]",
+        azure_default_role_arn: "[redacted]",
+        azure_default_duration_hours: "8",
+      });
+    });
+  });
+
+  describe("_redactArnForDebug", () => {
+    it("should redact the account id and resource name in IAM ARNs", () => {
+      expect(
+        login._redactArnForDebug("arn:aws:iam::123456789012:role/TestRole"),
+      ).toBe("arn:aws:iam::[redacted]:role/[redacted]");
+    });
+
+    it("should leave non-IAM ARNs unchanged", () => {
+      expect(login._redactArnForDebug("arn:aws:s3:::example-bucket")).toBe(
+        "arn:aws:s3:::example-bucket",
+      );
+    });
+  });
+
   describe("_parseRolesFromSamlResponse", () => {
     it("should parse a single role from SAML response", () => {
       const samlAssertion = Buffer.from(
@@ -1395,8 +1431,8 @@ describe("login", () => {
         )
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
-      expect((error as CLIError).message).toContain(
-        "was not found in the SAML response",
+      expect((error as CLIError).message).toBe(
+        "Configured default role ARN was not found in the SAML response.",
       );
     });
   });
@@ -3109,6 +3145,38 @@ describe("login", () => {
       expect(mockPage.screenshot).toHaveBeenCalledWith({
         path: "az2aws-unrecognized-state.png",
       });
+    });
+
+    it("should avoid screenshots in shared environments when unrecognized page persists", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      mockPage.$.mockResolvedValue(null);
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Unable to recognize page state in a shared environment. Re-run locally with --mode=debug to capture a screenshot.",
+      );
+      expect(mockPage.screenshot).not.toHaveBeenCalled();
     });
 
     it("should continue loop when page.$ throws an error", async () => {

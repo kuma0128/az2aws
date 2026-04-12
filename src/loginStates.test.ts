@@ -146,6 +146,31 @@ describe("loginStates", () => {
       consoleSpy.mockRestore();
     });
 
+    it("should suppress error message output when sensitive output is disabled", async () => {
+      const mockPage = createMockPage();
+      const mockError = {};
+      mockPage.$.mockResolvedValue(mockError);
+      mockPage.evaluate.mockResolvedValue("Error message");
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        username: "user@example.com",
+      });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await getUsernameState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+      );
+
+      expect(consoleSpy).not.toHaveBeenCalledWith("Error message");
+      consoleSpy.mockRestore();
+    });
+
     it("should wait for input, focus, clear, type, and submit", async () => {
       const mockPage = createMockPage();
       mockPage.$.mockResolvedValue(null);
@@ -562,6 +587,42 @@ describe("loginStates", () => {
 
       consoleSpy.mockRestore();
     });
+
+    it("should suppress passwordless instructions and auth code when sensitive output is disabled", async () => {
+      const mockPage = createMockPage();
+      const mockMessageElement = {};
+      const mockCodeElement = {};
+
+      mockPage.$.mockImplementation((selector: string) => {
+        if (selector === "#idDiv_RemoteNGC_PollingDescription")
+          return Promise.resolve(mockMessageElement);
+        if (selector === "#idRemoteNGC_DisplaySign")
+          return Promise.resolve(mockCodeElement);
+        return Promise.resolve(null);
+      });
+
+      mockPage.evaluate.mockImplementation((_fn: unknown, el: unknown) => {
+        if (el === mockMessageElement)
+          return Promise.resolve("Approve the sign-in request");
+        if (el === mockCodeElement) return Promise.resolve("42");
+        return Promise.resolve("");
+      });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await getPasswordlessState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+      );
+
+      expect(consoleSpy).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
   });
 
   describe("TFA instructions handler", () => {
@@ -667,6 +728,30 @@ describe("loginStates", () => {
         "Authentication failed. Please try again.",
       );
     });
+
+    it("should throw sanitized CLIError when sensitive output is disabled", async () => {
+      const mockPage = createMockPage();
+      const mockElement = {};
+      mockPage.evaluate.mockResolvedValue(
+        "Authentication failed. Please try again.",
+      );
+
+      const error = await getTfaFailedState()
+        .handler(
+          mockPage as never,
+          mockElement as never,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Authentication failed during MFA challenge.",
+      );
+    });
   });
 
   describe("Service exception handler", () => {
@@ -691,6 +776,28 @@ describe("loginStates", () => {
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toBe(
         "Service temporarily unavailable",
+      );
+    });
+
+    it("should throw sanitized CLIError when sensitive output is disabled", async () => {
+      const mockPage = createMockPage();
+      const mockElement = {};
+      mockPage.evaluate.mockResolvedValue("Service temporarily unavailable");
+
+      const error = await getServiceExceptionState()
+        .handler(
+          mockPage as never,
+          mockElement as never,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Login provider returned a service exception.",
       );
     });
   });
@@ -744,6 +851,30 @@ describe("loginStates", () => {
       );
 
       expect(consoleSpy).toHaveBeenCalledWith("Invalid code");
+      consoleSpy.mockRestore();
+    });
+
+    it("should suppress TFA code guidance when sensitive output is disabled", async () => {
+      const mockPage = createMockPage();
+      mockPage.$.mockResolvedValue(null);
+      mockPage.evaluate.mockResolvedValue("Enter the code shown in your app");
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        verificationCode: "654321",
+      });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await getTfaCodeInputState().handler(
+        mockPage as never,
+        createMockElementHandle() as never,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+      );
+
+      expect(consoleSpy).not.toHaveBeenCalled();
       consoleSpy.mockRestore();
     });
 

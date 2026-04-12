@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
-import { chmod, mkdir } from "node:fs/promises";
+import { chmod, mkdir, rename, rm } from "node:fs/promises";
 import os from "os";
 import path from "path";
 import { awsConfig } from "./awsConfig";
@@ -10,6 +10,8 @@ vi.mock("fs");
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn().mockResolvedValue(undefined),
   chmod: vi.fn().mockResolvedValue(undefined),
+  rename: vi.fn().mockResolvedValue(undefined),
+  rm: vi.fn().mockResolvedValue(undefined),
 }));
 
 const defaultConfigPath = paths.config;
@@ -563,6 +565,10 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
       ).resolves.toBeUndefined();
 
       expect(fs.writeFile).toHaveBeenCalled();
+      expect(rename).toHaveBeenCalledWith(
+        expect.stringMatching(/(^|[\\/])\.config\..+\.tmp$/),
+        paths.config,
+      );
       expect(mkdir).toHaveBeenCalledWith(path.dirname(paths.config), {
         recursive: true,
         mode: 0o700,
@@ -573,7 +579,12 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
           path.dirname(paths.config),
           0o700,
         );
-        expect(chmod).toHaveBeenNthCalledWith(2, paths.config, 0o600);
+        expect(chmod).toHaveBeenNthCalledWith(
+          2,
+          expect.stringMatching(/(^|[\\/])\.config\..+\.tmp$/),
+          0o600,
+        );
+        expect(chmod).toHaveBeenNthCalledWith(3, paths.config, 0o600);
       } else {
         expect(chmod).not.toHaveBeenCalled();
       }
@@ -609,10 +620,19 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         recursive: true,
         mode: 0o700,
       });
+      expect(rename).toHaveBeenCalledWith(
+        expect.stringMatching(/(^|[\\/])\.config\..+\.tmp$/),
+        customConfigPath,
+      );
       if (supportsPermissionHardening) {
         expect(chmod).toHaveBeenNthCalledWith(1, customConfigDir, 0o700);
         expect(chmod).toHaveBeenNthCalledWith(2, nestedCustomConfigDir, 0o700);
-        expect(chmod).toHaveBeenNthCalledWith(3, customConfigPath, 0o600);
+        expect(chmod).toHaveBeenNthCalledWith(
+          3,
+          expect.stringMatching(/(^|[\\/])\.config\..+\.tmp$/),
+          0o600,
+        );
+        expect(chmod).toHaveBeenNthCalledWith(4, customConfigPath, 0o600);
       } else {
         expect(chmod).not.toHaveBeenCalled();
       }
@@ -652,8 +672,13 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         mode: 0o700,
       });
       if (supportsPermissionHardening) {
-        expect(chmod).toHaveBeenCalledTimes(1);
-        expect(chmod).toHaveBeenCalledWith(customCredentialsPath, 0o600);
+        expect(chmod).toHaveBeenCalledTimes(2);
+        expect(chmod).toHaveBeenNthCalledWith(
+          1,
+          expect.stringMatching(/(^|[\\/])\.credentials\..+\.tmp$/),
+          0o600,
+        );
+        expect(chmod).toHaveBeenNthCalledWith(2, customCredentialsPath, 0o600);
       } else {
         expect(chmod).not.toHaveBeenCalled();
       }
@@ -683,8 +708,13 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
 
       expect(mkdir).not.toHaveBeenCalled();
       if (supportsPermissionHardening) {
-        expect(chmod).toHaveBeenCalledTimes(1);
-        expect(chmod).toHaveBeenCalledWith("config", 0o600);
+        expect(chmod).toHaveBeenCalledTimes(2);
+        expect(chmod).toHaveBeenNthCalledWith(
+          1,
+          expect.stringMatching(/^\.config\..+\.tmp$/),
+          0o600,
+        );
+        expect(chmod).toHaveBeenNthCalledWith(2, "config", 0o600);
       } else {
         expect(chmod).not.toHaveBeenCalled();
       }
@@ -721,7 +751,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
 
       expect(fs.writeFile).toHaveBeenCalled();
       if (supportsPermissionHardening) {
-        expect(chmod).toHaveBeenCalledTimes(2);
+        expect(chmod).toHaveBeenCalledTimes(3);
       } else {
         expect(chmod).not.toHaveBeenCalled();
       }
@@ -754,6 +784,33 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         await expect(savePromise).resolves.toBeUndefined();
         expect(chmod).not.toHaveBeenCalled();
       }
+    });
+
+    it("should clean up temporary files when atomic rename fails", async () => {
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          callback(null);
+        },
+      );
+      vi.mocked(rename).mockRejectedValueOnce(new Error("rename failed"));
+
+      await expect(
+        awsConfig._saveAsync("config", {
+          default: {
+            azure_tenant_id: "test-tenant",
+            azure_app_id_uri: "https://app.example.com",
+          } as never,
+        }),
+      ).rejects.toThrow("rename failed");
+
+      expect(rm).toHaveBeenCalledWith(
+        expect.stringMatching(/(^|[\\/])\.config\..+\.tmp$/),
+        { force: true },
+      );
     });
   });
 
