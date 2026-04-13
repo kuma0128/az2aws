@@ -81,7 +81,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: mkdir -p "$PUPPETEER_CACHE_DIR"
       - name: Install Chrome and Linux browser dependencies
-        run: sudo --preserve-env=PUPPETEER_CACHE_DIR,HOME,PATH pnpm exec puppeteer browsers install chrome --install-deps
+        # sudo resets PATH on GitHub-hosted runners, so restore the runner PATH
+        # explicitly before invoking pnpm/node from the setup actions.
+        run: sudo --preserve-env=PUPPETEER_CACHE_DIR,HOME /usr/bin/env PATH="$PATH" pnpm exec puppeteer browsers install chrome --install-deps
       - name: Restore Puppeteer cache ownership
         run: sudo chown -R "$(id -u):$(id -g)" "$PUPPETEER_CACHE_DIR"
       - run: pnpm test:e2e
