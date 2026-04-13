@@ -232,7 +232,10 @@ describe("checkForUpdate", () => {
     );
     const expectedPath = path.win32.join(expectedDir, "update-check.json");
     expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, "utf-8");
-    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true, mode: 0o700 });
+    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, {
+      recursive: true,
+      mode: 0o700,
+    });
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       expectedPath,
       expect.any(String),
@@ -264,7 +267,10 @@ describe("checkForUpdate", () => {
     );
     const expectedPath = path.win32.join(expectedDir, "update-check.json");
     expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, "utf-8");
-    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true, mode: 0o700 });
+    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, {
+      recursive: true,
+      mode: 0o700,
+    });
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       expectedPath,
       expect.any(String),
@@ -291,7 +297,10 @@ describe("checkForUpdate", () => {
     const expectedDir = path.win32.join("C:\\Users\\alice", "az2aws");
     const expectedPath = path.win32.join(expectedDir, "update-check.json");
     expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, "utf-8");
-    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true, mode: 0o700 });
+    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, {
+      recursive: true,
+      mode: 0o700,
+    });
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       expectedPath,
       expect.any(String),
@@ -320,7 +329,10 @@ describe("checkForUpdate", () => {
     const expectedDir = path.win32.join("C:\\Users\\alice", "az2aws");
     const expectedPath = path.win32.join(expectedDir, "update-check.json");
     expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, "utf-8");
-    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true, mode: 0o700 });
+    expect(fs.mkdirSync).toHaveBeenCalledWith(expectedDir, {
+      recursive: true,
+      mode: 0o700,
+    });
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       expectedPath,
       expect.any(String),
