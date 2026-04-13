@@ -148,6 +148,42 @@ describe("login", () => {
     });
   });
 
+  describe("_redactProfileForDebug", () => {
+    it("should redact sensitive profile fields while keeping duration visible", () => {
+      expect(
+        login._redactProfileForDebug({
+          azure_tenant_id: "tenant-id",
+          azure_app_id_uri: "https://signin.aws.amazon.com/saml#app",
+          azure_default_username: "user@example.com",
+          azure_default_password: "secret",
+          azure_default_role_arn: "arn:aws:iam::123456789012:role/Test",
+          azure_default_duration_hours: "8",
+        }),
+      ).toEqual({
+        azure_tenant_id: "[redacted]",
+        azure_app_id_uri: "[redacted]",
+        azure_default_username: "[redacted]",
+        azure_default_password: "[redacted]",
+        azure_default_role_arn: "[redacted]",
+        azure_default_duration_hours: "8",
+      });
+    });
+  });
+
+  describe("_redactArnForDebug", () => {
+    it("should redact the account id and resource name in IAM ARNs", () => {
+      expect(
+        login._redactArnForDebug("arn:aws:iam::123456789012:role/TestRole"),
+      ).toBe("arn:aws:iam::[redacted]:role/[redacted]");
+    });
+
+    it("should leave non-IAM ARNs unchanged", () => {
+      expect(login._redactArnForDebug("arn:aws:s3:::example-bucket")).toBe(
+        "arn:aws:s3:::example-bucket",
+      );
+    });
+  });
+
   describe("_parseRolesFromSamlResponse", () => {
     it("should parse a single role from SAML response", () => {
       const samlAssertion = Buffer.from(
@@ -1395,8 +1431,8 @@ describe("login", () => {
         )
         .catch((e: unknown) => e);
       expect(error).toBeInstanceOf(CLIError);
-      expect((error as CLIError).message).toContain(
-        "was not found in the SAML response",
+      expect((error as CLIError).message).toBe(
+        "Configured default role ARN was not found in the SAML response.",
       );
     });
   });
@@ -2527,18 +2563,98 @@ describe("login", () => {
       }
 
       // Verify profile was reset
+      expect(mockFsRm).toHaveBeenCalledTimes(1);
       expect(mockFsRm).toHaveBeenCalledWith("/mock/chromium/path", {
         recursive: true,
         force: true,
       });
-      expect(mockFsMkdir).toHaveBeenCalledWith("/mock/chromium/path", {
+      expect(mockFsMkdir).toHaveBeenCalledTimes(2);
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(1, "/mock/chromium/path", {
         recursive: true,
       });
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(2, "/mock/chromium/path", {
+        recursive: true,
+      });
+      expect(mockFsRm.mock.invocationCallOrder[0]).toBeGreaterThan(
+        mockFsMkdir.mock.invocationCallOrder[0],
+      );
+      expect(mockFsMkdir.mock.invocationCallOrder[1]).toBeGreaterThan(
+        mockFsRm.mock.invocationCallOrder[0],
+      );
       // Verify puppeteer.launch was called twice (initial + retry)
       expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
       expect(console.warn).toHaveBeenCalledWith(
         "Browser profile appears incompatible. Resetting profile data and retrying...",
       );
+    });
+
+    it("should reset a Windows managed profile path and retry on TargetCloseError", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromium = "C:\\Users\\alice\\.aws\\chromium";
+
+      mockPuppeteerLaunch
+        .mockRejectedValueOnce(
+          new TargetCloseError(
+            "Protocol error (Target.setAutoAttach): Target closed",
+          ),
+        )
+        .mockResolvedValueOnce(mockBrowser);
+
+      mockPage.$.mockResolvedValue(null);
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true,
+          false,
+          false,
+        );
+      } catch {
+        // Expected - will throw due to unrecognized page timeout
+      }
+
+      expect(mockFsRm).toHaveBeenCalledTimes(1);
+      expect(mockFsRm).toHaveBeenCalledWith(
+        "C:\\Users\\alice\\.aws\\chromium",
+        {
+          recursive: true,
+          force: true,
+        },
+      );
+      expect(mockFsMkdir).toHaveBeenCalledTimes(2);
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(
+        1,
+        "C:\\Users\\alice\\.aws\\chromium",
+        {
+          recursive: true,
+        },
+      );
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(
+        2,
+        "C:\\Users\\alice\\.aws\\chromium",
+        {
+          recursive: true,
+        },
+      );
+      expect(mockFsRm.mock.invocationCallOrder[0]).toBeGreaterThan(
+        mockFsMkdir.mock.invocationCallOrder[0],
+      );
+      expect(mockFsMkdir.mock.invocationCallOrder[1]).toBeGreaterThan(
+        mockFsRm.mock.invocationCallOrder[0],
+      );
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
     });
 
     it("should re-throw TargetCloseError when userDataDir is set to avoid deleting user-provided profile", async () => {
@@ -3029,6 +3145,38 @@ describe("login", () => {
       expect(mockPage.screenshot).toHaveBeenCalledWith({
         path: "az2aws-unrecognized-state.png",
       });
+    });
+
+    it("should avoid screenshots in shared environments when unrecognized page persists", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      mockPage.$.mockResolvedValue(null);
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Unable to recognize page state in a shared environment. Re-run locally with --mode=debug to capture a screenshot.",
+      );
+      expect(mockPage.screenshot).not.toHaveBeenCalled();
     });
 
     it("should continue loop when page.$ throws an error", async () => {

@@ -8,6 +8,8 @@ const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
 const FAKE_LATEST_VERSION_ENV = "AZ2AWS_FAKE_LATEST_VERSION";
 const ANSI_YELLOW = "\u001b[33m";
 const ANSI_RESET = "\u001b[0m";
+const CONFIG_DIR_MODE = 0o700;
+const CACHE_FILE_MODE = 0o600;
 
 type InstallMethod = "mise" | "snap" | "unknown";
 
@@ -54,11 +56,18 @@ function writeCache(
     const cachePath = getCachePath(env);
     const pathModule = process.platform === "win32" ? path.win32 : path;
     const dir = pathModule.dirname(cachePath);
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true, mode: CONFIG_DIR_MODE });
+    if (process.platform !== "win32") {
+      fs.chmodSync(dir, CONFIG_DIR_MODE);
+    }
     fs.writeFileSync(
       cachePath,
       JSON.stringify({ latestVersion, checkedAt: Date.now() }),
+      { mode: CACHE_FILE_MODE },
     );
+    if (process.platform !== "win32") {
+      fs.chmodSync(cachePath, CACHE_FILE_MODE);
+    }
   } catch {
     // Ignore cache write failures
   }

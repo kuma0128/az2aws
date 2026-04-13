@@ -90,10 +90,30 @@ pnpm build && node ./lib/index.js
 | `pnpm build` | Build for production |
 | `pnpm test` | Run unit tests |
 | `pnpm test:coverage` | Run unit tests with coverage |
+| `pnpm test:e2e` | Run the live Azure→AWS browser smoke test |
 | `pnpm lint` | Run ESLint and formatting checks |
 | `pnpm eslint` | Run ESLint |
 | `pnpm prettier:check` | Check code formatting |
 | `pnpm prettier:write` | Auto-fix code formatting |
+
+### E2E Smoke Test
+
+`pnpm test:e2e` launches a real Puppeteer/Chrome session, signs in through
+Azure AD, and verifies that az2aws can retrieve AWS credentials via
+`credential_process` without persisting them to the shared credentials file.
+
+Copy `.env.example` to `.env` and fill in the values. See
+[`vitest.e2e.config.ts`](vitest.e2e.config.ts) for the Vitest settings used by
+this suite.
+
+To troubleshoot a failing run, rerun with `AZ2AWS_E2E_MODE=debug` (visible
+browser, auto-fill) or `AZ2AWS_E2E_MODE=gui` (fully manual).
+
+> **Note:** Passkey-first Microsoft accounts are not supported — use a dedicated
+> account with standard username/password/MFA.
+
+CI only runs this test on `push` to `main` and `workflow_dispatch`; PR
+validation does not depend on repository secrets.
 
 ## Development Workflow
 

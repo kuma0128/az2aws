@@ -20,6 +20,11 @@ import {
   sessionDurationHoursValidationMessage,
   validateSessionDurationHours,
 } from "./sessionDuration";
+import {
+  formatDebugErrorMessage,
+  redactUrlForLogs,
+  shouldAllowSensitiveOutput,
+} from "./sensitiveOutput";
 
 const debug = _debug("az2aws");
 
@@ -33,6 +38,7 @@ const AZURE_AD_SSO = "autologon.microsoftazuread-sso.com";
 const AWS_SAML_ENDPOINT = "https://signin.aws.amazon.com/saml";
 const AWS_CN_SAML_ENDPOINT = "https://signin.amazonaws.cn/saml";
 const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
+const REDACTED = "[redacted]";
 
 // Keep the runtime import as native `import()` so CommonJS output can load
 // the ESM-only https-proxy-agent package.
@@ -68,7 +74,7 @@ function handleBackgroundPromise(
   description: string,
 ): void {
   void promise.catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = formatDebugErrorMessage(error);
     debug(`${description}: ${message}`);
   });
 }
@@ -143,6 +149,7 @@ export const login = {
         profile.azure_tenant_id,
         assertionConsumerServiceURL,
       );
+      const allowSensitiveOutput = shouldAllowSensitiveOutput();
       const samlResponse = await this._performLoginAsync(
         loginUrl,
         headless,
@@ -157,6 +164,7 @@ export const login = {
         noDisableExtensions,
         disableGpu,
         incognito,
+        allowSensitiveOutput,
       );
       const roles = this._parseRolesFromSamlResponse(samlResponse);
       const { role, durationHours } =
@@ -261,11 +269,28 @@ export const login = {
       }
     }
     debug("Environment");
-    debug({
-      ...env,
-      azure_default_password: "xxxxxxxxxx",
-    });
+    debug(this._redactProfileForDebug(env));
     return env;
+  },
+
+  _redactProfileForDebug(env: { [key: string]: string }): {
+    [key: string]: string;
+  } {
+    return Object.fromEntries(
+      Object.entries(env).map(([key, value]) => [
+        key,
+        key === "azure_default_duration_hours" ? value : REDACTED,
+      ]),
+    );
+  },
+
+  _redactArnForDebug(arn: string): string {
+    const match = arn.match(/^(arn:[^:]+:iam::)[^:]+:(.+?\/).+$/);
+    if (!match) {
+      return arn;
+    }
+
+    return `${match[1]}${REDACTED}:${match[2]}${REDACTED}`;
   },
 
   // Load the profile
@@ -315,7 +340,7 @@ export const login = {
             <samlp:NameIDPolicy Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"></samlp:NameIDPolicy>
         </samlp:AuthnRequest>
         `;
-    debug("Generated SAML request", samlRequest);
+    debug("Generated SAML request");
 
     debug("Deflating SAML");
 
@@ -331,7 +356,7 @@ export const login = {
         const url = `https://login.microsoftonline.com/${tenantId}/saml2?SAMLRequest=${encodeURIComponent(
           samlBase64,
         )}`;
-        debug("Created login URL", url);
+        debug("Created login URL", redactUrlForLogs(url));
 
         return resolve(url);
       });
@@ -370,6 +395,7 @@ export const login = {
     noDisableExtensions: boolean,
     disableGpu: boolean,
     incognito = false,
+    allowSensitiveStateOutput = true,
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
@@ -449,7 +475,7 @@ export const login = {
           !paths.userDataDir
         ) {
           debug(
-            `Browser launch failed with TargetCloseError. Resetting profile at ${paths.chromium}`,
+            "Browser launch failed with TargetCloseError. Resetting managed browser profile.",
           );
           console.warn(
             "Browser profile appears incompatible. Resetting profile data and retrying...",
@@ -490,7 +516,8 @@ export const login = {
       const samlResponsePromise = new Promise((resolve) => {
         page.on("request", (req: HTTPRequest) => {
           const reqURL = req.url();
-          debug(`Request: ${reqURL}`);
+          const redactedURL = redactUrlForLogs(reqURL);
+          debug(`Request: ${redactedURL}`);
           if (
             reqURL === AWS_SAML_ENDPOINT ||
             reqURL === AWS_GOV_SAML_ENDPOINT ||
@@ -505,7 +532,7 @@ export const login = {
                 headers: {},
                 body: "",
               }),
-              `Failed to respond to intercepted request ${reqURL}`,
+              `Failed to respond to intercepted request ${redactedURL}`,
             );
             if (browser) {
               handleBackgroundPromise(
@@ -518,7 +545,7 @@ export const login = {
           } else {
             handleBackgroundPromise(
               req.continue(),
-              `Failed to continue intercepted request ${reqURL}`,
+              `Failed to continue intercepted request ${redactedURL}`,
             );
           }
         });
@@ -539,7 +566,9 @@ export const login = {
         if (err instanceof Error) {
           // An error will be thrown if you're still logged in cause the page.goto ot waitForNavigation
           // will be a redirect to AWS. That's usually OK
-          debug(`Error occurred during loading the first page: ${err.message}`);
+          debug(
+            `Error occurred during loading the first page: ${formatDebugErrorMessage(err)}`,
+          );
         }
       }
 
@@ -562,7 +591,7 @@ export const login = {
                 debug(
                   `Error when running state "${
                     state.name
-                  }". ${err.toString()}. Retrying...`,
+                  }". ${formatDebugErrorMessage(err)}. Retrying...`,
                 );
               }
               break;
@@ -581,6 +610,7 @@ export const login = {
                   defaultUsername,
                   defaultPassword,
                   useRememberMe,
+                  allowSensitiveStateOutput,
                 ),
               ]);
 
@@ -595,6 +625,12 @@ export const login = {
           } else {
             debug("State not recognized!");
             if (totalUnrecognizedDelay > MAX_UNRECOGNIZED_PAGE_DELAY) {
+              if (!allowSensitiveStateOutput) {
+                throw new CLIError(
+                  "Unable to recognize page state in a shared environment. Re-run locally with --mode=debug to capture a screenshot.",
+                );
+              }
+
               const path = "az2aws-unrecognized-state.png";
               await page.screenshot({ path });
               throw new CLIError(
@@ -617,13 +653,15 @@ export const login = {
 
       const samlResponse = querystring.parse(samlResponseData).SAMLResponse;
 
-      debug("Found SAML response", samlResponse);
-
       if (!samlResponse) {
         throw new Error("SAML response not found");
       } else if (Array.isArray(samlResponse)) {
         throw new Error("SAML can't be an array");
       }
+
+      debug("Found SAML response", {
+        base64Length: samlResponse.length,
+      });
 
       return samlResponse;
     } finally {
@@ -642,7 +680,9 @@ export const login = {
   _parseRolesFromSamlResponse(assertion: string): Role[] {
     debug("Converting assertion from base64 to UTF-8");
     const samlText = Buffer.from(assertion, "base64").toString("utf8");
-    debug("Converted", samlText);
+    debug("Converted assertion from base64 to UTF-8", {
+      xmlLength: samlText.length,
+    });
 
     debug("Parsing SAML XML");
     const saml = load(samlText, { xmlMode: true });
@@ -664,7 +704,13 @@ export const login = {
       const principalArn = parts[principalIdx].trim();
       return { roleArn, principalArn };
     });
-    debug("Found roles", roles);
+    debug(
+      "Found roles",
+      roles.map((role) => ({
+        roleArn: this._redactArnForDebug(role.roleArn),
+        principalArn: this._redactArnForDebug(role.principalArn),
+      })),
+    );
     return roles;
   },
 
@@ -708,7 +754,7 @@ export const login = {
         role = roles.find((r) => r.roleArn === defaultRoleArn);
         if (!role) {
           throw new CLIError(
-            `Default role ARN '${defaultRoleArn}' was not found in the SAML response.`,
+            "Configured default role ARN was not found in the SAML response.",
           );
         }
         debug("Valid role found. No need to ask.");
@@ -789,7 +835,7 @@ export const login = {
     region: string,
     writeProfile = true,
   ): Promise<AwsCredentials | undefined> {
-    console.log(`Assuming role ${role.roleArn} in region ${region}...`);
+    console.log(`Assuming selected role in region ${region}...`);
     let stsOptions: STSClientConfig = {};
 
     if (awsNoVerifySsl) {
