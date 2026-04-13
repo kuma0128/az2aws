@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.7.0](https://github.com/kuma0128/az2aws/compare/v1.6.2...v1.7.0) (2026-04-13)
+
+
+### Features
+
+* add credential_process output mode ([#95](https://github.com/kuma0128/az2aws/issues/95)) ([2a3e66f](https://github.com/kuma0128/az2aws/commit/2a3e66fcd19fd461dd2f84fc32caa383fb56990c))
+* add macOS CI coverage and separate E2E job ([#183](https://github.com/kuma0128/az2aws/issues/183)) ([cf617f8](https://github.com/kuma0128/az2aws/commit/cf617f899b5d2ba88650f7ffd26c3195dc32c695))
+* Use Windows app-data conventions for update notifier cache ([#180](https://github.com/kuma0128/az2aws/issues/180)) ([8383ae4](https://github.com/kuma0128/az2aws/commit/8383ae46a468630ce531cc9df0dd7d64f115e49c))
+
+
+### Bug Fixes
+
+* --no-prompt on account selection screen ([#173](https://github.com/kuma0128/az2aws/issues/173)) ([07c833f](https://github.com/kuma0128/az2aws/commit/07c833ff8a4553b8c32ed7841b3544776c41f907))
+* clear password input before typing to prevent appending ([#171](https://github.com/kuma0128/az2aws/issues/171)) ([dfb0d65](https://github.com/kuma0128/az2aws/commit/dfb0d65c85fdb3a38bbc2d6ccdbd492f18e97c25))
+* enforce whole number validation for session duration hours ([#167](https://github.com/kuma0128/az2aws/issues/167)) ([0bc7fb4](https://github.com/kuma0128/az2aws/commit/0bc7fb4f187dad422f08a42ece57a4b04138c51d))
+* PATH handling when installing Chrome in CI workflow ([#184](https://github.com/kuma0128/az2aws/issues/184)) ([f6fd008](https://github.com/kuma0128/az2aws/commit/f6fd008a65f7c722b78ae65121e1e20f421dc232))
+* support custom AWS config parent directories ([#172](https://github.com/kuma0128/az2aws/issues/172)) ([19753dd](https://github.com/kuma0128/az2aws/commit/19753dd769f31a72b4e0bdb84acf9638c1cd67f7))
+
 ## [1.6.2](https://github.com/kuma0128/az2aws/compare/v1.6.1...v1.6.2) (2026-04-10)
 
 
