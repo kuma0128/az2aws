@@ -25,13 +25,19 @@ interface CheckForUpdateOptions {
   useColor?: boolean;
 }
 
-function getCachePath(): string {
-  return path.join(os.homedir(), ".config", "az2aws", "update-check.json");
+function getCachePath(env: NodeJS.ProcessEnv = process.env): string {
+  if (process.platform === "win32") {
+    const cacheRoot =
+      env.LOCALAPPDATA?.trim() || env.APPDATA?.trim() || os.homedir();
+    return path.win32.join(cacheRoot, PACKAGE_NAME, "update-check.json");
+  }
+
+  return path.join(os.homedir(), ".config", PACKAGE_NAME, "update-check.json");
 }
 
-function readCache(): CacheData | null {
+function readCache(env: NodeJS.ProcessEnv = process.env): CacheData | null {
   try {
-    const data = fs.readFileSync(getCachePath(), "utf-8");
+    const data = fs.readFileSync(getCachePath(env), "utf-8");
     const cache = JSON.parse(data) as CacheData;
     if (Date.now() - cache.checkedAt < CACHE_TTL_MS) {
       return cache;
@@ -42,10 +48,14 @@ function readCache(): CacheData | null {
   return null;
 }
 
-function writeCache(latestVersion: string): void {
+function writeCache(
+  latestVersion: string,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
   try {
-    const cachePath = getCachePath();
-    const dir = path.dirname(cachePath);
+    const cachePath = getCachePath(env);
+    const pathModule = process.platform === "win32" ? path.win32 : path;
+    const dir = pathModule.dirname(cachePath);
     fs.mkdirSync(dir, { recursive: true, mode: CONFIG_DIR_MODE });
     if (process.platform !== "win32") {
       fs.chmodSync(dir, CONFIG_DIR_MODE);
@@ -167,12 +177,12 @@ export async function checkForUpdate(
     if (forcedLatestVersion) {
       latestVersion = forcedLatestVersion;
     } else {
-      const cache = readCache();
+      const cache = readCache(env);
       if (cache) {
         latestVersion = cache.latestVersion;
       } else {
         latestVersion = await fetchLatestVersion();
-        writeCache(latestVersion);
+        writeCache(latestVersion, env);
       }
     }
 
