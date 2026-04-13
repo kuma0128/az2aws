@@ -31,7 +31,10 @@ function createMockRequest() {
 
 describe("checkForUpdate", () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
-  const originalPlatform = process.platform;
+  const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(
+    process,
+    "platform",
+  )!;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,10 +48,7 @@ describe("checkForUpdate", () => {
   });
 
   afterEach(() => {
-    Object.defineProperty(process, "platform", {
-      value: originalPlatform,
-      configurable: true,
-    });
+    Object.defineProperty(process, "platform", originalPlatformDescriptor);
     vi.restoreAllMocks();
   });
 
@@ -210,8 +210,8 @@ describe("checkForUpdate", () => {
 
   it("should use LOCALAPPDATA for the Windows update cache when available", async () => {
     Object.defineProperty(process, "platform", {
+      ...originalPlatformDescriptor,
       value: "win32",
-      configurable: true,
     });
     vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
 
@@ -245,8 +245,8 @@ describe("checkForUpdate", () => {
 
   it("should fall back to APPDATA for the Windows update cache", async () => {
     Object.defineProperty(process, "platform", {
+      ...originalPlatformDescriptor,
       value: "win32",
-      configurable: true,
     });
     vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
 
@@ -280,8 +280,8 @@ describe("checkForUpdate", () => {
 
   it("should fall back to the home directory for the Windows update cache", async () => {
     Object.defineProperty(process, "platform", {
+      ...originalPlatformDescriptor,
       value: "win32",
-      configurable: true,
     });
     vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
 
@@ -310,8 +310,8 @@ describe("checkForUpdate", () => {
 
   it("should fall back past empty-string env vars on Windows", async () => {
     Object.defineProperty(process, "platform", {
+      ...originalPlatformDescriptor,
       value: "win32",
-      configurable: true,
     });
     vi.spyOn(os, "homedir").mockReturnValue("C:\\Users\\alice");
 
