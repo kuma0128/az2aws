@@ -5,7 +5,7 @@
 
 # az2aws
 
-Log in to AWS CLI using [Azure Active Directory](https://azure.microsoft.com) SSO. Supports MFA and places temporary credentials in the proper location for AWS CLI and SDKs.
+Log in to AWS CLI using [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/) SSO. Supports MFA and places temporary credentials in the proper location for AWS CLI and SDKs.
 
 > **💡 Tip:** Let's be honest — typing `az2aws` correctly on the first try is harder than the AWS certification exam. Save your sanity:
 >
@@ -50,11 +50,11 @@ Install [Node.js](https://nodejs.org/) v24 or higher, then install az2aws:
 
 #### Linux Notes
 
-You must install [puppeteer dependencies](https://github.com/GoogleChrome/puppeteer/blob/master/docs/troubleshooting.md#chrome-headless-doesnt-launch) first.
+You must install [puppeteer dependencies](https://github.com/puppeteer/puppeteer/blob/main/docs/troubleshooting.md) first.
 
 **Install for all users:**
 
-    sudo npm install -g az2aws --unsafe-perm
+    sudo npm install -g az2aws
     sudo chmod -R go+rx $(npm root -g)
 
 **Install for current user only:**
@@ -79,7 +79,7 @@ under the installed `az2aws` package directory and run it with `node`.
 
 Run az2aws with a volume mounted to your AWS configuration directory:
 
-    docker run --rm -it -v ~/.aws:/root/.aws az2aws/az2aws
+    docker run --rm -it -v ~/.aws:/root/.aws taiseiito1000/az2aws
 
 You can also install the docker-launch.sh script to your PATH:
 
@@ -112,7 +112,7 @@ https://snapcraft.io/az2aws
 | `--no-prompt` | Skip prompts, use defaults |
 | `--enable-chrome-network-service` | Enable Network Service (for 3XX redirects) |
 | `--no-verify-ssl` | Disable AWS SSL verification |
-| `--enable-chrome-seamless-sso` | Enable Azure AD Seamless SSO |
+| `--enable-chrome-seamless-sso` | Enable Microsoft Entra Seamless SSO |
 | `--no-disable-extensions` | Keep browser extensions enabled |
 | `--disable-gpu` | Disable GPU acceleration |
 | `--incognito` | Open the login flow in an incognito browser context |
@@ -180,7 +180,7 @@ Example stdout payload:
 
 You can set defaults via environment variables (use with `--no-prompt`):
 
-- `AZURE_TENANT_ID` / `AZURE_APP_ID_URI` - Azure AD settings
+- `AZURE_TENANT_ID` / `AZURE_APP_ID_URI` - Microsoft Entra ID settings
 - `AZURE_DEFAULT_USERNAME` / `AZURE_DEFAULT_PASSWORD` - Credentials
 - `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` - AWS role settings
 
@@ -274,7 +274,7 @@ Credentials are only refreshed if expiring within 11 minutes - safe to run as a 
 
 ## Getting Your Tenant ID and App ID URI
 
-Ask your Azure AD admin for these values, or extract them from myapps.microsoft.com:
+Ask your Microsoft Entra ID admin for these values, or extract them from myapps.microsoft.com:
 
 1. Load the myapps.microsoft.com page.
 2. Click the app tile for the login you want.
@@ -288,7 +288,7 @@ Ask your Azure AD admin for these values, or extract them from myapps.microsoft.
 
 ## How It Works
 
-az2aws uses [Puppeteer](https://github.com/GoogleChrome/puppeteer) to automate a Chromium browser for Azure AD login. It parses the SAML response and calls [AWS STS AssumeRoleWithSAML](http://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html) to get temporary credentials.
+az2aws uses [Puppeteer](https://github.com/puppeteer/puppeteer) to automate a Chromium browser for Microsoft Entra ID login. It parses the SAML response and calls [AWS STS AssumeRoleWithSAML](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html) to get temporary credentials.
 
 ## Troubleshooting
 
@@ -300,7 +300,7 @@ If login fails, try these in order:
 
 ## Support for Other Authentication Providers
 
-This tool only supports Azure AD. Contributions for other SAML providers are welcome - open an issue on GitHub to discuss.
+This tool only supports Microsoft Entra ID. Contributions for other SAML providers are welcome - open an issue on GitHub to discuss.
 
 ## Acknowledgements
 
