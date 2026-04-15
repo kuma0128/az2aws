@@ -1146,6 +1146,7 @@ describe("login", () => {
         azure_default_remember_me: false,
         region: "us-east-1",
       });
+      vi.spyOn(login, "_loadProfileFromEnv").mockReturnValue({});
       vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
       vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([
         role,
