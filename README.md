@@ -5,7 +5,7 @@
 
 # az2aws
 
-Log in to AWS CLI using [Microsoft Entra ID](https://azure.microsoft.com) SSO. Supports MFA and places temporary credentials in the proper location for AWS CLI and SDKs.
+Log in to AWS CLI using [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/) SSO. Supports MFA and places temporary credentials in the proper location for AWS CLI and SDKs.
 
 > **💡 Tip:** Let's be honest — typing `az2aws` correctly on the first try is harder than the AWS certification exam. Save your sanity:
 >
