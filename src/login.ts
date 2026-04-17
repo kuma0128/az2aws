@@ -100,6 +100,7 @@ export const login = {
     disableGpu: boolean,
     incognito = false,
     credentialProcess = false,
+    sharedBrowser?: Browser,
   ): Promise<void> {
     const originalConsoleLog = console.log;
     const effectiveNoPrompt = credentialProcess ? true : noPrompt;
@@ -165,6 +166,7 @@ export const login = {
         disableGpu,
         incognito,
         allowSensitiveOutput,
+        sharedBrowser,
       );
       const roles = this._parseRolesFromSamlResponse(samlResponse);
       const { role, durationHours } =
@@ -220,29 +222,74 @@ export const login = {
   ): Promise<void> {
     const profiles = await awsConfig.getAllProfileNames();
 
-    for (const profile of profiles) {
-      debug(`Check if profile ${profile} is expired or is about to expire`);
-      if (
-        !forceRefresh &&
-        !(await awsConfig.isProfileAboutToExpireAsync(profile))
-      ) {
-        debug(`Profile ${profile} not yet due for refresh.`);
-        continue;
-      }
+    let headless: boolean;
+    if (mode === "cli") {
+      headless = true;
+    } else if (mode === "gui") {
+      headless = false;
+    } else if (mode === "debug") {
+      headless = false;
+    } else {
+      throw new CLIError("Invalid mode");
+    }
 
-      debug(`Run login for profile: ${profile}`);
-      await this.loginAsync(
-        profile,
-        mode,
-        disableSandbox,
-        noPrompt,
-        enableChromeNetworkService,
-        awsNoVerifySsl,
-        enableChromeSeamlessSso,
-        noDisableExtensions,
-        disableGpu,
-        incognito,
-      );
+    let sharedBrowser: Browser | undefined;
+    try {
+      for (const profile of profiles) {
+        debug(`Check if profile ${profile} is expired or is about to expire`);
+        if (
+          !forceRefresh &&
+          !(await awsConfig.isProfileAboutToExpireAsync(profile))
+        ) {
+          debug(`Profile ${profile} not yet due for refresh.`);
+          continue;
+        }
+
+        if (!sharedBrowser) {
+          // Launch a single browser to reuse across all profile logins so
+          // Azure AD session cookies persist in memory between profiles,
+          // avoiding repeated password/MFA prompts within this run.
+          // Use the current profile's rememberMe setting to decide whether
+          // to persist Chrome user data to disk.
+          const profileConfig = await awsConfig.getProfileConfigAsync(profile);
+          sharedBrowser = await this._launchBrowserAsync({
+            headless,
+            disableSandbox,
+            enableChromeNetworkService,
+            enableChromeSeamlessSso,
+            rememberMe: !!profileConfig?.azure_default_remember_me,
+            noDisableExtensions,
+            disableGpu,
+            incognito,
+          });
+        }
+
+        debug(`Run login for profile: ${profile}`);
+        await this.loginAsync(
+          profile,
+          mode,
+          disableSandbox,
+          noPrompt,
+          enableChromeNetworkService,
+          awsNoVerifySsl,
+          enableChromeSeamlessSso,
+          noDisableExtensions,
+          disableGpu,
+          incognito,
+          false,
+          sharedBrowser,
+        );
+      }
+    } finally {
+      if (sharedBrowser) {
+        try {
+          await sharedBrowser.close();
+        } catch (err) {
+          debug(
+            `Failed to close shared browser: ${formatDebugErrorMessage(err)}`,
+          );
+        }
+      }
     }
   },
 
@@ -396,96 +443,34 @@ export const login = {
     disableGpu: boolean,
     incognito = false,
     allowSensitiveStateOutput = true,
+    sharedBrowser?: Browser,
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
     let browser: Browser | undefined;
     const useRememberMe = rememberMe && !incognito;
+    const ownsBrowser = !sharedBrowser;
 
     try {
-      const args = headless
-        ? []
-        : incognito
-          ? [`--window-size=${WIDTH},${HEIGHT}`]
-          : [`--app=${url}`, `--window-size=${WIDTH},${HEIGHT}`];
-      if (disableSandbox) args.push("--no-sandbox");
-      if (enableChromeNetworkService)
-        args.push("--enable-features=NetworkService");
-      if (enableChromeSeamlessSso)
-        args.push(
-          `--auth-server-whitelist=${AZURE_AD_SSO}`,
-          `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`,
-        );
-      debug(`rememberMe value: ${rememberMe} (type: ${typeof rememberMe})`);
-      if (useRememberMe) {
-        if (paths.userDataDir) {
-          args.push(`--user-data-dir=${paths.userDataDir}`);
-        } else {
-          await fs.mkdir(paths.chromium, { recursive: true });
-          args.push(`--user-data-dir=${paths.chromium}`);
-        }
-
-        // --profile-directory requires --user-data-dir to work properly
-        if (paths.profileDir) {
-          args.push(`--profile-directory=${paths.profileDir}`);
-        }
-      }
-
-      if (incognito && rememberMe) {
-        console.warn(
-          "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles.",
-        );
-      }
-
-      const proxyUrl = getProxyUrl();
-      if (proxyUrl) {
-        args.push(`--proxy-server=${proxyUrl}`);
-      }
-
-      const ignoreDefaultArgs = noDisableExtensions
-        ? ["--disable-extensions"]
-        : [];
-
-      if (disableGpu) {
-        args.push("--disable-gpu");
-      }
-
-      const launchParams: {
-        headless: boolean;
-        args: string[];
-        ignoreDefaultArgs: string[];
-        executablePath?: string;
-      } = {
-        headless,
-        args,
-        ignoreDefaultArgs,
-      };
-
-      if (paths.chromeBin) {
-        launchParams.executablePath = paths.chromeBin;
-      }
-
-      try {
-        browser = await puppeteer.launch(launchParams);
-      } catch (e) {
-        if (
-          e instanceof Error &&
-          e.name === "TargetCloseError" &&
-          useRememberMe &&
-          !paths.userDataDir
-        ) {
-          debug(
-            "Browser launch failed with TargetCloseError. Resetting managed browser profile.",
-          );
+      if (sharedBrowser) {
+        browser = sharedBrowser;
+        if (incognito && rememberMe) {
           console.warn(
-            "Browser profile appears incompatible. Resetting profile data and retrying...",
+            "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles.",
           );
-          await fs.rm(paths.chromium, { recursive: true, force: true });
-          await fs.mkdir(paths.chromium, { recursive: true });
-          browser = await puppeteer.launch(launchParams);
-        } else {
-          throw e;
         }
+      } else {
+        browser = await this._launchBrowserAsync({
+          headless,
+          disableSandbox,
+          enableChromeNetworkService,
+          enableChromeSeamlessSso,
+          rememberMe,
+          noDisableExtensions,
+          disableGpu,
+          incognito,
+          appUrl: url,
+        });
       }
 
       // Wait for a bit as sometimes the browser isn't ready.
@@ -496,9 +481,19 @@ export const login = {
         const existingPages = await browser.pages();
         const context: BrowserContext = await browser.createBrowserContext();
         page = await context.newPage();
-        await Promise.all(
-          existingPages.map((existingPage) => existingPage.close()),
-        );
+        if (ownsBrowser) {
+          await Promise.all(
+            existingPages.map((existingPage) => existingPage.close()),
+          );
+        }
+        if (!headless) {
+          await page.bringToFront();
+        }
+      } else if (!ownsBrowser) {
+        // Shared browser: the previous profile's page was closed after its
+        // SAML response, so open a fresh page that still shares the browser's
+        // default context (and therefore its in-memory session cookies).
+        page = await browser.newPage();
         if (!headless) {
           await page.bringToFront();
         }
@@ -534,14 +529,31 @@ export const login = {
               }),
               `Failed to respond to intercepted request ${redactedURL}`,
             );
-            if (browser) {
+            if (ownsBrowser) {
+              if (browser) {
+                handleBackgroundPromise(
+                  browser.close(),
+                  "Failed to close browser after receiving SAML response",
+                );
+              }
+              browser = undefined;
+              debug(`Received SAML response, browser closed`);
+            } else {
+              // Shared browser: close the page (and incognito context) to
+              // stop further redirects, but keep the browser alive so its
+              // in-memory session can be reused by the next profile.
+              const context = incognito ? page.browserContext() : undefined;
               handleBackgroundPromise(
-                browser.close(),
-                "Failed to close browser after receiving SAML response",
+                (async () => {
+                  await page.close();
+                  if (context) {
+                    await context.close();
+                  }
+                })(),
+                "Failed to close page after receiving SAML response",
               );
+              debug(`Received SAML response, page closed (browser reused)`);
             }
-            browser = undefined;
-            debug(`Received SAML response, browser closed`);
           } else {
             handleBackgroundPromise(
               req.continue(),
@@ -555,7 +567,9 @@ export const login = {
       await page.setRequestInterception(true);
 
       try {
-        if (incognito || headless || cliProxy) {
+        if (!ownsBrowser || incognito || headless || cliProxy) {
+          // Shared browser: we didn't pass `--app=${url}` at launch time (the
+          // URL differs per profile), so always navigate explicitly.
           debug("Going to login page");
           await page.goto(url, { waitUntil: "domcontentloaded" });
         } else {
@@ -665,9 +679,130 @@ export const login = {
 
       return samlResponse;
     } finally {
-      if (browser) {
+      if (ownsBrowser && browser) {
         await browser.close();
       }
+    }
+  },
+
+  /**
+   * Launch a Puppeteer browser with the standard az2aws launch flags.
+   *
+   * Extracted so a single browser instance can be shared across multiple
+   * profile logins (see `loginAll`) and so the launch-argument assembly
+   * can be unit-tested in isolation.
+   * @private
+   */
+  async _launchBrowserAsync(options: {
+    headless: boolean;
+    disableSandbox: boolean;
+    enableChromeNetworkService: boolean;
+    enableChromeSeamlessSso: boolean;
+    rememberMe: boolean;
+    noDisableExtensions: boolean;
+    disableGpu: boolean;
+    incognito: boolean;
+    appUrl?: string;
+  }): Promise<Browser> {
+    const {
+      headless,
+      disableSandbox,
+      enableChromeNetworkService,
+      enableChromeSeamlessSso,
+      rememberMe,
+      noDisableExtensions,
+      disableGpu,
+      incognito,
+      appUrl,
+    } = options;
+    const useRememberMe = rememberMe && !incognito;
+
+    const args = headless
+      ? []
+      : incognito || !appUrl
+        ? // No appUrl is supplied when this browser is launched for the
+          // shared `loginAll` flow: the login URL differs per profile, so
+          // we omit `--app=${appUrl}` and navigate explicitly via
+          // `page.goto` for each profile instead.
+          [`--window-size=${WIDTH},${HEIGHT}`]
+        : [`--app=${appUrl}`, `--window-size=${WIDTH},${HEIGHT}`];
+    if (disableSandbox) args.push("--no-sandbox");
+    if (enableChromeNetworkService)
+      args.push("--enable-features=NetworkService");
+    if (enableChromeSeamlessSso)
+      args.push(
+        `--auth-server-whitelist=${AZURE_AD_SSO}`,
+        `--auth-negotiate-delegate-whitelist=${AZURE_AD_SSO}`,
+      );
+    debug(`rememberMe value: ${rememberMe} (type: ${typeof rememberMe})`);
+    if (useRememberMe) {
+      if (paths.userDataDir) {
+        args.push(`--user-data-dir=${paths.userDataDir}`);
+      } else {
+        await fs.mkdir(paths.chromium, { recursive: true });
+        args.push(`--user-data-dir=${paths.chromium}`);
+      }
+
+      // --profile-directory requires --user-data-dir to work properly
+      if (paths.profileDir) {
+        args.push(`--profile-directory=${paths.profileDir}`);
+      }
+    }
+
+    if (incognito && rememberMe) {
+      console.warn(
+        "WARNING: Incognito mode overrides 'Stay logged in' and ignores saved Chrome profiles.",
+      );
+    }
+
+    const proxyUrl = getProxyUrl();
+    if (proxyUrl) {
+      args.push(`--proxy-server=${proxyUrl}`);
+    }
+
+    const ignoreDefaultArgs = noDisableExtensions
+      ? ["--disable-extensions"]
+      : [];
+
+    if (disableGpu) {
+      args.push("--disable-gpu");
+    }
+
+    const launchParams: {
+      headless: boolean;
+      args: string[];
+      ignoreDefaultArgs: string[];
+      executablePath?: string;
+    } = {
+      headless,
+      args,
+      ignoreDefaultArgs,
+    };
+
+    if (paths.chromeBin) {
+      launchParams.executablePath = paths.chromeBin;
+    }
+
+    try {
+      return await puppeteer.launch(launchParams);
+    } catch (e) {
+      if (
+        e instanceof Error &&
+        e.name === "TargetCloseError" &&
+        useRememberMe &&
+        !paths.userDataDir
+      ) {
+        debug(
+          "Browser launch failed with TargetCloseError. Resetting managed browser profile.",
+        );
+        console.warn(
+          "Browser profile appears incompatible. Resetting profile data and retrying...",
+        );
+        await fs.rm(paths.chromium, { recursive: true, force: true });
+        await fs.mkdir(paths.chromium, { recursive: true });
+        return await puppeteer.launch(launchParams);
+      }
+      throw e;
     }
   },
 

@@ -1219,6 +1219,16 @@ describe("login", () => {
         "profile2",
       ]);
       vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(false);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+      } as unknown as Awaited<
+        ReturnType<typeof awsConfig.getProfileConfigAsync>
+      >);
+      const fakeBrowser = { close: vi.fn().mockResolvedValue(undefined) };
+      const launchBrowserSpy = vi
+        .spyOn(login, "_launchBrowserAsync")
+        .mockResolvedValue(fakeBrowser as never);
       const loginAsyncSpy = vi
         .spyOn(login, "loginAsync")
         .mockResolvedValue(undefined);
@@ -1238,6 +1248,7 @@ describe("login", () => {
 
       // When forceRefresh is true, isProfileAboutToExpireAsync should not be called
       expect(awsConfig.isProfileAboutToExpireAsync).not.toHaveBeenCalled();
+      expect(launchBrowserSpy).toHaveBeenCalledTimes(1);
       expect(loginAsyncSpy).toHaveBeenCalledTimes(2);
       expect(loginAsyncSpy).toHaveBeenCalledWith(
         "profile1",
@@ -1250,6 +1261,8 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
+        fakeBrowser,
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
         "profile2",
@@ -1262,7 +1275,10 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
+        fakeBrowser,
       );
+      expect(fakeBrowser.close).toHaveBeenCalledTimes(1);
     });
 
     it("should skip profiles that are not about to expire when forceRefresh=false", async () => {
@@ -1275,6 +1291,16 @@ describe("login", () => {
         .mockResolvedValueOnce(true) // profile1 is about to expire
         .mockResolvedValueOnce(false) // profile2 is not
         .mockResolvedValueOnce(true); // profile3 is about to expire
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+      } as unknown as Awaited<
+        ReturnType<typeof awsConfig.getProfileConfigAsync>
+      >);
+      const fakeBrowser = { close: vi.fn().mockResolvedValue(undefined) };
+      vi.spyOn(login, "_launchBrowserAsync").mockResolvedValue(
+        fakeBrowser as never,
+      );
       const loginAsyncSpy = vi
         .spyOn(login, "loginAsync")
         .mockResolvedValue(undefined);
@@ -1304,6 +1330,8 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
+        fakeBrowser,
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
         "profile3",
@@ -1316,7 +1344,10 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
+        fakeBrowser,
       );
+      expect(fakeBrowser.close).toHaveBeenCalledTimes(1);
     });
 
     it("should not call loginAsync when all profiles are not about to expire", async () => {
@@ -1325,6 +1356,9 @@ describe("login", () => {
         "profile2",
       ]);
       vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(false);
+      const launchBrowserSpy = vi
+        .spyOn(login, "_launchBrowserAsync")
+        .mockResolvedValue({} as never);
       const loginAsyncSpy = vi
         .spyOn(login, "loginAsync")
         .mockResolvedValue(undefined);
@@ -1343,6 +1377,96 @@ describe("login", () => {
       );
 
       expect(loginAsyncSpy).not.toHaveBeenCalled();
+      // No browser should be launched when nothing needs refreshing
+      expect(launchBrowserSpy).not.toHaveBeenCalled();
+    });
+
+    it("should launch only a single shared browser across all profile logins", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([
+        "profile1",
+        "profile2",
+        "profile3",
+      ]);
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(true);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_remember_me: true,
+      } as unknown as Awaited<
+        ReturnType<typeof awsConfig.getProfileConfigAsync>
+      >);
+      const fakeBrowser = { close: vi.fn().mockResolvedValue(undefined) };
+      const launchBrowserSpy = vi
+        .spyOn(login, "_launchBrowserAsync")
+        .mockResolvedValue(fakeBrowser as never);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      // Exactly one shared browser is launched, regardless of profile count
+      expect(launchBrowserSpy).toHaveBeenCalledTimes(1);
+      expect(launchBrowserSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headless: true,
+          rememberMe: true,
+        }),
+      );
+      // Each loginAsync call receives the same shared browser
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(3);
+      for (const call of loginAsyncSpy.mock.calls) {
+        expect(call[call.length - 1]).toBe(fakeBrowser);
+      }
+      expect(fakeBrowser.close).toHaveBeenCalledTimes(1);
+    });
+
+    it("should close the shared browser even when loginAsync throws", async () => {
+      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([
+        "profile1",
+        "profile2",
+      ]);
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(true);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+      } as unknown as Awaited<
+        ReturnType<typeof awsConfig.getProfileConfigAsync>
+      >);
+      const fakeBrowser = { close: vi.fn().mockResolvedValue(undefined) };
+      vi.spyOn(login, "_launchBrowserAsync").mockResolvedValue(
+        fakeBrowser as never,
+      );
+      const loginError = new Error("Login failed");
+      vi.spyOn(login, "loginAsync").mockRejectedValue(loginError);
+
+      await expect(
+        login.loginAll(
+          "cli",
+          true,
+          true,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+        ),
+      ).rejects.toBe(loginError);
+
+      expect(fakeBrowser.close).toHaveBeenCalledTimes(1);
     });
 
     it("should propagate error when loginAsync throws", async () => {
