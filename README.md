@@ -18,6 +18,25 @@ Log in to AWS CLI using [Microsoft Entra ID](https://learn.microsoft.com/en-us/e
 >
 > Your fingers will thank you. Your keyboard will thank you. Your coworkers will stop hearing you swear.
 
+## Contents
+
+- [Installation](#installation)
+  - [mise (Recommended)](#mise-recommended)
+  - [npm](#npm)
+  - [Docker](#docker)
+  - [Snap](#snap)
+- [Command Options](#command-options)
+- [Usage](#usage)
+  - [Configuration](#configuration)
+  - [Logging In](#logging-in)
+- [Automation](#automation)
+  - [Which profiles `--all-profiles` refreshes](#which-profiles---all-profiles-refreshes)
+- [Getting Your Tenant ID and App ID URI](#getting-your-tenant-id-and-app-id-uri)
+- [How It Works](#how-it-works)
+- [Troubleshooting](#troubleshooting)
+- [Support for Other Authentication Providers](#support-for-other-authentication-providers)
+- [Acknowledgements](#acknowledgements)
+
 ## Installation
 
 ### mise (Recommended)
