@@ -13,6 +13,7 @@ vi.mock("./awsConfig", () => ({
     getProfileConfigAsync: vi.fn(),
     setProfileCredentialsAsync: vi.fn(),
     getAllProfileNames: vi.fn(),
+    getAz2awsProfileNames: vi.fn(),
     isProfileAboutToExpireAsync: vi.fn(),
   },
 }));
@@ -1066,9 +1067,21 @@ describe("login", () => {
       aws_session_token: "session-token",
       aws_expiration: "2024-01-01T00:00:00.000Z",
     };
+    const azureEnvVars = [
+      "azure_tenant_id",
+      "azure_app_id_uri",
+      "azure_default_username",
+      "azure_default_password",
+      "azure_default_role_arn",
+      "azure_default_duration_hours",
+    ];
 
     beforeEach(() => {
       vi.clearAllMocks();
+      for (const key of azureEnvVars) {
+        vi.stubEnv(key, "");
+        vi.stubEnv(key.toUpperCase(), "");
+      }
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "error").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -1084,6 +1097,7 @@ describe("login", () => {
     });
 
     afterEach(() => {
+      vi.unstubAllEnvs();
       vi.restoreAllMocks();
     });
 
@@ -1192,7 +1206,7 @@ describe("login", () => {
     });
 
     it("should not call loginAsync when no profiles are configured", async () => {
-      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([]);
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([]);
       const loginAsyncSpy = vi
         .spyOn(login, "loginAsync")
         .mockResolvedValue(undefined);
@@ -1214,7 +1228,7 @@ describe("login", () => {
     });
 
     it("should iterate over all profiles with forceRefresh=true and skip expiration check", async () => {
-      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
         "profile1",
         "profile2",
       ]);
@@ -1266,7 +1280,7 @@ describe("login", () => {
     });
 
     it("should skip profiles that are not about to expire when forceRefresh=false", async () => {
-      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
         "profile1",
         "profile2",
         "profile3",
@@ -1320,7 +1334,7 @@ describe("login", () => {
     });
 
     it("should not call loginAsync when all profiles are not about to expire", async () => {
-      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue([
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
         "profile1",
         "profile2",
       ]);
@@ -1346,7 +1360,9 @@ describe("login", () => {
     });
 
     it("should propagate error when loginAsync throws", async () => {
-      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(["profile1"]);
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "profile1",
+      ]);
       vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(true);
       const loginError = new Error("Login failed");
       vi.spyOn(login, "loginAsync").mockRejectedValue(loginError);
@@ -1371,7 +1387,9 @@ describe("login", () => {
     });
 
     it("should propagate error when isProfileAboutToExpireAsync throws", async () => {
-      vi.mocked(awsConfig.getAllProfileNames).mockResolvedValue(["profile1"]);
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "profile1",
+      ]);
       const expireError = new Error("Failed to check expiration");
       vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockRejectedValue(
         expireError,
@@ -1398,6 +1416,44 @@ describe("login", () => {
       expect(error).toBe(expireError);
       expect((error as Error).message).toBe("Failed to check expiration");
       expect(loginAsyncSpy).not.toHaveBeenCalled();
+    });
+
+    it("should only iterate over az2aws-configured profiles returned by getAz2awsProfileNames", async () => {
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "az2awsProfile",
+      ]);
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(true);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(awsConfig.getAz2awsProfileNames).toHaveBeenCalled();
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
+      expect(loginAsyncSpy).toHaveBeenCalledWith(
+        "az2awsProfile",
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
     });
   });
 

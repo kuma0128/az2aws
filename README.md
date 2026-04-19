@@ -18,6 +18,25 @@ Log in to AWS CLI using [Microsoft Entra ID](https://learn.microsoft.com/en-us/e
 >
 > Your fingers will thank you. Your keyboard will thank you. Your coworkers will stop hearing you swear.
 
+## Contents
+
+- [Installation](#installation)
+  - [mise (Recommended)](#mise-recommended)
+  - [npm](#npm)
+  - [Docker](#docker)
+  - [Snap](#snap)
+- [Command Options](#command-options)
+- [Usage](#usage)
+  - [Configuration](#configuration)
+  - [Logging In](#logging-in)
+- [Automation](#automation)
+  - [Which profiles `--all-profiles` refreshes](#which-profiles---all-profiles-refreshes)
+- [Getting Your Tenant ID and App ID URI](#getting-your-tenant-id-and-app-id-uri)
+- [How It Works](#how-it-works)
+- [Troubleshooting](#troubleshooting)
+- [Support for Other Authentication Providers](#support-for-other-authentication-providers)
+- [Acknowledgements](#acknowledgements)
+
 ## Installation
 
 ### mise (Recommended)
@@ -271,6 +290,22 @@ Renew all profiles at once:
     az2aws --all-profiles --no-prompt    # With "Stay logged in" enabled
 
 Credentials are only refreshed if expiring within 11 minutes - safe to run as a cron job.
+
+### Which profiles `--all-profiles` refreshes
+
+`--all-profiles` iterates every `[default]` / `[profile <name>]` section in
+`~/.aws/config` that has **at least one `azure_*` key** (e.g.
+`azure_tenant_id`, `azure_app_id_uri`, `azure_default_role_arn`). Sections
+without any `azure_*` key — plain AWS profiles, `[sso-session ...]`,
+`[services ...]` — are skipped.
+
+Profiles that intentionally keep `azure_tenant_id` / `azure_app_id_uri` in
+environment variables (`AZURE_TENANT_ID`, `AZURE_APP_ID_URI`) instead of
+the config file are still refreshed, as long as they have some other
+`azure_*` key on disk. If required values are missing even after the
+env-var merge, az2aws fails loudly with
+`Profile '<name>' is not configured properly.` rather than skipping
+silently.
 
 ## Getting Your Tenant ID and App ID URI
 

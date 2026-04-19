@@ -235,6 +235,45 @@ export const awsConfig = {
     return profiles;
   },
 
+  async getAz2awsProfileNames(): Promise<string[]> {
+    debug(`Getting az2aws-configured profiles from config.`);
+    const config =
+      (await this._loadAsync<{ [key: string]: ProfileConfig }>("config")) || {};
+
+    const profiles: string[] = [];
+    for (const [sectionName, sectionConfig] of Object.entries(config)) {
+      let profileName: string;
+      if (sectionName === "default") {
+        profileName = "default";
+      } else if (sectionName.startsWith("profile ")) {
+        profileName = sectionName.substring("profile ".length);
+      } else {
+        debug(`Skipping non-profile section '${sectionName}'`);
+        continue;
+      }
+
+      // Treat a profile as az2aws-managed if it has at least one azure_* key.
+      // Required values (azure_tenant_id / azure_app_id_uri) may still be
+      // supplied by environment variables at runtime, so don't hard-require
+      // them in the config file.
+      const hasAzureKey =
+        sectionConfig &&
+        typeof sectionConfig === "object" &&
+        Object.keys(sectionConfig).some((key) => key.startsWith("azure_"));
+      if (!hasAzureKey) {
+        debug(
+          `Skipping profile '${profileName}' because it has no az2aws (azure_*) keys`,
+        );
+        continue;
+      }
+
+      profiles.push(profileName);
+    }
+
+    debug(`Received az2aws profiles: ${profiles.toString()}`);
+    return profiles;
+  },
+
   async _loadAsync<T extends Record<string, unknown>>(
     type: string,
   ): Promise<T | undefined> {
