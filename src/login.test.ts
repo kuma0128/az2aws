@@ -2623,6 +2623,8 @@ describe("login", () => {
       expect(mockFsRm).toHaveBeenCalledWith("/mock/chromium/path", {
         recursive: true,
         force: true,
+        maxRetries: 5,
+        retryDelay: 100,
       });
       expect(mockFsMkdir).toHaveBeenCalledTimes(2);
       expect(mockFsMkdir).toHaveBeenNthCalledWith(1, "/mock/chromium/path", {
@@ -2687,6 +2689,8 @@ describe("login", () => {
         {
           recursive: true,
           force: true,
+          maxRetries: 5,
+          retryDelay: 100,
         },
       );
       expect(mockFsMkdir).toHaveBeenCalledTimes(2);
@@ -2832,6 +2836,43 @@ describe("login", () => {
       expect(error).toBe(retryError);
       expect(mockFsRm).toHaveBeenCalled();
       expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
+    });
+
+    it("should propagate fs.rm failure when Windows lock retries are exhausted", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromium = "C:\\Users\\alice\\.aws\\chromium";
+
+      mockPuppeteerLaunch.mockRejectedValueOnce(
+        new TargetCloseError("Protocol error: Target closed"),
+      );
+      const ebusy = Object.assign(new Error("EBUSY: resource busy or locked"), {
+        code: "EBUSY",
+      });
+      mockFsRm.mockRejectedValueOnce(ebusy);
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe=true
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(ebusy);
+      expect(mockFsRm).toHaveBeenCalledTimes(1);
+      // Retry should not have happened because the profile reset failed
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(1);
     });
   });
 
