@@ -32,8 +32,18 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 24
-          cache: pnpm
-      - run: corepack enable
+      - run: corepack enable pnpm
+        shell: bash
+      - name: Export pnpm store path
+        shell: bash
+        run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7a6c8dd5c50e56e9e4e3b9147a0ac7a4e5 # v5.0.5
+        with:
+          path: ${{ env.PNPM_STORE_PATH }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm-store-
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - if: matrix.os == 'ubuntu-slim'
@@ -74,8 +84,18 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 24
-          cache: pnpm
-      - run: corepack enable
+      - run: corepack enable pnpm
+        shell: bash
+      - name: Export pnpm store path
+        shell: bash
+        run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7a6c8dd5c50e56e9e4e3b9147a0ac7a4e5 # v5.0.5
+        with:
+          path: ${{ env.PNPM_STORE_PATH }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm-store-
       - run: pnpm install --frozen-lockfile
       - name: Detect system Chrome
         shell: bash
