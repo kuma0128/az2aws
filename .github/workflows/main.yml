@@ -32,7 +32,7 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 24.15.0
-      - run: npm install --global corepack@0.34.7
+      - run: npm install --global --force corepack@0.34.7
       - run: corepack enable pnpm
       - run: npm run check:lockfile
       - run: corepack pnpm install --frozen-lockfile
@@ -75,7 +75,7 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 24.15.0
-      - run: npm install --global corepack@0.34.7
+      - run: npm install --global --force corepack@0.34.7
       - run: corepack enable pnpm
       - run: npm run check:lockfile
       - run: corepack pnpm install --frozen-lockfile
