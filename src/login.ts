@@ -480,7 +480,12 @@ export const login = {
           console.warn(
             "Browser profile appears incompatible. Resetting profile data and retrying...",
           );
-          await fs.rm(paths.chromium, { recursive: true, force: true });
+          await fs.rm(paths.chromium, {
+            recursive: true,
+            force: true,
+            maxRetries: 5,
+            retryDelay: 100,
+          });
           await fs.mkdir(paths.chromium, { recursive: true });
           browser = await puppeteer.launch(launchParams);
         } else {
