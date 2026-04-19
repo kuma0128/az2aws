@@ -462,13 +462,17 @@ region = us-west-2
       expect(result).toEqual(["default"]);
     });
 
-    it("should skip profiles missing either azure_tenant_id or azure_app_id_uri", async () => {
+    it("should include profiles with partial azure_* keys so env vars can supply the rest at runtime", async () => {
+      // Users may keep azure_tenant_id / azure_app_id_uri in environment
+      // variables instead of the config file. Such profiles must still be
+      // refreshed by --all-profiles; any genuinely missing values will be
+      // reported by _loadProfileAsync later.
       const configContent = `
-[profile missingAppId]
-azure_tenant_id = tenant-only
+[profile envDriven]
+azure_default_role_arn = arn:aws:iam::111111111111:role/Dev
 
-[profile missingTenant]
-azure_app_id_uri = https://app-only.example.com
+[profile partial]
+azure_tenant_id = tenant-only
 
 [profile complete]
 azure_tenant_id = complete-tenant
@@ -486,7 +490,7 @@ azure_app_id_uri = https://complete.example.com
       );
 
       const result = await awsConfig.getAz2awsProfileNames();
-      expect(result).toEqual(["complete"]);
+      expect(result).toEqual(["envDriven", "partial", "complete"]);
     });
 
     it("should ignore non-profile sections such as sso-session and services", async () => {

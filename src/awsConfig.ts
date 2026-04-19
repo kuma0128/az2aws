@@ -252,13 +252,17 @@ export const awsConfig = {
         continue;
       }
 
-      if (
-        !sectionConfig ||
-        !sectionConfig.azure_tenant_id ||
-        !sectionConfig.azure_app_id_uri
-      ) {
+      // Treat a profile as az2aws-managed if it has at least one azure_* key.
+      // Required values (azure_tenant_id / azure_app_id_uri) may still be
+      // supplied by environment variables at runtime, so don't hard-require
+      // them in the config file.
+      const hasAzureKey =
+        sectionConfig &&
+        typeof sectionConfig === "object" &&
+        Object.keys(sectionConfig).some((key) => key.startsWith("azure_"));
+      if (!hasAzureKey) {
         debug(
-          `Skipping profile '${profileName}' because it is not configured for az2aws`,
+          `Skipping profile '${profileName}' because it has no az2aws (azure_*) keys`,
         );
         continue;
       }
