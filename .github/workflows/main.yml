@@ -31,15 +31,16 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: 24
+          node-version: 24.15.0
+      - run: npm install --global corepack@0.34.7
       - run: corepack enable pnpm
-        shell: bash
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
+      - run: npm run check:lockfile
+      - run: corepack pnpm install --frozen-lockfile
+      - run: npm run lint
       - if: matrix.os == 'ubuntu-slim'
-        run: pnpm test:coverage
+        run: npm run test:coverage
       - if: matrix.os != 'ubuntu-slim'
-        run: pnpm test
+        run: npm run test
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-slim'
         uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
@@ -48,7 +49,7 @@ jobs:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
           verbose: false
-      - run: pnpm build
+      - run: npm run build
 
   e2e:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
@@ -73,10 +74,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: 24
+          node-version: 24.15.0
+      - run: npm install --global corepack@0.34.7
       - run: corepack enable pnpm
-        shell: bash
-      - run: pnpm install --frozen-lockfile
+      - run: npm run check:lockfile
+      - run: corepack pnpm install --frozen-lockfile
       - name: Detect system Chrome
         shell: bash
         run: |
@@ -87,4 +89,4 @@ jobs:
           fi
           echo "BROWSER_CHROME_BIN=$browser_bin" >> "$GITHUB_ENV"
           "$browser_bin" --version
-      - run: pnpm test:e2e
+      - run: npm run test:e2e

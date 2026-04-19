@@ -19,7 +19,7 @@ Please be respectful and constructive in all interactions. We are committed to p
 
 ## Getting Started
 
-This project is written in TypeScript and uses Prettier and ESLint for code formatting. You need Node.js v24 or higher.
+This project is written in TypeScript and uses Prettier and ESLint for code formatting. Use Node.js 24.15.0 LTS for local development so your environment matches CI.
 
 ### Prerequisites
 
@@ -37,13 +37,13 @@ echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc
 
 Then restart your shell or run `source ~/.zshrc` (or the appropriate config file for your shell, such as `~/.bashrc`).
 
-3. Install Node.js v24:
+3. Install Node.js 24.15.0:
 
 ```sh
-mise use --global node@24
+mise use --global node@24.15.0
 ```
 
-4. Verify Node.js version (should return v24.x.x):
+4. Verify Node.js version (should return `v24.15.0`):
 
 ```sh
 node -v
@@ -52,6 +52,13 @@ node -v
 5. Enable pnpm via corepack:
 
 ```sh
+corepack enable
+```
+
+If `corepack` is not available on your machine, install the same userland Corepack version used in CI first:
+
+```sh
+npm install --global corepack@0.34.7
 corepack enable
 ```
 
@@ -67,38 +74,40 @@ cd az2aws
 2. Install dependencies:
 
 ```sh
-pnpm install
+corepack pnpm install
 ```
 
 3. Start development mode:
 
 ```sh
-pnpm start
+npm run start
 ```
 
 Or build and run production mode:
 
 ```sh
-pnpm build && node ./lib/index.js
+npm run build && node ./lib/index.js
 ```
 
 ### Available Scripts
 
 | Script | Description |
 |--------|-------------|
-| `pnpm start` | Start development mode with hot reload |
-| `pnpm build` | Build for production |
-| `pnpm test` | Run unit tests |
-| `pnpm test:coverage` | Run unit tests with coverage |
-| `pnpm test:e2e` | Run the live Azure→AWS browser smoke test |
-| `pnpm lint` | Run ESLint and formatting checks |
-| `pnpm eslint` | Run ESLint |
-| `pnpm prettier:check` | Check code formatting |
-| `pnpm prettier:write` | Auto-fix code formatting |
+| `corepack pnpm install` | Install dependencies using the repo-pinned pnpm |
+| `npm run check:lockfile` | Fail fast if `pnpm-lock.yaml` was polluted into a multi-document YAML file |
+| `npm run start` | Start development mode with hot reload |
+| `npm run build` | Build for production |
+| `npm run test` | Run unit tests |
+| `npm run test:coverage` | Run unit tests with coverage |
+| `npm run test:e2e` | Run the live Azure→AWS browser smoke test |
+| `npm run lint` | Run ESLint and formatting checks |
+| `npm run eslint` | Run ESLint |
+| `npm run prettier:check` | Check code formatting |
+| `npm run prettier:write` | Auto-fix code formatting |
 
 ### E2E Smoke Test
 
-`pnpm test:e2e` launches a real Puppeteer/Chrome session, signs in through
+`npm run test:e2e` launches a real Puppeteer/Chrome session, signs in through
 Azure AD, and verifies that az2aws can retrieve AWS credentials via
 `credential_process` without persisting them to the shared credentials file.
 
@@ -128,7 +137,8 @@ git checkout -b fix/your-bug-fix
 2. Make your changes and ensure tests pass:
 
 ```sh
-pnpm test
+npm run check:lockfile
+npm run test
 ```
 
 3. Commit your changes following our [commit message guidelines](#commit-message-guidelines).
@@ -139,8 +149,9 @@ pnpm test
 
 ### Before Submitting
 
-- [ ] Run `pnpm test` and ensure all checks pass
-- [ ] Run `pnpm build` to verify the build succeeds
+- [ ] Run `npm run check:lockfile` and ensure the lockfile is still clean
+- [ ] Run `npm run test` and ensure all checks pass
+- [ ] Run `npm run build` to verify the build succeeds
 - [ ] Update documentation if you changed any user-facing behavior
 - [ ] Add tests for new functionality
 

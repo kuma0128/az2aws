@@ -5,15 +5,20 @@ FROM node:24-slim AS deps
 
 WORKDIR /az2aws
 
+ARG COREPACK_VERSION=0.34.7
+
 # Place Puppeteer's Chrome under the workdir for easy COPY to final stage
 ENV PUPPETEER_CACHE_DIR=/az2aws/.cache/puppeteer
 # Skip chrome-headless-shell download (this project uses full Chrome only)
 ENV PUPPETEER_CHROME_HEADLESS_SHELL_SKIP_DOWNLOAD=true
 
 COPY package.json pnpm-lock.yaml ./
+COPY scripts ./scripts
 
-RUN corepack enable \
-    && pnpm install --prod --frozen-lockfile
+RUN npm install --global corepack@${COREPACK_VERSION} \
+    && corepack enable pnpm \
+    && node ./scripts/check-pnpm-lockfile.cjs \
+    && corepack pnpm install --prod --frozen-lockfile
 
 # =============================================================================
 # Stage 2: Production runtime image

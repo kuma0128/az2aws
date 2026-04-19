@@ -56,6 +56,7 @@
     "start": "ts-node-dev src/index.ts",
     "build": "tsc",
     "watch": "tsc -w",
+    "check:lockfile": "node ./scripts/check-pnpm-lockfile.cjs",
     "eslint": "eslint .",
     "prettier:write": "prettier --write \"src/**/*.{ts,json}\"",
     "prettier:check": "prettier --check \"src/**/*.ts\"",
@@ -63,7 +64,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "pnpm eslint && pnpm prettier:check"
+    "lint": "eslint . && prettier --check \"src/**/*.ts\""
   },
   "dependencies": {
     "@aws-sdk/client-sts": "^3.1009.0",
