@@ -235,6 +235,41 @@ export const awsConfig = {
     return profiles;
   },
 
+  async getAz2awsProfileNames(): Promise<string[]> {
+    debug(`Getting az2aws-configured profiles from config.`);
+    const config =
+      (await this._loadAsync<{ [key: string]: ProfileConfig }>("config")) || {};
+
+    const profiles: string[] = [];
+    for (const [sectionName, sectionConfig] of Object.entries(config)) {
+      let profileName: string;
+      if (sectionName === "default") {
+        profileName = "default";
+      } else if (sectionName.startsWith("profile ")) {
+        profileName = sectionName.substring("profile ".length);
+      } else {
+        debug(`Skipping non-profile section '${sectionName}'`);
+        continue;
+      }
+
+      if (
+        !sectionConfig ||
+        !sectionConfig.azure_tenant_id ||
+        !sectionConfig.azure_app_id_uri
+      ) {
+        debug(
+          `Skipping profile '${profileName}' because it is not configured for az2aws`,
+        );
+        continue;
+      }
+
+      profiles.push(profileName);
+    }
+
+    debug(`Received az2aws profiles: ${profiles.toString()}`);
+    return profiles;
+  },
+
   async _loadAsync<T extends Record<string, unknown>>(
     type: string,
   ): Promise<T | undefined> {

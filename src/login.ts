@@ -218,7 +218,7 @@ export const login = {
     disableGpu: boolean,
     incognito = false,
   ): Promise<void> {
-    const profiles = await awsConfig.getAllProfileNames();
+    const profiles = await awsConfig.getAz2awsProfileNames();
 
     for (const profile of profiles) {
       debug(`Check if profile ${profile} is expired or is about to expire`);

@@ -391,6 +391,134 @@ region = eu-west-1
     });
   });
 
+  describe("getAz2awsProfileNames", () => {
+    it("should return empty array when config file does not exist", async () => {
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => {
+          const error = new Error("ENOENT") as NodeJS.ErrnoException;
+          error.code = "ENOENT";
+          callback(error);
+        },
+      );
+
+      const result = await awsConfig.getAz2awsProfileNames();
+      expect(result).toEqual([]);
+    });
+
+    it("should return only profiles configured for az2aws in a mixed config file", async () => {
+      const configContent = `
+[default]
+region = us-east-1
+
+[profile plain]
+region = us-west-2
+
+[profile az]
+azure_tenant_id = test-tenant
+azure_app_id_uri = https://app.example.com
+region = eu-west-1
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => {
+          callback(null, configContent);
+        },
+      );
+
+      const result = await awsConfig.getAz2awsProfileNames();
+      expect(result).toEqual(["az"]);
+    });
+
+    it("should include the default profile when it has az2aws keys", async () => {
+      const configContent = `
+[default]
+azure_tenant_id = default-tenant
+azure_app_id_uri = https://default.example.com
+region = us-east-1
+
+[profile plain]
+region = us-west-2
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => {
+          callback(null, configContent);
+        },
+      );
+
+      const result = await awsConfig.getAz2awsProfileNames();
+      expect(result).toEqual(["default"]);
+    });
+
+    it("should skip profiles missing either azure_tenant_id or azure_app_id_uri", async () => {
+      const configContent = `
+[profile missingAppId]
+azure_tenant_id = tenant-only
+
+[profile missingTenant]
+azure_app_id_uri = https://app-only.example.com
+
+[profile complete]
+azure_tenant_id = complete-tenant
+azure_app_id_uri = https://complete.example.com
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => {
+          callback(null, configContent);
+        },
+      );
+
+      const result = await awsConfig.getAz2awsProfileNames();
+      expect(result).toEqual(["complete"]);
+    });
+
+    it("should ignore non-profile sections such as sso-session and services", async () => {
+      const configContent = `
+[sso-session my-sso]
+sso_start_url = https://example.awsapps.com/start
+sso_region = us-east-1
+
+[services my-services]
+s3 =
+  endpoint_url = https://s3.example.com
+
+[profile az]
+azure_tenant_id = az-tenant
+azure_app_id_uri = https://az.example.com
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => {
+          callback(null, configContent);
+        },
+      );
+
+      const result = await awsConfig.getAz2awsProfileNames();
+      expect(result).toEqual(["az"]);
+    });
+  });
+
   describe("_loadAsync", () => {
     it("should throw error for unknown config type", async () => {
       await expect(awsConfig._loadAsync("unknown")).rejects.toThrow(
