@@ -1775,6 +1775,24 @@ describe("login", () => {
       );
     });
 
+    it("should log the assuming-role message with the region", async () => {
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        2,
+        false,
+        "us-east-1",
+      );
+
+      expect(console.log).toHaveBeenCalledWith(
+        "Assuming selected role in region us-east-1...",
+      );
+    });
+
     it("should print a profile-ready confirmation after saving credentials", async () => {
       await login._assumeRoleAsync(
         "test-profile",
@@ -1788,20 +1806,12 @@ describe("login", () => {
         "us-east-1",
       );
 
-      expect(console.log).toHaveBeenNthCalledWith(
-        1,
-        "Assuming selected role in region us-east-1...",
-      );
-      expect(console.log).toHaveBeenNthCalledWith(2, "");
-      expect(console.log).toHaveBeenNthCalledWith(
-        3,
+      expect(console.log).toHaveBeenCalledWith(
         "Credentials expire at 2024-01-01T00:00:00.000Z.",
       );
-      expect(console.log).toHaveBeenNthCalledWith(
-        4,
+      expect(console.log).toHaveBeenCalledWith(
         'Use them with AWS CLI by passing --profile "test-profile".',
       );
-      expect(console.log).toHaveBeenCalledTimes(4);
     });
 
     it("should call assumeRoleWithSAML with correct parameters", async () => {

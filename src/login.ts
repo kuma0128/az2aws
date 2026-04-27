@@ -73,7 +73,7 @@ function printCredentialsReadyMessage(
   profileName: string,
   credentials: AwsCredentials,
 ): void {
-  console.log("");
+  console.log();
   console.log(`Credentials expire at ${credentials.aws_expiration}.`);
   console.log(`Use them with AWS CLI by passing --profile "${profileName}".`);
 }
