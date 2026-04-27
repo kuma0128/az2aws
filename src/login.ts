@@ -69,6 +69,15 @@ type RoleDurationAnswers = {
   durationHours?: string | number;
 };
 
+function printCredentialsReadyMessage(
+  profileName: string,
+  credentials: AwsCredentials,
+): void {
+  console.log("");
+  console.log(`Credentials expire at ${credentials.aws_expiration}.`);
+  console.log(`Use them with AWS CLI by passing --profile "${profileName}".`);
+}
+
 function handleBackgroundPromise(
   promise: Promise<unknown>,
   description: string,
@@ -916,6 +925,7 @@ export const login = {
 
     if (writeProfile) {
       await awsConfig.setProfileCredentialsAsync(profileName, credentials);
+      printCredentialsReadyMessage(profileName, credentials);
     }
 
     return credentials;

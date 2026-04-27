@@ -1746,6 +1746,9 @@ describe("login", () => {
         aws_session_token: "session-token",
       });
       expect(awsConfig.setProfileCredentialsAsync).not.toHaveBeenCalled();
+      expect(console.log).not.toHaveBeenCalledWith(
+        "Credentials expire at 2024-01-01T00:00:00.000Z.",
+      );
     });
 
     it("should save credentials with correct values", async () => {
@@ -1770,6 +1773,35 @@ describe("login", () => {
           aws_expiration: "2024-01-01T00:00:00.000Z",
         },
       );
+    });
+
+    it("should print a profile-ready confirmation after saving credentials", async () => {
+      await login._assumeRoleAsync(
+        "test-profile",
+        "base64-assertion",
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+        2,
+        false,
+        "us-east-1",
+      );
+
+      expect(console.log).toHaveBeenNthCalledWith(
+        1,
+        "Assuming selected role in region us-east-1...",
+      );
+      expect(console.log).toHaveBeenNthCalledWith(2, "");
+      expect(console.log).toHaveBeenNthCalledWith(
+        3,
+        "Credentials expire at 2024-01-01T00:00:00.000Z.",
+      );
+      expect(console.log).toHaveBeenNthCalledWith(
+        4,
+        'Use them with AWS CLI by passing --profile "test-profile".',
+      );
+      expect(console.log).toHaveBeenCalledTimes(4);
     });
 
     it("should call assumeRoleWithSAML with correct parameters", async () => {
