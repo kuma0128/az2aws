@@ -131,6 +131,13 @@ describe("login integration: standard mode persists credentials to disk", () => 
       credentialProcess,
     );
 
+    expect(console.log).toHaveBeenCalledWith(
+      `Credentials expire at ${expectedExpiration.toISOString()}.`,
+    );
+    expect(console.log).toHaveBeenCalledWith(
+      `Use them with AWS CLI by passing --profile "${profileName}".`,
+    );
+
     const persisted = await readFile(credentialsPath, "utf8");
     expect(persisted.trim()).not.toBe("");
 
