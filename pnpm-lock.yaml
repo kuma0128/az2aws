@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  basic-ftp@<5.2.1: 5.2.2
+  basic-ftp@<5.3.0: 5.3.0
   brace-expansion@<1.1.13: 1.1.13
   yauzl@<3.2.1: 3.2.1
 
@@ -1146,8 +1146,8 @@ packages:
   bare-url@2.4.2:
     resolution: {integrity: sha512-/9a2j4ac6ckpmAHvod/ob7x439OAHst/drc2Clnq+reRYd/ovddwcF4LfoxHyNk5AuGBnPg+HqFjmE/Zpq6v0A==}
 
-  basic-ftp@5.2.2:
-    resolution: {integrity: sha512-1tDrzKsdCg70WGvbFss/ulVAxupNauGnOlgpyjKzeQxzyllBLS0CGLV7tjIXTK3ZQA9/FBEm9qyFFN1bciA6pw==}
+  basic-ftp@5.3.0:
+    resolution: {integrity: sha512-5K9eNNn7ywHPsYnFwjKgYH8Hf8B5emh7JKcPaVjjrMJFQQwGpwowEnZNEtHs7DfR7hCZsmaK3VA4HUK0YarT+w==, tarball: https://registry.npmjs.org/basic-ftp/-/basic-ftp-5.3.0.tgz}
     engines: {node: '>=10.0.0'}
 
   binary-extensions@2.3.0:
@@ -3575,7 +3575,7 @@ snapshots:
     dependencies:
       bare-path: 3.0.0
 
-  basic-ftp@5.2.2: {}
+  basic-ftp@5.3.0: {}
 
   binary-extensions@2.3.0: {}
 
@@ -3963,7 +3963,7 @@ snapshots:
 
   get-uri@6.0.5:
     dependencies:
-      basic-ftp: 5.2.2
+      basic-ftp: 5.3.0
       data-uri-to-buffer: 6.0.2
       debug: 4.4.3
     transitivePeerDependencies:
