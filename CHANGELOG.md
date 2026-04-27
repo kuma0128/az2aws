@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.8.0](https://github.com/kuma0128/az2aws/compare/v1.7.0...v1.8.0) (2026-04-27)
+
+
+### Features
+
+* show saved credential usage details ([#206](https://github.com/kuma0128/az2aws/issues/206)) ([04855cf](https://github.com/kuma0128/az2aws/commit/04855cf18e42f84ec2d639c825b0b6233730c3a0))
+
+
+### Bug Fixes
+
+* **login:** retry managed profile reset on Windows lock errors ([#199](https://github.com/kuma0128/az2aws/issues/199)) ([a4ad1c7](https://github.com/kuma0128/az2aws/commit/a4ad1c76d0f193cee16f17319e47449c6b5cba44))
+* **login:** skip non-az2aws profiles in --all-profiles ([#196](https://github.com/kuma0128/az2aws/issues/196)) ([0dc6820](https://github.com/kuma0128/az2aws/commit/0dc6820775ebf03637dda78a899e0e2c16c25561))
+* outdated references in README and docker-launch.sh ([#192](https://github.com/kuma0128/az2aws/issues/192)) ([79421ae](https://github.com/kuma0128/az2aws/commit/79421ae4c6c734cb81b37fde6a457e2b9c0752e8))
+
+
+### Performance Improvements
+
+* switch CI to Corepack and drop manual pnpm store cache ([a27b64c](https://github.com/kuma0128/az2aws/commit/a27b64c4183382a10618a6dfcae0ccf803261894))
+
 ## [1.7.0](https://github.com/kuma0128/az2aws/compare/v1.6.2...v1.7.0) (2026-04-13)
 
 
