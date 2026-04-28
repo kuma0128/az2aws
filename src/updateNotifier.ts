@@ -4,7 +4,7 @@ import path from "path";
 import os from "os";
 
 const PACKAGE_NAME = "az2aws";
-const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
+const CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
 const FAKE_LATEST_VERSION_ENV = "AZ2AWS_FAKE_LATEST_VERSION";
 const ANSI_YELLOW = "\u001b[33m";
 const ANSI_RESET = "\u001b[0m";

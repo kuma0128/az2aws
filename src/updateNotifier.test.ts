@@ -141,7 +141,7 @@ describe("checkForUpdate", () => {
   it("should ignore expired cache and fetch fresh data", async () => {
     const expiredCache = JSON.stringify({
       latestVersion: "2.0.0",
-      checkedAt: Date.now() - 1000 * 60 * 60 * 25, // 25 hours ago
+      checkedAt: Date.now() - 1000 * 60 * 60 * 7, // 7 hours ago
     });
     vi.mocked(fs.readFileSync).mockReturnValue(expiredCache);
 
