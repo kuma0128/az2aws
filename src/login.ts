@@ -31,6 +31,7 @@ const debug = _debug("az2aws");
 const WIDTH = 425;
 const HEIGHT = 550;
 const DELAY_ON_UNRECOGNIZED_PAGE = 1000;
+const GUI_FALLBACK_HINT_DELAY = 15 * 1000;
 const MAX_UNRECOGNIZED_PAGE_DELAY = 30 * 1000;
 
 // source: https://docs.microsoft.com/en-us/azure/active-directory/hybrid/how-to-connect-sso-quick-start#google-chrome-all-platforms
@@ -86,6 +87,12 @@ function handleBackgroundPromise(
     const message = formatDebugErrorMessage(error);
     debug(`${description}: ${message}`);
   });
+}
+
+function printGuiFallbackHint(): void {
+  console.log(
+    "Login is taking longer than expected. If a browser prompt such as certificate selection is waiting for input, stop this run and retry with --mode=gui.",
+  );
 }
 
 export const login = {
@@ -588,8 +595,18 @@ export const login = {
 
       if (cliProxy) {
         let totalUnrecognizedDelay = 0;
+        const cliProxyStartedAt = Date.now();
+        let hasPrintedGuiFallbackHint = false;
         for (;;) {
           if (samlResponseData) break;
+
+          if (
+            !hasPrintedGuiFallbackHint &&
+            Date.now() - cliProxyStartedAt > GUI_FALLBACK_HINT_DELAY
+          ) {
+            printGuiFallbackHint();
+            hasPrintedGuiFallbackHint = true;
+          }
 
           let foundState = false;
           for (let i = 0; i < states.length; i++) {

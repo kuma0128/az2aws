@@ -3286,6 +3286,40 @@ describe("login", () => {
       });
     });
 
+    it("should suggest gui mode when cli login takes longer than expected", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      mockPage.$.mockResolvedValue(null);
+      vi.spyOn(Date, "now")
+        .mockReturnValueOnce(0)
+        .mockReturnValue(16 * 1000);
+      const consoleLogSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
+
+      await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        )
+        .catch(() => undefined);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        "Login is taking longer than expected. If a browser prompt such as certificate selection is waiting for input, stop this run and retry with --mode=gui.",
+      );
+    });
+
     it("should avoid screenshots in shared environments when unrecognized page persists", async () => {
       const mockPage = createMockPage();
       const mockBrowser = createMockBrowser(mockPage);
