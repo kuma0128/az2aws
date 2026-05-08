@@ -595,14 +595,15 @@ export const login = {
 
       if (cliProxy) {
         let totalUnrecognizedDelay = 0;
-        const cliProxyStartedAt = Date.now();
+        let passwordSubmittedAt: number | undefined;
         let hasPrintedGuiFallbackHint = false;
         for (;;) {
           if (samlResponseData) break;
 
           if (
+            passwordSubmittedAt !== undefined &&
             !hasPrintedGuiFallbackHint &&
-            Date.now() - cliProxyStartedAt > GUI_FALLBACK_HINT_DELAY
+            Date.now() - passwordSubmittedAt > GUI_FALLBACK_HINT_DELAY
           ) {
             printGuiFallbackHint();
             hasPrintedGuiFallbackHint = true;
@@ -646,6 +647,9 @@ export const login = {
               ]);
 
               debug(`Finished state: ${state.name}`);
+              if (state.name === "password input") {
+                passwordSubmittedAt = Date.now();
+              }
 
               break;
             }

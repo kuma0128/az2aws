@@ -3224,6 +3224,13 @@ describe("login", () => {
         goto: vi.fn().mockResolvedValue(undefined),
         waitForNavigation: vi.fn().mockResolvedValue(undefined),
         $: vi.fn().mockResolvedValue(null),
+        focus: vi.fn().mockResolvedValue(undefined),
+        $eval: vi.fn().mockResolvedValue(undefined),
+        keyboard: {
+          press: vi.fn().mockResolvedValue(undefined),
+          type: vi.fn().mockResolvedValue(undefined),
+        },
+        click: vi.fn().mockResolvedValue(undefined),
         screenshot: vi.fn().mockResolvedValue(undefined),
         getRequestHandler: () => requestHandler,
         waitForRequestInterception: () => requestInterceptionReady,
@@ -3286,11 +3293,22 @@ describe("login", () => {
       });
     });
 
-    it("should suggest gui mode when cli login takes longer than expected", async () => {
+    it("should suggest gui mode when cli login stalls after password input", async () => {
       const mockPage = createMockPage();
       const mockBrowser = createMockBrowser(mockPage);
       mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
-      mockPage.$.mockResolvedValue(null);
+      let hasFoundPasswordInput = false;
+      mockPage.$.mockImplementation((selector: string) => {
+        if (
+          !hasFoundPasswordInput &&
+          selector.includes('input[name="Password"]')
+        ) {
+          hasFoundPasswordInput = true;
+          return Promise.resolve({} as never);
+        }
+
+        return Promise.resolve(null);
+      });
       vi.spyOn(Date, "now")
         .mockReturnValueOnce(0)
         .mockReturnValue(16 * 1000);
@@ -3316,6 +3334,38 @@ describe("login", () => {
         .catch(() => undefined);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
+        "Login is taking longer than expected. If a browser prompt such as certificate selection is waiting for input, stop this run and retry with --mode=gui.",
+      );
+    });
+
+    it("should not suggest gui mode before password input", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      mockPage.$.mockResolvedValue(null);
+      vi.spyOn(Date, "now").mockReturnValue(16 * 1000);
+      const consoleLogSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
+
+      await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          true,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        )
+        .catch(() => undefined);
+
+      expect(consoleLogSpy).not.toHaveBeenCalledWith(
         "Login is taking longer than expected. If a browser prompt such as certificate selection is waiting for input, stop this run and retry with --mode=gui.",
       );
     });
