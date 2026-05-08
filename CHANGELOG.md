@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/kuma0128/az2aws/compare/v1.8.0...v1.8.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* **update-notifier:** shorten cache TTL to 6 hours ([#207](https://github.com/kuma0128/az2aws/issues/207)) ([4112845](https://github.com/kuma0128/az2aws/commit/411284573c6609832ec63914f7cfc2ff44eb2340))
+
 ## [1.8.0](https://github.com/kuma0128/az2aws/compare/v1.7.0...v1.8.0) (2026-04-27)
 
 
