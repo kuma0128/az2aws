@@ -268,9 +268,9 @@ If the source profile can return multiple SAML roles, add
 
 You can set defaults via environment variables (use with `--no-prompt`):
 
-- `AZURE_TENANT_ID` / `AZURE_APP_ID_URI` - Microsoft Entra ID settings
+- `AZURE_TENANT_ID` / `AZURE_APP_ID_URI` (`AZURE_APP_ID` alias) - Microsoft Entra ID settings
 - `AZURE_DEFAULT_USERNAME` / `AZURE_DEFAULT_PASSWORD` - Credentials
-- `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` - AWS role settings
+- `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` (`AZURE_DURATION_HOURS` alias) - AWS role settings
 
 When using `--no-prompt` with multiple available roles, you must set
 `AZURE_DEFAULT_ROLE_ARN` (or configure `azure_default_role_arn`) so the CLI can

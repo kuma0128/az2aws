@@ -352,7 +352,9 @@ export const login = {
       normalizedProfile,
       "azure_app_id",
     );
-    if (!appIdUri && appId) {
+    if (appIdUri) {
+      normalizedProfile.azure_app_id_uri = appIdUri;
+    } else if (appId) {
       normalizedProfile.azure_app_id_uri = appId;
     }
 
@@ -364,7 +366,9 @@ export const login = {
       normalizedProfile,
       "azure_duration_hours",
     );
-    if (!defaultDurationHours && durationHours) {
+    if (defaultDurationHours) {
+      normalizedProfile.azure_default_duration_hours = defaultDurationHours;
+    } else if (durationHours) {
       normalizedProfile.azure_default_duration_hours = durationHours;
     }
 
@@ -435,10 +439,15 @@ export const login = {
     }
     profile = this._normalizeProfileAliases(profile);
 
-    if (!profile.azure_tenant_id || !profile.azure_app_id_uri)
+    if (!profile.azure_tenant_id || !profile.azure_app_id_uri) {
+      const profileDescription =
+        loadedProfile.credentialsProfileName === loadedProfile.awsCliProfileName
+          ? `'${loadedProfile.awsCliProfileName}'`
+          : `'${loadedProfile.credentialsProfileName}' used by AWS profile '${loadedProfile.awsCliProfileName}'`;
       throw new CLIError(
-        `Profile '${profileName}' is not configured properly.`,
+        `Profile ${profileDescription} is not configured properly.`,
       );
+    }
 
     if (
       loadedProfile.credentialsProfileName === loadedProfile.awsCliProfileName
