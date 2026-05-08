@@ -3407,6 +3407,7 @@ describe("login", () => {
     });
 
     afterEach(() => {
+      vi.restoreAllMocks();
       Object.keys(originalPaths).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
