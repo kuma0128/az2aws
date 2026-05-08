@@ -64,6 +64,11 @@ interface Role {
 }
 
 type AwsCredentials = ProfileCredentials;
+type LoadedProfile = {
+  profile: ProfileConfig;
+  credentialsProfileName: string;
+  awsCliProfileName: string;
+};
 type RoleDurationAnswers = {
   role?: string;
   durationHours?: string | number;
@@ -132,7 +137,8 @@ export const login = {
         throw new CLIError("Invalid mode");
       }
 
-      const profile = await this._loadProfileAsync(profileName);
+      const loadedProfile = await this._loadProfileForLoginAsync(profileName);
+      const profile = loadedProfile.profile;
       console.log(
         `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`,
       );
@@ -186,13 +192,14 @@ export const login = {
         );
 
       const credentials = await this._assumeRoleAsync(
-        profileName,
+        loadedProfile.credentialsProfileName,
         samlResponse,
         role,
         durationHours,
         awsNoVerifySsl,
         profile.region,
         !credentialProcess,
+        loadedProfile.awsCliProfileName,
       );
 
       if (credentialProcess) {
@@ -261,10 +268,12 @@ export const login = {
     const options = [
       "azure_tenant_id",
       "azure_app_id_uri",
+      "azure_app_id",
       "azure_default_username",
       "azure_default_password",
       "azure_default_role_arn",
       "azure_default_duration_hours",
+      "azure_duration_hours",
     ];
     for (let i = 0; i < options.length; i++) {
       const opt = options[i];
@@ -302,8 +311,80 @@ export const login = {
     return `${match[1]}${REDACTED}:${match[2]}${REDACTED}`;
   },
 
-  // Load the profile
-  async _loadProfileAsync(profileName: string): Promise<ProfileConfig> {
+  _getProfileStringValue(profile: ProfileConfig, key: string): string {
+    const value = profile[key];
+    if (typeof value !== "string") {
+      return "";
+    }
+
+    const trimmedValue = value.trim();
+    if (trimmedValue.length < 2) {
+      return trimmedValue;
+    }
+
+    const firstChar = trimmedValue[0];
+    const lastChar = trimmedValue[trimmedValue.length - 1];
+    const quotePairs: Record<string, string> = {
+      '"': '"',
+      "'": "'",
+      "`": "`",
+    };
+
+    const unquotedValue =
+      quotePairs[firstChar] === lastChar
+        ? trimmedValue.slice(1, -1).trim()
+        : trimmedValue;
+
+    return unquotedValue.replace(/\\#/g, "#");
+  },
+
+  _hasAz2awsConfig(profile: ProfileConfig): boolean {
+    return Object.keys(profile).some((key) => key.startsWith("azure_"));
+  },
+
+  _normalizeProfileAliases(profile: ProfileConfig): ProfileConfig {
+    const normalizedProfile = { ...profile };
+    const appIdUri = this._getProfileStringValue(
+      normalizedProfile,
+      "azure_app_id_uri",
+    );
+    const appId = this._getProfileStringValue(
+      normalizedProfile,
+      "azure_app_id",
+    );
+    if (!appIdUri && appId) {
+      normalizedProfile.azure_app_id_uri = appId;
+    }
+
+    const defaultDurationHours = this._getProfileStringValue(
+      normalizedProfile,
+      "azure_default_duration_hours",
+    );
+    const durationHours = this._getProfileStringValue(
+      normalizedProfile,
+      "azure_duration_hours",
+    );
+    if (!defaultDurationHours && durationHours) {
+      normalizedProfile.azure_default_duration_hours = durationHours;
+    }
+
+    return normalizedProfile;
+  },
+
+  async _resolveProfileForLoginAsync(
+    profileName: string,
+    awsCliProfileName = profileName,
+    visitedProfileNames: string[] = [],
+  ): Promise<LoadedProfile> {
+    if (visitedProfileNames.includes(profileName)) {
+      throw new CLIError(
+        `Circular source_profile reference detected: ${[
+          ...visitedProfileNames,
+          profileName,
+        ].join(" -> ")}.`,
+      );
+    }
+
     const profile = await awsConfig.getProfileConfigAsync(profileName);
 
     if (!profile)
@@ -311,20 +392,76 @@ export const login = {
         `Unknown profile '${profileName}'. You must configure it first with --configure.`,
       );
 
+    const roleArn = this._getProfileStringValue(profile, "role_arn");
+    const sourceProfileName = this._getProfileStringValue(
+      profile,
+      "source_profile",
+    );
+
+    if (!this._hasAz2awsConfig(profile) && roleArn && sourceProfileName) {
+      const resolvedProfile = await this._resolveProfileForLoginAsync(
+        sourceProfileName,
+        awsCliProfileName,
+        [...visitedProfileNames, profileName],
+      );
+
+      const resolvedConfig =
+        !resolvedProfile.profile.region && profile.region
+          ? { ...resolvedProfile.profile, region: profile.region }
+          : resolvedProfile.profile;
+
+      return {
+        ...resolvedProfile,
+        profile: resolvedConfig,
+      };
+    }
+
+    return {
+      profile,
+      credentialsProfileName: profileName,
+      awsCliProfileName,
+    };
+  },
+
+  async _loadProfileForLoginAsync(profileName: string): Promise<LoadedProfile> {
+    const loadedProfile = await this._resolveProfileForLoginAsync(profileName);
+    let profile = this._normalizeProfileAliases(loadedProfile.profile);
+
     const env = this._loadProfileFromEnv();
     for (const prop in env) {
       if (env[prop]) {
         profile[prop] = env[prop] === null ? profile[prop] : env[prop];
       }
     }
+    profile = this._normalizeProfileAliases(profile);
 
     if (!profile.azure_tenant_id || !profile.azure_app_id_uri)
       throw new CLIError(
         `Profile '${profileName}' is not configured properly.`,
       );
 
-    console.log(`Logging in with profile '${profileName}'...`);
-    return profile;
+    if (
+      loadedProfile.credentialsProfileName === loadedProfile.awsCliProfileName
+    ) {
+      console.log(
+        `Logging in with profile '${loadedProfile.awsCliProfileName}'...`,
+      );
+    } else {
+      console.log(
+        `Logging in with source_profile '${loadedProfile.credentialsProfileName}' for AWS profile '${loadedProfile.awsCliProfileName}'...`,
+      );
+    }
+
+    return {
+      ...loadedProfile,
+      profile,
+    };
+  },
+
+  // Load the profile
+  async _loadProfileAsync(profileName: string): Promise<ProfileConfig> {
+    const loadedProfile = await this._loadProfileForLoginAsync(profileName);
+    return loadedProfile.profile;
   },
 
   /**
@@ -848,6 +985,7 @@ export const login = {
     awsNoVerifySsl: boolean,
     region: string,
     writeProfile = true,
+    awsCliProfileName = profileName,
   ): Promise<AwsCredentials | undefined> {
     console.log(`Assuming selected role in region ${region}...`);
     let stsOptions: STSClientConfig = {};
@@ -925,7 +1063,7 @@ export const login = {
 
     if (writeProfile) {
       await awsConfig.setProfileCredentialsAsync(profileName, credentials);
-      printCredentialsReadyMessage(profileName, credentials);
+      printCredentialsReadyMessage(awsCliProfileName, credentials);
     }
 
     return credentials;

@@ -120,23 +120,23 @@ https://snapcraft.io/az2aws
 
 ## Command Options
 
-| Option | Description |
-|--------|-------------|
-| `--profile (-p)` | Profile name to use. Default: `default` or `AWS_PROFILE` |
-| `--all-profiles (-a)` | Run for all configured profiles |
-| `--force-refresh (-f)` | Force refresh even if credentials are valid |
-| `--configure (-c)` | Configure the profile |
-| `--mode (-m) <mode>` | `cli` (default), `gui`, or `debug` |
-| `--no-sandbox` | Disable Puppeteer sandbox (needed on Linux) |
-| `--no-prompt` | Skip prompts, use defaults |
-| `--enable-chrome-network-service` | Enable Network Service (for 3XX redirects) |
-| `--no-verify-ssl` | Disable AWS SSL verification |
-| `--enable-chrome-seamless-sso` | Enable Microsoft Entra Seamless SSO |
-| `--no-disable-extensions` | Keep browser extensions enabled |
-| `--disable-gpu` | Disable GPU acceleration |
-| `--incognito` | Open the login flow in an incognito browser context |
-| `--credential-process` | Output credentials for AWS CLI credential_process |
-| `--version (-v)` | Show version number |
+| Option                            | Description                                              |
+| --------------------------------- | -------------------------------------------------------- |
+| `--profile (-p)`                  | Profile name to use. Default: `default` or `AWS_PROFILE` |
+| `--all-profiles (-a)`             | Run for all configured profiles                          |
+| `--force-refresh (-f)`            | Force refresh even if credentials are valid              |
+| `--configure (-c)`                | Configure the profile                                    |
+| `--mode (-m) <mode>`              | `cli` (default), `gui`, or `debug`                       |
+| `--no-sandbox`                    | Disable Puppeteer sandbox (needed on Linux)              |
+| `--no-prompt`                     | Skip prompts, use defaults                               |
+| `--enable-chrome-network-service` | Enable Network Service (for 3XX redirects)               |
+| `--no-verify-ssl`                 | Disable AWS SSL verification                             |
+| `--enable-chrome-seamless-sso`    | Enable Microsoft Entra Seamless SSO                      |
+| `--no-disable-extensions`         | Keep browser extensions enabled                          |
+| `--disable-gpu`                   | Disable GPU acceleration                                 |
+| `--incognito`                     | Open the login flow in an incognito browser context      |
+| `--credential-process`            | Output credentials for AWS CLI credential_process        |
+| `--version (-v)`                  | Show version number                                      |
 
 ## Usage
 
@@ -195,6 +195,75 @@ Example stdout payload:
       "Expiration": "2026-01-01T00:00:00.000Z"
     }
 
+#### AWS CLI source_profile profiles
+
+az2aws can also refresh the source credentials for a standard AWS CLI
+`role_arn` / `source_profile` profile. If the requested profile has
+`role_arn` and `source_profile` but no `azure_*` keys, az2aws logs in with the
+source profile, writes credentials under that source profile, and leaves the
+AWS CLI to perform the final AssumeRole:
+
+    [profile az2aws-source-prod]
+    azure_tenant_id = ...
+    azure_app_id_uri = ...
+    azure_default_role_arn = arn:aws:iam::123456789012:role/Az2awsSourceRole
+    azure_default_duration_hours = 1
+
+    [profile app-prod-admin]
+    role_arn = arn:aws:iam::123456789012:role/ExampleAdminRole
+    source_profile = az2aws-source-prod
+    region = ap-northeast-1
+    output = yaml
+
+    az2aws --profile app-prod-admin
+
+After `az2aws --profile app-prod-admin` refreshes the source credentials, use
+the AWS CLI target profile normally:
+
+    aws s3 ls --profile app-prod-admin
+
+#### azaws compatibility
+
+az2aws can reuse AWS CLI profiles created by the `azaws` OSS tool, such as
+[`frontchug/azaws`](https://github.com/frontchug/azaws), when they follow the
+same source-profile pattern:
+
+    [profile azaws-source-prod]
+    azure_tenant_id = 00000000-0000-0000-0000-000000000000
+    azure_app_id = `https://signin.aws.amazon.com/saml#example-prod`
+    azure_duration_hours = 12
+    region = ap-northeast-1
+
+    [profile app-prod-admin]
+    role_arn = arn:aws:iam::123456789012:role/ExampleAdminRole
+    source_profile = azaws-source-prod
+    region = ap-northeast-1
+    output = yaml
+
+Run az2aws against the AWS CLI target profile:
+
+    az2aws --profile app-prod-admin
+
+That is the only az2aws command needed to refresh credentials. Afterward, use
+the AWS CLI target profile normally:
+
+    aws s3 ls --profile app-prod-admin
+
+az2aws follows `source_profile`, refreshes credentials for the source profile,
+and leaves the AWS CLI to perform the final `role_arn` AssumeRole when you run
+AWS CLI commands with the target profile. For azaws compatibility, az2aws
+accepts `azure_app_id` as an alias for `azure_app_id_uri` and
+`azure_duration_hours` as an alias for `azure_default_duration_hours`.
+
+If the source profile can return multiple SAML roles, add
+`azure_default_role_arn` to make non-interactive runs deterministic:
+
+    [profile azaws-source-prod]
+    azure_tenant_id = 00000000-0000-0000-0000-000000000000
+    azure_app_id = https://signin.aws.amazon.com/saml#example-prod
+    azure_default_role_arn = arn:aws:iam::123456789012:role/Az2awsSourceRole
+    azure_duration_hours = 12
+
 #### Environment Variables
 
 You can set defaults via environment variables (use with `--no-prompt`):
@@ -249,6 +318,7 @@ yourself. If you want the browser to stay visible while az2aws still auto-fills
 the login steps, use `--mode debug`.
 
 **Tips:**
+
 - Set `AWS_PROFILE` env var instead of using `--profile`
 - Use `--mode gui --disable-gpu` on VMs or if rendering fails
 - Set `https_proxy` or `http_proxy` env var for corporate proxy
@@ -267,7 +337,7 @@ incompatibility manually (e.g., update az2aws, or use a different
 
 If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
 Try:
- `--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
+`--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
 
 If your Microsoft account requires a saved passkey prompt before the username
 or password page appears, that flow is unsupported in `az2aws --mode cli`.

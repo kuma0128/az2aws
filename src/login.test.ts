@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { login } from "./login";
 import { CLIError } from "./CLIError";
+import type { ProfileConfig } from "./awsConfig";
 
 vi.mock("inquirer", () => ({
   default: {
@@ -791,6 +792,103 @@ describe("login", () => {
 
       expect(result.azure_tenant_id).toBe("env-tenant");
       expect(result.azure_default_username).toBe("env-user@example.com");
+    });
+
+    it("should resolve AWS CLI assume-role profiles through source_profile", async () => {
+      const targetProfile = {
+        role_arn: "arn:aws:iam::123456789012:role/TargetRole",
+        source_profile: "azaws-source",
+        region: "ap-northeast-1",
+      } as unknown as ProfileConfig;
+      const sourceProfile = {
+        azure_tenant_id: "source-tenant",
+        azure_app_id_uri: "https://source.example.com",
+        azure_default_username: "source-user@example.com",
+        azure_default_role_arn: "arn:aws:iam::123456789012:role/SourceRole",
+        azure_default_duration_hours: "2",
+        azure_default_remember_me: false,
+        region: "",
+      };
+
+      vi.mocked(awsConfig.getProfileConfigAsync).mockImplementation(
+        (profileName: string) => {
+          if (profileName === "target") {
+            return Promise.resolve(targetProfile);
+          }
+
+          if (profileName === "azaws-source") {
+            return Promise.resolve(sourceProfile);
+          }
+
+          return Promise.resolve(undefined);
+        },
+      );
+
+      const result = await login._loadProfileAsync("target");
+
+      expect(result.azure_tenant_id).toBe("source-tenant");
+      expect(result.azure_app_id_uri).toBe("https://source.example.com");
+      expect(result.azure_default_role_arn).toBe(
+        "arn:aws:iam::123456789012:role/SourceRole",
+      );
+      expect(result.region).toBe("ap-northeast-1");
+    });
+
+    it("should normalize AWS CLI source_profile settings created by compatible SSO tools", async () => {
+      const targetProfile = {
+        role_arn: "arn:aws:iam::123456789012:role/TargetRole",
+        source_profile: "az2aws-source-prod",
+        region: "ap-northeast-1",
+      } as unknown as ProfileConfig;
+      const sourceProfile = {
+        azure_tenant_id: "source-tenant",
+        azure_app_id: "`https://signin.aws.amazon.com/saml\\#example-prod`",
+        azure_duration_hours: "12",
+        region: "",
+      } as unknown as ProfileConfig;
+
+      vi.mocked(awsConfig.getProfileConfigAsync).mockImplementation(
+        (profileName: string) => {
+          if (profileName === "target") {
+            return Promise.resolve(targetProfile);
+          }
+
+          if (profileName === "az2aws-source-prod") {
+            return Promise.resolve(sourceProfile);
+          }
+
+          return Promise.resolve(undefined);
+        },
+      );
+
+      const result = await login._loadProfileAsync("target");
+
+      expect(result.azure_tenant_id).toBe("source-tenant");
+      expect(result.azure_app_id_uri).toBe(
+        "https://signin.aws.amazon.com/saml#example-prod",
+      );
+      expect(result.azure_default_duration_hours).toBe("12");
+      expect(result.region).toBe("ap-northeast-1");
+    });
+
+    it("should reject circular source_profile references", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockImplementation(
+        (profileName: string) =>
+          Promise.resolve({
+            role_arn: `arn:aws:iam::123456789012:role/${profileName}`,
+            source_profile: profileName === "first" ? "second" : "first",
+            region: "us-east-1",
+          } as unknown as ProfileConfig),
+      );
+
+      const error = await login
+        ._loadProfileAsync("first")
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Circular source_profile reference detected: first -> second -> first.",
+      );
     });
   });
 
