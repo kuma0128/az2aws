@@ -195,70 +195,27 @@ Example stdout payload:
       "Expiration": "2026-01-01T00:00:00.000Z"
     }
 
-#### AWS CLI source_profile profiles
-
-az2aws can also refresh the source credentials for a standard AWS CLI
-`role_arn` / `source_profile` profile. If the requested profile has
-`role_arn` and `source_profile` but no `azure_*` keys, az2aws logs in with the
-source profile, writes credentials under that source profile, and leaves the
-AWS CLI to perform the final AssumeRole:
-
-    [profile az2aws-source-prod]
-    azure_tenant_id = ...
-    azure_app_id_uri = ...
-    azure_default_role_arn = arn:aws:iam::123456789012:role/Az2awsSourceRole
-    azure_default_duration_hours = 1
-
-    [profile app-prod-admin]
-    role_arn = arn:aws:iam::123456789012:role/ExampleAdminRole
-    source_profile = az2aws-source-prod
-    region = ap-northeast-1
-    output = yaml
-
-    az2aws --profile app-prod-admin
-
-After `az2aws --profile app-prod-admin` refreshes the source credentials, use
-the AWS CLI target profile normally:
-
-    aws s3 ls --profile app-prod-admin
-
 #### azaws compatibility
 
 az2aws can reuse AWS CLI profiles created by the `azaws` OSS tool, such as
-[`frontchug/azaws`](https://github.com/frontchug/azaws), when they follow the
-same source-profile pattern:
+[`frontchug/azaws`](https://github.com/frontchug/azaws):
 
-    [profile azaws-source-prod]
+    [profile azaws-prod]
     azure_tenant_id = 00000000-0000-0000-0000-000000000000
     azure_app_id = `https://signin.aws.amazon.com/saml#example-prod`
     azure_duration_hours = 12
     region = ap-northeast-1
 
-    [profile app-prod-admin]
-    role_arn = arn:aws:iam::123456789012:role/ExampleAdminRole
-    source_profile = azaws-source-prod
-    region = ap-northeast-1
-    output = yaml
+    az2aws --profile azaws-prod
 
-Run az2aws against the AWS CLI target profile:
+For azaws compatibility, az2aws accepts `azure_app_id` as an alias for
+`azure_app_id_uri` and `azure_duration_hours` as an alias for
+`azure_default_duration_hours`.
 
-    az2aws --profile app-prod-admin
+If the profile can return multiple SAML roles, add `azure_default_role_arn` to
+make non-interactive runs deterministic:
 
-That is the only az2aws command needed to refresh credentials. Afterward, use
-the AWS CLI target profile normally:
-
-    aws s3 ls --profile app-prod-admin
-
-az2aws follows `source_profile`, refreshes credentials for the source profile,
-and leaves the AWS CLI to perform the final `role_arn` AssumeRole when you run
-AWS CLI commands with the target profile. For azaws compatibility, az2aws
-accepts `azure_app_id` as an alias for `azure_app_id_uri` and
-`azure_duration_hours` as an alias for `azure_default_duration_hours`.
-
-If the source profile can return multiple SAML roles, add
-`azure_default_role_arn` to make non-interactive runs deterministic:
-
-    [profile azaws-source-prod]
+    [profile azaws-prod]
     azure_tenant_id = 00000000-0000-0000-0000-000000000000
     azure_app_id = https://signin.aws.amazon.com/saml#example-prod
     azure_default_role_arn = arn:aws:iam::123456789012:role/Az2awsSourceRole
