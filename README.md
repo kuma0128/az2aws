@@ -120,23 +120,23 @@ https://snapcraft.io/az2aws
 
 ## Command Options
 
-| Option | Description |
-|--------|-------------|
-| `--profile (-p)` | Profile name to use. Default: `default` or `AWS_PROFILE` |
-| `--all-profiles (-a)` | Run for all configured profiles |
-| `--force-refresh (-f)` | Force refresh even if credentials are valid |
-| `--configure (-c)` | Configure the profile |
-| `--mode (-m) <mode>` | `cli` (default), `gui`, or `debug` |
-| `--no-sandbox` | Disable Puppeteer sandbox (needed on Linux) |
-| `--no-prompt` | Skip prompts, use defaults |
-| `--enable-chrome-network-service` | Enable Network Service (for 3XX redirects) |
-| `--no-verify-ssl` | Disable AWS SSL verification |
-| `--enable-chrome-seamless-sso` | Enable Microsoft Entra Seamless SSO |
-| `--no-disable-extensions` | Keep browser extensions enabled |
-| `--disable-gpu` | Disable GPU acceleration |
-| `--incognito` | Open the login flow in an incognito browser context |
-| `--credential-process` | Output credentials for AWS CLI credential_process |
-| `--version (-v)` | Show version number |
+| Option                            | Description                                              |
+| --------------------------------- | -------------------------------------------------------- |
+| `--profile (-p)`                  | Profile name to use. Default: `default` or `AWS_PROFILE` |
+| `--all-profiles (-a)`             | Run for all configured profiles                          |
+| `--force-refresh (-f)`            | Force refresh even if credentials are valid              |
+| `--configure (-c)`                | Configure the profile                                    |
+| `--mode (-m) <mode>`              | `cli` (default), `gui`, or `debug`                       |
+| `--no-sandbox`                    | Disable Puppeteer sandbox (needed on Linux)              |
+| `--no-prompt`                     | Skip prompts, use defaults                               |
+| `--enable-chrome-network-service` | Enable Network Service (for 3XX redirects)               |
+| `--no-verify-ssl`                 | Disable AWS SSL verification                             |
+| `--enable-chrome-seamless-sso`    | Enable Microsoft Entra Seamless SSO                      |
+| `--no-disable-extensions`         | Keep browser extensions enabled                          |
+| `--disable-gpu`                   | Disable GPU acceleration                                 |
+| `--incognito`                     | Open the login flow in an incognito browser context      |
+| `--credential-process`            | Output credentials for AWS CLI credential_process        |
+| `--version (-v)`                  | Show version number                                      |
 
 ## Usage
 
@@ -195,13 +195,39 @@ Example stdout payload:
       "Expiration": "2026-01-01T00:00:00.000Z"
     }
 
+#### azaws compatibility
+
+az2aws can reuse AWS CLI profiles created by the `azaws` OSS tool, such as
+[`frontchug/azaws`](https://github.com/frontchug/azaws):
+
+    [profile azaws-prod]
+    azure_tenant_id = 00000000-0000-0000-0000-000000000000
+    azure_app_id = `https://signin.aws.amazon.com/saml#example-prod`
+    azure_duration_hours = 12
+    region = ap-northeast-1
+
+    az2aws --profile azaws-prod
+
+For azaws compatibility, az2aws accepts `azure_app_id` as an alias for
+`azure_app_id_uri` and `azure_duration_hours` as an alias for
+`azure_default_duration_hours`.
+
+If the profile can return multiple SAML roles, add `azure_default_role_arn` to
+make non-interactive runs deterministic:
+
+    [profile azaws-prod]
+    azure_tenant_id = 00000000-0000-0000-0000-000000000000
+    azure_app_id = https://signin.aws.amazon.com/saml#example-prod
+    azure_default_role_arn = arn:aws:iam::123456789012:role/Az2awsSourceRole
+    azure_duration_hours = 12
+
 #### Environment Variables
 
 You can set defaults via environment variables (use with `--no-prompt`):
 
-- `AZURE_TENANT_ID` / `AZURE_APP_ID_URI` - Microsoft Entra ID settings
+- `AZURE_TENANT_ID` / `AZURE_APP_ID_URI` (`AZURE_APP_ID` alias) - Microsoft Entra ID settings
 - `AZURE_DEFAULT_USERNAME` / `AZURE_DEFAULT_PASSWORD` - Credentials
-- `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` - AWS role settings
+- `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` (`AZURE_DURATION_HOURS` alias) - AWS role settings
 
 When using `--no-prompt` with multiple available roles, you must set
 `AZURE_DEFAULT_ROLE_ARN` (or configure `azure_default_role_arn`) so the CLI can
@@ -249,6 +275,7 @@ yourself. If you want the browser to stay visible while az2aws still auto-fills
 the login steps, use `--mode debug`.
 
 **Tips:**
+
 - Set `AWS_PROFILE` env var instead of using `--profile`
 - Use `--mode gui --disable-gpu` on VMs or if rendering fails
 - Set `https_proxy` or `http_proxy` env var for corporate proxy
@@ -267,7 +294,7 @@ incompatibility manually (e.g., update az2aws, or use a different
 
 If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
 Try:
- `--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
+`--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
 
 If your Microsoft account requires a saved passkey prompt before the username
 or password page appears, that flow is unsupported in `az2aws --mode cli`.

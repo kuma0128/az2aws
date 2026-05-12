@@ -73,12 +73,38 @@ import { awsConfig } from "./awsConfig";
 import { states } from "./loginStates";
 import { paths } from "./paths";
 
+const AZURE_ENV_KEYS = [
+  "azure_tenant_id",
+  "AZURE_TENANT_ID",
+  "azure_app_id_uri",
+  "AZURE_APP_ID_URI",
+  "azure_app_id",
+  "AZURE_APP_ID",
+  "azure_default_username",
+  "AZURE_DEFAULT_USERNAME",
+  "azure_default_password",
+  "AZURE_DEFAULT_PASSWORD",
+  "azure_default_role_arn",
+  "AZURE_DEFAULT_ROLE_ARN",
+  "azure_default_duration_hours",
+  "AZURE_DEFAULT_DURATION_HOURS",
+  "azure_duration_hours",
+  "AZURE_DURATION_HOURS",
+];
+
+function clearAzureEnv() {
+  for (const key of AZURE_ENV_KEYS) {
+    delete process.env[key];
+  }
+}
+
 describe("login", () => {
   describe("_loadProfileFromEnv", () => {
     const originalEnv = process.env;
 
     beforeEach(() => {
       process.env = { ...originalEnv };
+      clearAzureEnv();
     });
 
     afterEach(() => {
@@ -86,19 +112,6 @@ describe("login", () => {
     });
 
     it("should return empty object when no env vars are set", () => {
-      delete process.env.azure_tenant_id;
-      delete process.env.AZURE_TENANT_ID;
-      delete process.env.azure_app_id_uri;
-      delete process.env.AZURE_APP_ID_URI;
-      delete process.env.azure_default_username;
-      delete process.env.AZURE_DEFAULT_USERNAME;
-      delete process.env.azure_default_password;
-      delete process.env.AZURE_DEFAULT_PASSWORD;
-      delete process.env.azure_default_role_arn;
-      delete process.env.AZURE_DEFAULT_ROLE_ARN;
-      delete process.env.azure_default_duration_hours;
-      delete process.env.AZURE_DEFAULT_DURATION_HOURS;
-
       const result = login._loadProfileFromEnv();
       expect(result).toEqual({});
     });
@@ -132,20 +145,24 @@ describe("login", () => {
     it("should read all supported env vars", () => {
       process.env.AZURE_TENANT_ID = "tenant-id";
       process.env.AZURE_APP_ID_URI = "app-id-uri";
+      process.env.AZURE_APP_ID = "app-id";
       process.env.AZURE_DEFAULT_USERNAME = "user@example.com";
       process.env.AZURE_DEFAULT_PASSWORD = "secret";
       process.env.AZURE_DEFAULT_ROLE_ARN = "arn:aws:iam::123456789:role/Test";
       process.env.AZURE_DEFAULT_DURATION_HOURS = "8";
+      process.env.AZURE_DURATION_HOURS = "10";
 
       const result = login._loadProfileFromEnv();
       expect(result.azure_tenant_id).toBe("tenant-id");
       expect(result.azure_app_id_uri).toBe("app-id-uri");
+      expect(result.azure_app_id).toBe("app-id");
       expect(result.azure_default_username).toBe("user@example.com");
       expect(result.azure_default_password).toBe("secret");
       expect(result.azure_default_role_arn).toBe(
         "arn:aws:iam::123456789:role/Test",
       );
       expect(result.azure_default_duration_hours).toBe("8");
+      expect(result.azure_duration_hours).toBe("10");
     });
   });
 
@@ -716,6 +733,7 @@ describe("login", () => {
     beforeEach(() => {
       vi.clearAllMocks();
       process.env = { ...originalEnv };
+      clearAzureEnv();
       vi.spyOn(console, "log").mockImplementation(() => {});
     });
 
@@ -791,6 +809,25 @@ describe("login", () => {
 
       expect(result.azure_tenant_id).toBe("env-tenant");
       expect(result.azure_default_username).toBe("env-user@example.com");
+    });
+
+    it("should normalize canonical quoted profile settings", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "test-tenant",
+        azure_app_id_uri: "`https://signin.aws.amazon.com/saml\\#example-prod`",
+        azure_default_username: "user@example.com",
+        azure_default_role_arn: "arn:aws:iam::123456789:role/Test",
+        azure_default_duration_hours: "'8'",
+        azure_default_remember_me: true,
+        region: "us-west-2",
+      });
+
+      const result = await login._loadProfileAsync("valid");
+
+      expect(result.azure_app_id_uri).toBe(
+        "https://signin.aws.amazon.com/saml#example-prod",
+      );
+      expect(result.azure_default_duration_hours).toBe("8");
     });
   });
 
@@ -1067,20 +1104,10 @@ describe("login", () => {
       aws_session_token: "session-token",
       aws_expiration: "2024-01-01T00:00:00.000Z",
     };
-    const azureEnvVars = [
-      "azure_tenant_id",
-      "azure_app_id_uri",
-      "azure_default_username",
-      "azure_default_password",
-      "azure_default_role_arn",
-      "azure_default_duration_hours",
-    ];
-
     beforeEach(() => {
       vi.clearAllMocks();
-      for (const key of azureEnvVars) {
+      for (const key of AZURE_ENV_KEYS) {
         vi.stubEnv(key, "");
-        vi.stubEnv(key.toUpperCase(), "");
       }
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "error").mockImplementation(() => {});
@@ -3253,6 +3280,7 @@ describe("login", () => {
     });
 
     afterEach(() => {
+      vi.restoreAllMocks();
       Object.keys(originalPaths).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];

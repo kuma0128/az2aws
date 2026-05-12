@@ -478,5 +478,83 @@ describe("configureProfileAsync", () => {
 
       expect(durationHoursQuestion.default).toBe(1);
     });
+
+    it("should use azure_app_id as default for appIdUri when azure_app_id_uri is missing (azaws compat)", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "existing-tenant",
+        azure_app_id_uri: "",
+        azure_app_id: "https://signin.aws.amazon.com/saml#example-prod",
+        azure_default_username: "",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "",
+      });
+      vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
+        undefined,
+      );
+
+      let capturedQuestions: unknown[] = [];
+      vi.mocked(inquirer.prompt).mockImplementation((questions) => {
+        capturedQuestions = questions as unknown[];
+        return Promise.resolve({
+          tenantId: "tenant",
+          appIdUri: "https://signin.aws.amazon.com/saml#example-prod",
+          username: "",
+          rememberMe: "false",
+          defaultRoleArn: "",
+          defaultDurationHours: "1",
+          region: "",
+        });
+      });
+
+      await configureProfileAsync("azaws-prod");
+
+      const appIdUriQuestion = capturedQuestions.find(
+        (q: unknown) => (q as { name: string }).name === "appIdUri",
+      ) as { default: string };
+
+      expect(appIdUriQuestion.default).toBe(
+        "https://signin.aws.amazon.com/saml#example-prod",
+      );
+    });
+
+    it("should prefer azure_app_id_uri over azure_app_id when both are set", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "existing-tenant",
+        azure_app_id_uri: "https://uri.example.com",
+        azure_app_id: "https://id.example.com",
+        azure_default_username: "",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "",
+      });
+      vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
+        undefined,
+      );
+
+      let capturedQuestions: unknown[] = [];
+      vi.mocked(inquirer.prompt).mockImplementation((questions) => {
+        capturedQuestions = questions as unknown[];
+        return Promise.resolve({
+          tenantId: "tenant",
+          appIdUri: "https://uri.example.com",
+          username: "",
+          rememberMe: "false",
+          defaultRoleArn: "",
+          defaultDurationHours: "1",
+          region: "",
+        });
+      });
+
+      await configureProfileAsync("mixed");
+
+      const appIdUriQuestion = capturedQuestions.find(
+        (q: unknown) => (q as { name: string }).name === "appIdUri",
+      ) as { default: string };
+
+      expect(appIdUriQuestion.default).toBe("https://uri.example.com");
+    });
   });
 });

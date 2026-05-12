@@ -26,6 +26,8 @@ const AZURE_ENV_KEYS = [
   "AZURE_TENANT_ID",
   "azure_app_id_uri",
   "AZURE_APP_ID_URI",
+  "azure_app_id",
+  "AZURE_APP_ID",
   "azure_default_username",
   "AZURE_DEFAULT_USERNAME",
   "azure_default_password",
@@ -34,6 +36,8 @@ const AZURE_ENV_KEYS = [
   "AZURE_DEFAULT_ROLE_ARN",
   "azure_default_duration_hours",
   "AZURE_DEFAULT_DURATION_HOURS",
+  "azure_duration_hours",
+  "AZURE_DURATION_HOURS",
 ];
 
 describe("login integration: standard mode persists credentials to disk", () => {

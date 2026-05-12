@@ -268,10 +268,12 @@ export const login = {
     const options = [
       "azure_tenant_id",
       "azure_app_id_uri",
+      "azure_app_id",
       "azure_default_username",
       "azure_default_password",
       "azure_default_role_arn",
       "azure_default_duration_hours",
+      "azure_duration_hours",
     ];
     for (let i = 0; i < options.length; i++) {
       const opt = options[i];
@@ -309,14 +311,76 @@ export const login = {
     return `${match[1]}${REDACTED}:${match[2]}${REDACTED}`;
   },
 
+  _getProfileStringValue(profile: ProfileConfig, key: string): string {
+    const value = profile[key];
+    if (typeof value !== "string") {
+      return "";
+    }
+
+    const trimmedValue = value.trim();
+    if (trimmedValue.length < 2) {
+      return trimmedValue;
+    }
+
+    const firstChar = trimmedValue[0];
+    const lastChar = trimmedValue[trimmedValue.length - 1];
+    const quotePairs: Record<string, string> = {
+      '"': '"',
+      "'": "'",
+      "`": "`",
+    };
+
+    const unquotedValue =
+      quotePairs[firstChar] === lastChar
+        ? trimmedValue.slice(1, -1).trim()
+        : trimmedValue;
+
+    return unquotedValue.replace(/\\#/g, "#");
+  },
+
+  _normalizeProfileAliases(profile: ProfileConfig): ProfileConfig {
+    const normalizedProfile = { ...profile };
+    const appIdUri = this._getProfileStringValue(
+      normalizedProfile,
+      "azure_app_id_uri",
+    );
+    const appId = this._getProfileStringValue(
+      normalizedProfile,
+      "azure_app_id",
+    );
+    if (appIdUri) {
+      normalizedProfile.azure_app_id_uri = appIdUri;
+    } else if (appId) {
+      normalizedProfile.azure_app_id_uri = appId;
+    }
+
+    const defaultDurationHours = this._getProfileStringValue(
+      normalizedProfile,
+      "azure_default_duration_hours",
+    );
+    const durationHours = this._getProfileStringValue(
+      normalizedProfile,
+      "azure_duration_hours",
+    );
+    if (defaultDurationHours) {
+      normalizedProfile.azure_default_duration_hours = defaultDurationHours;
+    } else if (durationHours) {
+      normalizedProfile.azure_default_duration_hours = durationHours;
+    }
+
+    return normalizedProfile;
+  },
+
   // Load the profile
   async _loadProfileAsync(profileName: string): Promise<ProfileConfig> {
-    const profile = await awsConfig.getProfileConfigAsync(profileName);
+    const rawProfile = await awsConfig.getProfileConfigAsync(profileName);
 
-    if (!profile)
+    if (!rawProfile)
       throw new CLIError(
         `Unknown profile '${profileName}'. You must configure it first with --configure.`,
       );
+
+    let profile = this._normalizeProfileAliases(rawProfile);
 
     const env = this._loadProfileFromEnv();
     for (const prop in env) {
@@ -324,6 +388,7 @@ export const login = {
         profile[prop] = env[prop] === null ? profile[prop] : env[prop];
       }
     }
+    profile = this._normalizeProfileAliases(profile);
 
     if (!profile.azure_tenant_id || !profile.azure_app_id_uri)
       throw new CLIError(
