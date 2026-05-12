@@ -27,7 +27,7 @@ export async function configureProfileAsync(
       name: "appIdUri",
       message: "Azure App ID URI:",
       validate: (input: string): boolean => input.trim().length > 0,
-      default: profile && profile.azure_app_id_uri,
+      default: profile && (profile.azure_app_id_uri || profile.azure_app_id),
     },
     {
       type: "input" as const,
