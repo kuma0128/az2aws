@@ -41,10 +41,9 @@ export async function configureProfileAsync(
       message:
         "Stay logged in: skip authentication while refreshing aws credentials (true|false)",
       default:
-        (profile &&
-          profile.azure_default_remember_me &&
-          profile.azure_default_remember_me.toString()) ||
-        "false",
+        profile?.azure_default_remember_me === undefined
+          ? "true"
+          : profile.azure_default_remember_me.toString(),
       validate: (input: string): boolean | string => {
         if (input === "true" || input === "false") return true;
         return "Remember me must be either true or false";

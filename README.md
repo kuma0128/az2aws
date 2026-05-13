@@ -163,7 +163,8 @@ standard partition.
 
 #### Stay Logged In
 
-Enable "Stay logged in" during configuration to use `--no-prompt` without storing passwords:
+New profiles enable "Stay logged in" by default during configuration. This lets
+`az2aws` refresh AWS credentials with `--no-prompt` without storing passwords:
 
     az2aws --no-prompt
     az2aws --profile foo --no-prompt
