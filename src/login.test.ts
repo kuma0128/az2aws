@@ -857,71 +857,6 @@ describe("login", () => {
       vi.restoreAllMocks();
     });
 
-    it("should skip login when credentials are still valid", async () => {
-      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
-        azure_tenant_id: "tenant",
-        azure_app_id_uri: "app",
-        azure_default_username: "user",
-        azure_default_role_arn: "role",
-        azure_default_duration_hours: "1",
-        azure_default_remember_me: false,
-        region: "us-east-1",
-      });
-      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(false);
-
-      await login.loginAsync(
-        "default",
-        "cli",
-        true,
-        true,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-      );
-
-      expect(awsConfig.isProfileAboutToExpireAsync).toHaveBeenCalledWith(
-        "default",
-      );
-      expect(login._performLoginAsync).not.toHaveBeenCalled();
-      expect(console.log).toHaveBeenCalledWith(
-        "Credentials for profile 'default' are still valid; skipping login. Use --force-refresh to renew them.",
-      );
-    });
-
-    it("should refresh when forceRefresh is true even if credentials are still valid", async () => {
-      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
-        azure_tenant_id: "tenant",
-        azure_app_id_uri: "app",
-        azure_default_username: "user",
-        azure_default_role_arn: "role",
-        azure_default_duration_hours: "1",
-        azure_default_remember_me: false,
-        region: "us-east-1",
-      });
-      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(false);
-
-      await login.loginAsync(
-        "default",
-        "cli",
-        true,
-        true,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        true,
-      );
-
-      expect(awsConfig.isProfileAboutToExpireAsync).not.toHaveBeenCalled();
-      expect(login._performLoginAsync).toHaveBeenCalled();
-    });
-
     it("should log region defaults when region is not set", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
         azure_tenant_id: "tenant",
@@ -1356,8 +1291,6 @@ describe("login", () => {
         false,
         false,
         false,
-        false,
-        true,
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
         "profile2",
@@ -1370,8 +1303,6 @@ describe("login", () => {
         false,
         false,
         false,
-        false,
-        true,
       );
     });
 
@@ -1414,16 +1345,12 @@ describe("login", () => {
         false,
         false,
         false,
-        false,
-        false,
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
         "profile3",
         "cli",
         true,
         true,
-        false,
-        false,
         false,
         false,
         false,
@@ -1547,8 +1474,6 @@ describe("login", () => {
         "cli",
         true,
         true,
-        false,
-        false,
         false,
         false,
         false,

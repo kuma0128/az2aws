@@ -130,7 +130,6 @@ async function runAsync(): Promise<void> {
         disableGpu,
         incognito,
         credentialProcess,
-        forceRefresh,
       );
     }
   } catch (err: unknown) {

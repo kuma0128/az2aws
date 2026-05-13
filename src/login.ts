@@ -116,7 +116,6 @@ export const login = {
     disableGpu: boolean,
     incognito = false,
     credentialProcess = false,
-    forceRefresh = false,
   ): Promise<void> {
     const originalConsoleLog = console.log;
     const effectiveNoPrompt = credentialProcess ? true : noPrompt;
@@ -141,18 +140,6 @@ export const login = {
       }
 
       const profile = await this._loadProfileAsync(profileName);
-      if (!credentialProcess && !forceRefresh) {
-        const isAboutToExpire =
-          await awsConfig.isProfileAboutToExpireAsync(profileName);
-        if (isAboutToExpire === false) {
-          console.log(
-            `Credentials for profile '${profileName}' are still valid; skipping login. Use --force-refresh to renew them.`,
-          );
-          return;
-        }
-      }
-
-      console.log(`Logging in with profile '${profileName}'...`);
       console.log(
         `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`,
       );
@@ -271,8 +258,6 @@ export const login = {
         noDisableExtensions,
         disableGpu,
         incognito,
-        false,
-        forceRefresh,
       );
     }
   },
@@ -410,6 +395,7 @@ export const login = {
         `Profile '${profileName}' is not configured properly.`,
       );
 
+    console.log(`Logging in with profile '${profileName}'...`);
     return profile;
   },
 
