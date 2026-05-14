@@ -384,8 +384,45 @@ describe("configureProfileAsync", () => {
       expect(rememberMeQuestion.default).toBe("true");
     });
 
-    it("should default rememberMe to 'false' when no profile exists", async () => {
+    it("should default rememberMe to 'true' when no profile exists", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+      vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
+        undefined,
+      );
+
+      let capturedQuestions: unknown[] = [];
+      vi.mocked(inquirer.prompt).mockImplementation((questions) => {
+        capturedQuestions = questions as unknown[];
+        return Promise.resolve({
+          tenantId: "tenant",
+          appIdUri: "https://app.example.com",
+          username: "",
+          rememberMe: "false",
+          defaultRoleArn: "",
+          defaultDurationHours: "1",
+          region: "",
+        });
+      });
+
+      await configureProfileAsync("test");
+
+      const rememberMeQuestion = capturedQuestions.find(
+        (q: unknown) => (q as { name: string }).name === "rememberMe",
+      ) as { default: string };
+
+      expect(rememberMeQuestion.default).toBe("true");
+    });
+
+    it("should use existing false rememberMe value as default when profile exists", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "existing-tenant",
+        azure_app_id_uri: "https://existing-app.example.com",
+        azure_default_username: "existing@example.com",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "4",
+        azure_default_remember_me: false,
+        region: "",
+      });
       vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
         undefined,
       );
