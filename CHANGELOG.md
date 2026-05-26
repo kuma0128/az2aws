@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.9.0](https://github.com/kuma0128/az2aws/compare/v1.8.1...v1.9.0) (2026-05-21)
+
+
+### Features
+
+* Enable Stay logged in by default ([#222](https://github.com/kuma0128/az2aws/issues/222)) ([7c027dc](https://github.com/kuma0128/az2aws/commit/7c027dcad1b5d40b35e74e39844d2157137468e8))
+* suggest gui mode when cli login stalls ([#215](https://github.com/kuma0128/az2aws/issues/215)) ([f4a5850](https://github.com/kuma0128/az2aws/commit/f4a58504b0802d39781abf2352f70a81248ac08e))
+* support azaws-compatible profiles ([#214](https://github.com/kuma0128/az2aws/issues/214)) ([20f1ecb](https://github.com/kuma0128/az2aws/commit/20f1ecbb0926f24bb6bba166b97eb10b39d91c95))
+
 ## [1.8.1](https://github.com/kuma0128/az2aws/compare/v1.8.0...v1.8.1) (2026-05-07)
 
 
