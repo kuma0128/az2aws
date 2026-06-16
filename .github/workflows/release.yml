@@ -14,7 +14,7 @@ on:
           - docker
           - snap
       docker_tag:
-        description: Docker tag source, e.g. v1.9.0 (required for Docker publish)
+        description: Git tag to publish, e.g. v1.9.0 (required for Docker publish)
         required: false
         type: string
   release:
@@ -30,6 +30,8 @@ jobs:
       publish_docker: ${{ steps.resolve.outputs.publish_docker }}
       publish_snap: ${{ steps.resolve.outputs.publish_snap }}
       docker_tag: ${{ steps.resolve.outputs.docker_tag }}
+      docker_image_tag: ${{ steps.resolve.outputs.docker_image_tag }}
+      source_ref: ${{ steps.resolve.outputs.source_ref }}
     steps:
       - id: resolve
         shell: bash
@@ -44,6 +46,8 @@ jobs:
             docker_tag="${{ inputs.docker_tag }}"
           fi
 
+          source_ref="$GITHUB_REF"
+          docker_image_tag=""
           publish_npm=false
           publish_docker=false
           publish_snap=false
@@ -69,9 +73,25 @@ jobs:
               ;;
           esac
 
-          if [ "$publish_docker" = "true" ] && [ -z "$docker_tag" ]; then
-            echo "::error::docker_tag is required when publishing Docker."
-            exit 1
+          if [ "$publish_docker" = "true" ]; then
+            if [ -z "$docker_tag" ]; then
+              echo "::error::docker_tag is required when publishing Docker."
+              exit 1
+            fi
+
+            source_ref="refs/tags/$docker_tag"
+            docker_image_tag="${docker_tag#v}"
+            docker_image_tag="$(printf '%s' "$docker_image_tag" | sed -E 's/[^A-Za-z0-9_.-]+/-/g; s/^[.-]+//; s/[.-]+$//')"
+
+            if [ -z "$docker_image_tag" ]; then
+              echo "::error::docker_tag did not produce a valid Docker image tag."
+              exit 1
+            fi
+
+            if [ "${#docker_image_tag}" -gt 128 ]; then
+              echo "::error::Docker image tag '$docker_image_tag' is ${#docker_image_tag} characters; Docker tags must be 128 characters or fewer."
+              exit 1
+            fi
           fi
 
           {
@@ -79,6 +99,8 @@ jobs:
             echo "publish_docker=$publish_docker"
             echo "publish_snap=$publish_snap"
             echo "docker_tag=$docker_tag"
+            echo "docker_image_tag=$docker_image_tag"
+            echo "source_ref=$source_ref"
           } >> "$GITHUB_OUTPUT"
 
   build:
@@ -90,6 +112,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
+          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -119,6 +142,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
+          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -146,6 +170,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
+          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -157,15 +182,14 @@ jobs:
         shell: bash
         env:
           IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/az2aws
-          DOCKER_TAG: ${{ needs.release-inputs.outputs.docker_tag }}
+          DOCKER_IMAGE_TAG: ${{ needs.release-inputs.outputs.docker_image_tag }}
         run: |
           set -euo pipefail
 
-          docker_tag="${DOCKER_TAG#v}"
-          docker_tag="$(echo "$docker_tag" | sed -E 's/[^A-Za-z0-9_.-]+/-/g; s/^[.-]+//; s/[.-]+$//')"
+          docker_tag="$DOCKER_IMAGE_TAG"
 
           if [ -z "$docker_tag" ]; then
-            echo "::error::docker_tag did not produce a valid Docker tag."
+            echo "::error::docker_image_tag is empty."
             exit 1
           fi
 
@@ -214,6 +238,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
+          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
