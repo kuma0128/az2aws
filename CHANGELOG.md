@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/kuma0128/az2aws/compare/v1.9.0...v1.9.1) (2026-06-16)
+
+
+### Bug Fixes
+
+* **deps:** bump commander from 14.0.3 to 15.0.0 ([f07f11b](https://github.com/kuma0128/az2aws/commit/f07f11b82cdfffb9b990c8058f4b2a01e3bcf35b))
+
 ## [1.9.0](https://github.com/kuma0128/az2aws/compare/v1.8.1...v1.9.0) (2026-05-21)
 
 
