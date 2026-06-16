@@ -5,6 +5,14 @@ FROM node:24-slim AS deps
 
 WORKDIR /az2aws
 
+# Install tools Puppeteer needs to download and extract Chrome
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    unzip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Place Puppeteer's Chrome under the workdir for easy COPY to final stage
 ENV PUPPETEER_CACHE_DIR=/az2aws/.cache/puppeteer
 # Skip chrome-headless-shell download (this project uses full Chrome only)
