@@ -42,8 +42,8 @@ jobs:
             publish_target="all"
             docker_tag="${{ github.event.release.tag_name }}"
           else
-            publish_target="${{ inputs.publish_target }}"
-            docker_tag="${{ inputs.docker_tag }}"
+            publish_target="${{ github.event.inputs.publish_target }}"
+            docker_tag="${{ github.event.inputs.docker_tag }}"
           fi
 
           source_ref="$GITHUB_REF"
@@ -74,12 +74,25 @@ jobs:
           esac
 
           if [ "$publish_docker" = "true" ]; then
+            docker_tag="$(printf '%s' "$docker_tag" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+
             if [ -z "$docker_tag" ]; then
               echo "::error::docker_tag is required when publishing Docker."
               exit 1
             fi
 
-            source_ref="refs/tags/$docker_tag"
+            if [[ "$docker_tag" == *refs/* ]]; then
+              echo "::error::docker_tag must be a plain tag name such as 'v1.2.3', not a full ref."
+              exit 1
+            fi
+
+            expected_ref="refs/tags/$docker_tag"
+
+            if [ "$GITHUB_REF" != "$expected_ref" ]; then
+              echo "::error::Docker publishing must run from '$expected_ref', but this workflow is running from '$GITHUB_REF'."
+              exit 1
+            fi
+
             docker_image_tag="${docker_tag#v}"
             docker_image_tag="$(printf '%s' "$docker_image_tag" | sed -E 's/[^A-Za-z0-9_.-]+/-/g; s/^[.-]+//; s/[.-]+$//')"
 
