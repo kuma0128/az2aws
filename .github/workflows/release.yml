@@ -29,7 +29,6 @@ jobs:
       publish_npm: ${{ steps.resolve.outputs.publish_npm }}
       publish_docker: ${{ steps.resolve.outputs.publish_docker }}
       publish_snap: ${{ steps.resolve.outputs.publish_snap }}
-      docker_tag: ${{ steps.resolve.outputs.docker_tag }}
       docker_image_tag: ${{ steps.resolve.outputs.docker_image_tag }}
       source_ref: ${{ steps.resolve.outputs.source_ref }}
     steps:
@@ -118,7 +117,6 @@ jobs:
             echo "publish_npm=$publish_npm"
             echo "publish_docker=$publish_docker"
             echo "publish_snap=$publish_snap"
-            echo "docker_tag=$docker_tag"
             echo "docker_image_tag=$docker_image_tag"
             echo "source_ref=$source_ref"
           } >> "$GITHUB_OUTPUT"
