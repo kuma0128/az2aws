@@ -2,13 +2,127 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_target:
+        description: What to publish
+        required: true
+        default: docker
+        type: choice
+        options:
+          - all
+          - npm
+          - docker
+          - snap
+      docker_tag:
+        description: Git tag to publish, e.g. v1.9.0 (required for Docker publish)
+        required: false
+        type: string
   release:
     types: [published]
 
 permissions: {}
 
 jobs:
+  release-inputs:
+    runs-on: ubuntu-slim
+    outputs:
+      publish_npm: ${{ steps.resolve.outputs.publish_npm }}
+      publish_docker: ${{ steps.resolve.outputs.publish_docker }}
+      publish_snap: ${{ steps.resolve.outputs.publish_snap }}
+      docker_image_tag: ${{ steps.resolve.outputs.docker_image_tag }}
+      source_ref: ${{ steps.resolve.outputs.source_ref }}
+    steps:
+      - id: resolve
+        shell: bash
+        env:
+          DISPATCH_DOCKER_TAG: ${{ github.event.inputs.docker_tag }}
+          DISPATCH_PUBLISH_TARGET: ${{ github.event.inputs.publish_target }}
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            publish_target="all"
+            docker_tag="$RELEASE_TAG_NAME"
+          else
+            publish_target="$DISPATCH_PUBLISH_TARGET"
+            docker_tag="$DISPATCH_DOCKER_TAG"
+          fi
+
+          source_ref="$GITHUB_REF"
+          docker_image_tag=""
+          publish_npm=false
+          publish_docker=false
+          publish_snap=false
+
+          case "$publish_target" in
+            all)
+              publish_npm=true
+              publish_docker=true
+              publish_snap=true
+              ;;
+            npm)
+              publish_npm=true
+              ;;
+            docker)
+              publish_docker=true
+              ;;
+            snap)
+              publish_snap=true
+              ;;
+            *)
+              echo "::error::Unsupported publish_target: $publish_target"
+              exit 1
+              ;;
+          esac
+
+          if [ "$publish_docker" = "true" ]; then
+            if [ -z "$docker_tag" ]; then
+              echo "::error::docker_tag is required when publishing Docker."
+              exit 1
+            fi
+
+            if [[ "$docker_tag" =~ [[:space:]] ]] || [[ "$docker_tag" =~ [[:cntrl:]] ]]; then
+              echo "::error::docker_tag must not contain whitespace or control characters."
+              exit 1
+            fi
+
+            if [[ "$docker_tag" == *refs/* ]]; then
+              echo "::error::docker_tag must be a plain tag name such as 'v1.2.3', not a full ref."
+              exit 1
+            fi
+
+            expected_ref="refs/tags/$docker_tag"
+
+            if [ "$GITHUB_REF" != "$expected_ref" ]; then
+              echo "::error::Docker publishing must run from '$expected_ref', but this workflow is running from '$GITHUB_REF'."
+              exit 1
+            fi
+
+            docker_image_tag="${docker_tag#v}"
+            docker_image_tag="$(printf '%s' "$docker_image_tag" | sed -E 's/[^A-Za-z0-9_.-]+/-/g; s/^[.-]+//; s/[.-]+$//')"
+
+            if [ -z "$docker_image_tag" ]; then
+              echo "::error::docker_tag did not produce a valid Docker image tag."
+              exit 1
+            fi
+
+            if [ "${#docker_image_tag}" -gt 128 ]; then
+              echo "::error::Docker image tag '$docker_image_tag' is ${#docker_image_tag} characters; Docker tags must be 128 characters or fewer."
+              exit 1
+            fi
+          fi
+
+          {
+            echo "publish_npm=$publish_npm"
+            echo "publish_docker=$publish_docker"
+            echo "publish_snap=$publish_snap"
+            echo "docker_image_tag=$docker_image_tag"
+            echo "source_ref=$source_ref"
+          } >> "$GITHUB_OUTPUT"
+
   build:
+    needs: release-inputs
     runs-on: ubuntu-slim
     permissions:
       contents: read
@@ -16,6 +130,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
+          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -33,7 +148,10 @@ jobs:
           path: lib
 
   publish-npm:
-    needs: build
+    needs:
+      - release-inputs
+      - build
+    if: needs.release-inputs.outputs.publish_npm == 'true'
     runs-on: ubuntu-slim
     permissions:
       contents: read
@@ -42,6 +160,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
+          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -58,7 +177,10 @@ jobs:
         run: npm publish
 
   publish-docker:
-    needs: build
+    needs:
+      - release-inputs
+      - build
+    if: needs.release-inputs.outputs.publish_docker == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -66,22 +188,43 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
+          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: lib
           path: lib
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
-        with:
-          images: ${{ vars.DOCKERHUB_USERNAME }}/az2aws
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest
+      - name: Prepare Docker tags
+        id: docker-tags
+        shell: bash
+        env:
+          IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/az2aws
+          DOCKER_IMAGE_TAG: ${{ needs.release-inputs.outputs.docker_image_tag }}
+        run: |
+          set -euo pipefail
+
+          docker_tag="$DOCKER_IMAGE_TAG"
+
+          if [ -z "$docker_tag" ]; then
+            echo "::error::docker_image_tag is empty."
+            exit 1
+          fi
+
+          tags=("$IMAGE_NAME:$docker_tag")
+
+          if [[ "$docker_tag" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            tags+=("$IMAGE_NAME:${BASH_REMATCH[1]}.${BASH_REMATCH[2]}")
+            tags+=("$IMAGE_NAME:${BASH_REMATCH[1]}")
+            tags+=("$IMAGE_NAME:latest")
+          fi
+
+          {
+            echo "tags<<EOF"
+            printf '%s\n' "${tags[@]}"
+            echo "EOF"
+            echo "version=$docker_tag"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Login to DockerHub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
@@ -95,11 +238,17 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.docker-tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.docker-tags.outputs.version }}
 
   publish-snap:
-    needs: build
+    needs:
+      - release-inputs
+      - build
+    if: needs.release-inputs.outputs.publish_snap == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -107,6 +256,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
+          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
