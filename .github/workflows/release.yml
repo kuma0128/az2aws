@@ -35,15 +35,19 @@ jobs:
     steps:
       - id: resolve
         shell: bash
+        env:
+          DISPATCH_DOCKER_TAG: ${{ github.event.inputs.docker_tag }}
+          DISPATCH_PUBLISH_TARGET: ${{ github.event.inputs.publish_target }}
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
 
           if [ "$GITHUB_EVENT_NAME" = "release" ]; then
             publish_target="all"
-            docker_tag="${{ github.event.release.tag_name }}"
+            docker_tag="$RELEASE_TAG_NAME"
           else
-            publish_target="${{ github.event.inputs.publish_target }}"
-            docker_tag="${{ github.event.inputs.docker_tag }}"
+            publish_target="$DISPATCH_PUBLISH_TARGET"
+            docker_tag="$DISPATCH_DOCKER_TAG"
           fi
 
           source_ref="$GITHUB_REF"
@@ -74,10 +78,13 @@ jobs:
           esac
 
           if [ "$publish_docker" = "true" ]; then
-            docker_tag="$(printf '%s' "$docker_tag" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
-
             if [ -z "$docker_tag" ]; then
               echo "::error::docker_tag is required when publishing Docker."
+              exit 1
+            fi
+
+            if [[ "$docker_tag" =~ [[:space:]] ]] || [[ "$docker_tag" =~ [[:cntrl:]] ]]; then
+              echo "::error::docker_tag must not contain whitespace or control characters."
               exit 1
             fi
 
