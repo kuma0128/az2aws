@@ -1,6 +1,6 @@
 {
   "name": "az2aws",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "Use Azure AD SSO to log into the AWS CLI. A modern, actively maintained alternative to aws-azure-login.",
   "main": "lib/index.js",
   "author": {
