@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.2](https://github.com/kuma0128/az2aws/compare/v1.9.1...v1.9.2) (2026-07-02)
+
+
+### Bug Fixes
+
+* **deps:** resolve audit vulnerabilities in undici and esbuild ([#252](https://github.com/kuma0128/az2aws/issues/252)) ([2b12889](https://github.com/kuma0128/az2aws/commit/2b12889b2a2b6ba8fc289442986836e002f5c76f))
+* support docker-only release publishing ([#246](https://github.com/kuma0128/az2aws/issues/246)) ([7463ce1](https://github.com/kuma0128/az2aws/commit/7463ce11a33ff4c6728fa8d66d9f906a57d5c0c3))
+
 ## [1.9.1](https://github.com/kuma0128/az2aws/compare/v1.9.0...v1.9.1) (2026-06-16)
 
 
