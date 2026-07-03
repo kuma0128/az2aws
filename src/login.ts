@@ -27,6 +27,10 @@ import {
   redactUrlForLogs,
   shouldAllowSensitiveOutput,
 } from "./sensitiveOutput";
+import {
+  detectSystemChromeAsync,
+  isSystemChromeDetectionDisabled,
+} from "./systemChrome";
 
 const debug = _debug("az2aws");
 
@@ -665,8 +669,16 @@ export const login = {
         ignoreDefaultArgs,
       };
 
+      let usingAutoDetectedBrowser = false;
       if (paths.chromeBin) {
         launchParams.executablePath = paths.chromeBin;
+      } else if (!isSystemChromeDetectionDisabled()) {
+        const systemChrome = await detectSystemChromeAsync();
+        if (systemChrome) {
+          debug(`Using system browser: ${systemChrome}`);
+          launchParams.executablePath = systemChrome;
+          usingAutoDetectedBrowser = true;
+        }
       }
 
       try {
@@ -691,6 +703,15 @@ export const login = {
             retryDelay: 100,
           });
           await fs.mkdir(paths.chromium, { recursive: true });
+          browser = await puppeteer.launch(launchParams);
+        } else if (usingAutoDetectedBrowser) {
+          debug(
+            `System browser launch failed: ${formatDebugErrorMessage(e)}. Falling back to the bundled browser.`,
+          );
+          console.warn(
+            "The system browser failed to launch. Falling back to the bundled browser...",
+          );
+          delete launchParams.executablePath;
           browser = await puppeteer.launch(launchParams);
         } else {
           throw e;

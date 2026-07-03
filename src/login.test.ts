@@ -32,6 +32,8 @@ const {
   mockFsMkdtemp,
   mockFsReadFile,
   mockFsWriteFile,
+  mockDetectSystemChrome,
+  mockIsSystemChromeDetectionDisabled,
 } = vi.hoisted(() => {
   const mockSend = vi.fn();
   const mockHttpsProxyAgent = vi.fn();
@@ -41,6 +43,8 @@ const {
   const mockFsMkdtemp = vi.fn();
   const mockFsReadFile = vi.fn();
   const mockFsWriteFile = vi.fn();
+  const mockDetectSystemChrome = vi.fn();
+  const mockIsSystemChromeDetectionDisabled = vi.fn();
   return {
     mockSend,
     mockHttpsProxyAgent,
@@ -50,6 +54,8 @@ const {
     mockFsMkdtemp,
     mockFsReadFile,
     mockFsWriteFile,
+    mockDetectSystemChrome,
+    mockIsSystemChromeDetectionDisabled,
   };
 });
 
@@ -83,6 +89,13 @@ vi.mock("fs/promises", () => ({
 
 vi.mock("node:timers/promises", () => ({
   setTimeout: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Default behavior (both mocks return undefined): detection enabled but no
+// system browser found, so tests exercise the bundled-browser path.
+vi.mock("./systemChrome", () => ({
+  detectSystemChromeAsync: mockDetectSystemChrome,
+  isSystemChromeDetectionDisabled: mockIsSystemChromeDetectionDisabled,
 }));
 
 import inquirer from "inquirer";
@@ -2092,6 +2105,157 @@ describe("login", () => {
             "--profile-directory=CustomProfile",
           ]),
         }),
+      );
+    });
+
+    it("should use an auto-detected system browser when BROWSER_CHROME_BIN is not set", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = undefined;
+      mockDetectSystemChrome.mockResolvedValueOnce(
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      );
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      // The shared launch mock throws, which triggers the bundled-browser
+      // fallback and strips executablePath from the (shared) launch params
+      // object, so snapshot the value passed to each launch call instead.
+      const executablePathPerLaunch: (string | undefined)[] = [];
+      mockPuppeteerLaunch.mockImplementation(
+        (params: { executablePath?: string }) => {
+          executablePathPerLaunch.push(params.executablePath);
+          throw new Error("Mock launch error for testing");
+        },
+      );
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(executablePathPerLaunch[0]).toBe(
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Falling back to the bundled browser"),
+      );
+    });
+
+    it("should prefer BROWSER_CHROME_BIN over the auto-detected browser", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = "/custom/chrome";
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(mockDetectSystemChrome).not.toHaveBeenCalled();
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({ executablePath: "/custom/chrome" }),
+      );
+    });
+
+    it("should skip auto-detection when it is disabled", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = undefined;
+      mockIsSystemChromeDetectionDisabled.mockReturnValueOnce(true);
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(mockDetectSystemChrome).not.toHaveBeenCalled();
+      expect(capturedLaunchArgs).not.toEqual(
+        expect.objectContaining({ executablePath: expect.anything() }),
+      );
+    });
+
+    it("should fall back to the bundled browser when the system browser fails to launch", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = undefined;
+      mockDetectSystemChrome.mockResolvedValueOnce("/detected/system/chrome");
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      const executablePathPerLaunch: (string | undefined)[] = [];
+      mockPuppeteerLaunch.mockImplementation(
+        (params: { executablePath?: string }) => {
+          executablePathPerLaunch.push(params.executablePath);
+          throw new Error("Mock launch error for testing");
+        },
+      );
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw after the bundled-browser retry also fails
+      }
+
+      expect(executablePathPerLaunch).toEqual([
+        "/detected/system/chrome",
+        undefined,
+      ]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Falling back to the bundled browser"),
       );
     });
 

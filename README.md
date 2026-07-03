@@ -239,11 +239,18 @@ To avoid storing passwords in bash history, use a leading space:
     HISTCONTROL=ignoreboth
      export AZURE_DEFAULT_PASSWORD=mypassword
 
-#### Use an Existing Chrome Install and Profile
+#### Browser Selection
 
-Use your own Chrome installation by setting these environment variables:
+az2aws automatically uses your system Google Chrome (or Microsoft Edge) when
+one is installed, and falls back to the Chrome for Testing browser bundled
+with Puppeteer when no system browser is found or it fails to launch. Using
+a real browser matters because Microsoft Entra ID may treat the bundled
+automation browser as untrusted — for example refusing to reuse "Stay logged
+in" sessions. Firefox is not supported. Auto-detection is skipped in CI
+environments.
 
-- `BROWSER_CHROME_BIN` - Path to Chrome executable
+- `BROWSER_USE_SYSTEM_CHROME=0` - Always use the bundled browser
+- `BROWSER_CHROME_BIN` - Explicit path to a Chromium-based browser (overrides auto-detection)
 - `BROWSER_USER_DATA_DIR` - Chrome user data directory
 - `BROWSER_PROFILE_DIR` - Chrome profile name (e.g., "Default")
 
@@ -301,17 +308,12 @@ If you are prompted for your password on every login even though "Stay logged
 in" (`azure_default_remember_me`) is enabled, Microsoft Entra ID may be
 refusing to reuse sign-in sessions created by the Chrome for Testing browser
 bundled with Puppeteer, even though the session cookies are saved and sent
-correctly. Point az2aws at your regular Chrome installation with a dedicated
-automation profile:
-
-    # macOS
-    export BROWSER_CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    export BROWSER_USER_DATA_DIR="$HOME/.aws/chrome-profile"
-
-The first login still asks for your credentials; subsequent logins reuse the
-Entra session until it expires. Keep `BROWSER_USER_DATA_DIR` pointed at a
-dedicated directory (not your day-to-day Chrome profile) so az2aws never
-locks or modifies your normal browser data.
+correctly. az2aws avoids this by automatically preferring your system Chrome
+or Edge when one is installed (see "Browser Selection"). If no system browser
+was detected, or you opted out with `BROWSER_USE_SYSTEM_CHROME=0`, install
+Google Chrome or point `BROWSER_CHROME_BIN` at a Chromium-based browser.
+After switching browsers, the first login asks for your credentials once;
+subsequent logins reuse the Entra session until it expires.
 
 If your Microsoft account requires a saved passkey prompt before the username
 or password page appears, that flow is unsupported in `az2aws --mode cli`.
