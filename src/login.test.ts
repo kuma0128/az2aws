@@ -128,6 +128,10 @@ function clearAzureEnv() {
   }
 }
 
+function createEnoentError(): NodeJS.ErrnoException {
+  return Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+}
+
 describe("login", () => {
   describe("_loadProfileFromEnv", () => {
     const originalEnv = process.env;
@@ -2261,7 +2265,7 @@ describe("login", () => {
 
     it("should create a temporary profile with certificate auto-select in headless mode", async () => {
       mockFsMkdtemp.mockResolvedValueOnce("/tmp/az2aws-chromium-test");
-      mockFsReadFile.mockRejectedValueOnce(new Error("ENOENT"));
+      mockFsReadFile.mockRejectedValueOnce(createEnoentError());
 
       try {
         await login._performLoginAsync(
@@ -2304,7 +2308,7 @@ describe("login", () => {
       (paths as any).userDataDir = "/custom/user/data/dir";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (paths as any).profileDir = undefined;
-      mockFsReadFile.mockRejectedValueOnce(new Error("ENOENT"));
+      mockFsReadFile.mockRejectedValueOnce(createEnoentError());
 
       try {
         await login._performLoginAsync(
@@ -2910,6 +2914,7 @@ describe("login", () => {
       vi.spyOn(console, "warn").mockImplementation(() => {});
       mockFsRm.mockResolvedValue(undefined);
       mockFsMkdir.mockResolvedValue(undefined);
+      mockFsReadFile.mockRejectedValue(createEnoentError());
       Object.keys(paths).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
@@ -4281,7 +4286,7 @@ describe("configureAutomaticCertificateSelectionAsync", () => {
   };
 
   it("should seed the auto-select preference when the preferences file is missing", async () => {
-    mockFsReadFile.mockRejectedValue(new Error("ENOENT"));
+    mockFsReadFile.mockRejectedValue(createEnoentError());
 
     await configureAutomaticCertificateSelectionAsync(
       "/data/dir",
@@ -4391,6 +4396,109 @@ describe("configureAutomaticCertificateSelectionAsync", () => {
       false,
     );
 
+    expect(mockFsWriteFile).not.toHaveBeenCalled();
+  });
+
+  it("should append to existing user-managed entries instead of replacing them", async () => {
+    const userEntry = JSON.stringify({
+      pattern: "https://example.com",
+      filter: {},
+    });
+    mockFsReadFile.mockResolvedValue(
+      JSON.stringify({
+        profile: { managed_auto_select_certificate_for_urls: [userEntry] },
+      }),
+    );
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "Default",
+      true,
+    );
+
+    const { preferences } = readWrittenPreferences();
+    expect(
+      preferences.profile.managed_auto_select_certificate_for_urls,
+    ).toEqual([
+      userEntry,
+      JSON.stringify({
+        pattern: "https://[*.]microsoftonline.com",
+        filter: {},
+      }),
+    ]);
+  });
+
+  it("should not rewrite the preferences file when already seeded", async () => {
+    mockFsReadFile.mockResolvedValue(
+      JSON.stringify({
+        profile: {
+          managed_auto_select_certificate_for_urls: [
+            JSON.stringify({
+              pattern: "https://[*.]microsoftonline.com",
+              filter: {},
+            }),
+          ],
+        },
+      }),
+    );
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "Default",
+      true,
+    );
+
+    expect(mockFsWriteFile).not.toHaveBeenCalled();
+  });
+
+  it("should keep user-managed entries when removing the seeded entry", async () => {
+    const userEntry = JSON.stringify({
+      pattern: "https://example.com",
+      filter: {},
+    });
+    mockFsReadFile.mockResolvedValue(
+      JSON.stringify({
+        profile: {
+          managed_auto_select_certificate_for_urls: [
+            userEntry,
+            JSON.stringify({
+              pattern: "https://[*.]microsoftonline.com",
+              filter: {},
+            }),
+          ],
+        },
+      }),
+    );
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "Default",
+      false,
+    );
+
+    const { preferences } = readWrittenPreferences();
+    expect(
+      preferences.profile.managed_auto_select_certificate_for_urls,
+    ).toEqual([userEntry]);
+  });
+
+  it("should fail without writing when the preferences file is unreadable", async () => {
+    mockFsReadFile.mockRejectedValue(
+      Object.assign(new Error("EACCES"), { code: "EACCES" }),
+    );
+
+    await expect(
+      configureAutomaticCertificateSelectionAsync("/data/dir", "Default", true),
+    ).rejects.toThrow("EACCES");
+    expect(mockFsWriteFile).not.toHaveBeenCalled();
+  });
+
+  it("should fail without writing when the preferences file is corrupted", async () => {
+    mockFsReadFile.mockResolvedValue("{not valid json");
+
+    await expect(
+      configureAutomaticCertificateSelectionAsync("/data/dir", "Default", true),
+    ).rejects.toThrow();
     expect(mockFsWriteFile).not.toHaveBeenCalled();
   });
 });

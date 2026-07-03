@@ -134,18 +134,17 @@ const AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY =
 // Chrome honors the AutoSelectCertificateForUrls enterprise policy through
 // this profile preference. [*.]microsoftonline.com covers the Entra ID
 // certificate authentication hosts (certauth.login / device.login).
-const AUTO_SELECT_CLIENT_CERTIFICATE_URLS = [
-  JSON.stringify({
-    pattern: "https://[*.]microsoftonline.com",
-    filter: {},
-  }),
-];
+const AUTO_SELECT_CERTIFICATE_PREFERENCE = JSON.stringify({
+  pattern: "https://[*.]microsoftonline.com",
+  filter: {},
+});
 
 /**
  * Chrome shows a native dialog when the IdP requests a client certificate,
  * which headless mode cannot display. Seeding this preference makes Chrome
- * auto-select the certificate instead of hanging. When disabling, only a seed
- * that az2aws itself wrote is removed so user-managed settings stay intact.
+ * auto-select the certificate instead of hanging. The az2aws entry is merged
+ * with (and later removed from) any existing entries so user-managed
+ * settings stay intact.
  */
 export async function configureAutomaticCertificateSelectionAsync(
   userDataDir: string,
@@ -163,11 +162,17 @@ export async function configureAutomaticCertificateSelectionAsync(
     const parsed: unknown = JSON.parse(
       await fs.readFile(preferencesPath, "utf8"),
     );
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      preferences = parsed as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Preferences file has an unexpected format");
     }
-  } catch {
-    // Missing or unreadable preferences; start from an empty file.
+    preferences = parsed as Record<string, unknown>;
+  } catch (error) {
+    // Only a missing file is safe to create from scratch. Any other failure
+    // (locked, unreadable, corrupted) could belong to a real Chrome profile
+    // that must not be overwritten, so bail out without writing.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
   }
 
   const profileSection =
@@ -177,18 +182,34 @@ export async function configureAutomaticCertificateSelectionAsync(
       ? (preferences.profile as Record<string, unknown>)
       : {};
 
+  const existingValue = profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY];
+
   if (enabled) {
-    profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY] =
-      AUTO_SELECT_CLIENT_CERTIFICATE_URLS;
+    // Append the az2aws entry, keeping any user-managed entries. A non-array
+    // value is invalid for this preference and gets replaced.
+    const entries: unknown[] = Array.isArray(existingValue)
+      ? [...(existingValue as unknown[])]
+      : [];
+    if (entries.includes(AUTO_SELECT_CERTIFICATE_PREFERENCE)) {
+      return;
+    }
+    entries.push(AUTO_SELECT_CERTIFICATE_PREFERENCE);
+    profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY] = entries;
   } else {
-    const currentValue = profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY];
     if (
-      JSON.stringify(currentValue) !==
-      JSON.stringify(AUTO_SELECT_CLIENT_CERTIFICATE_URLS)
+      !Array.isArray(existingValue) ||
+      !existingValue.includes(AUTO_SELECT_CERTIFICATE_PREFERENCE)
     ) {
       return;
     }
-    delete profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY];
+    const remainingEntries = existingValue.filter(
+      (entry) => entry !== AUTO_SELECT_CERTIFICATE_PREFERENCE,
+    );
+    if (remainingEntries.length === 0) {
+      delete profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY];
+    } else {
+      profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY] = remainingEntries;
+    }
   }
 
   preferences.profile = profileSection;
