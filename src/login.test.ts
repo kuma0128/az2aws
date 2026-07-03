@@ -2945,6 +2945,117 @@ describe("login", () => {
     });
   });
 
+  describe("_performLoginAsync missing Chrome error handling", () => {
+    const originalPaths = { ...paths };
+
+    const createMissingChromeError = () =>
+      new Error(
+        "Could not find Chrome (ver. 150.0.7871.24). This can occur if either\n" +
+          " 1. you did not perform an installation before running the script (e.g. `npx puppeteer browsers install chrome`) or\n" +
+          " 2. your cache path is incorrectly configured.",
+      );
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      Object.keys(paths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+    });
+
+    afterEach(() => {
+      Object.keys(originalPaths).forEach((key) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (paths as any)[key] = (originalPaths as any)[key];
+      });
+      vi.restoreAllMocks();
+    });
+
+    it("should throw a CLIError with reinstall guidance when the managed Chrome is missing", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = undefined;
+      mockPuppeteerLaunch.mockRejectedValueOnce(createMissingChromeError());
+
+      await expect(
+        login._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        ),
+      ).rejects.toMatchObject({
+        name: "CLIError",
+        message: expect.stringContaining(
+          "npx puppeteer browsers install chrome",
+        ),
+      });
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(1);
+    });
+
+    it("should mention BROWSER_CHROME_BIN and the original error in the missing-Chrome error", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = undefined;
+      mockPuppeteerLaunch.mockRejectedValueOnce(createMissingChromeError());
+
+      const error: unknown = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      const message = (error as Error).message;
+      expect(message).toContain("BROWSER_CHROME_BIN");
+      expect(message).toContain("Could not find Chrome (ver. 150.0.7871.24)");
+    });
+
+    it("should rethrow the raw error when BROWSER_CHROME_BIN is set", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = "/custom/chrome/bin";
+      const missingChromeError = createMissingChromeError();
+      mockPuppeteerLaunch.mockRejectedValueOnce(missingChromeError);
+
+      const error: unknown = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBe(missingChromeError);
+      expect((error as Error).name).not.toBe("CLIError");
+    });
+  });
+
   describe("_performLoginAsync SAML error handling", () => {
     const originalPaths = { ...paths };
 

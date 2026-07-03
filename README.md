@@ -34,6 +34,7 @@ Log in to AWS CLI using [Microsoft Entra ID](https://learn.microsoft.com/en-us/e
 - [Getting Your Tenant ID and App ID URI](#getting-your-tenant-id-and-app-id-uri)
 - [How It Works](#how-it-works)
 - [Troubleshooting](#troubleshooting)
+  - [Could not find Chrome](#could-not-find-chrome)
 - [Support for Other Authentication Providers](#support-for-other-authentication-providers)
 - [Acknowledgements](#acknowledgements)
 
@@ -293,6 +294,12 @@ will **not** modify that directory — you will need to resolve the
 incompatibility manually (e.g., update az2aws, or use a different
 `BROWSER_USER_DATA_DIR`).
 
+If you see `Could not find Chrome (ver. ...)`, the Puppeteer-managed browser
+is missing (e.g., the download failed during install or an update changed the
+required Chrome version). Run `npx puppeteer browsers install chrome`, or set
+`BROWSER_CHROME_BIN` to an existing Chrome. See
+[Could not find Chrome](#could-not-find-chrome) for details.
+
 If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
 Try:
 `--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
@@ -360,6 +367,26 @@ If login fails, try these in order:
 1. **GUI mode**: `az2aws --mode gui` - most reliable
 2. **Debug mode**: `az2aws --mode debug` - see browser while CLI runs
 3. **Verbose logging**: `DEBUG=az2aws az2aws` (Windows: `set DEBUG=az2aws && az2aws`)
+
+### Could not find Chrome
+
+If az2aws fails with `Could not find Chrome (ver. ...)`, Puppeteer could not
+find its managed Chrome browser. Each Puppeteer release pins a specific
+Chrome for Testing version, so this happens when the browser download was
+skipped or failed during install, or when an az2aws update changed the
+required Chrome version. Fix it by either:
+
+1. Reinstalling the managed browser:
+
+       npx puppeteer browsers install chrome
+
+   or running `install.mjs` from the installed package
+   (see [Windows Notes](#windows-notes) for locating it):
+
+       node <az2aws_install_dir>/node_modules/puppeteer/install.mjs
+
+2. Pointing az2aws at your own Chrome with `BROWSER_CHROME_BIN`
+   (see [Use an Existing Chrome Install and Profile](#use-an-existing-chrome-install-and-profile)).
 
 ## Support for Other Authentication Providers
 

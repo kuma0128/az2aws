@@ -551,6 +551,25 @@ export const login = {
       } catch (e) {
         if (
           e instanceof Error &&
+          e.message.includes("Could not find Chrome") &&
+          !paths.chromeBin
+        ) {
+          debug("Browser launch failed: managed Chrome binary is missing.");
+          const notFoundInfo =
+            /Could not find Chrome \(ver\. [^)]+\)/.exec(e.message)?.[0] ??
+            "Could not find Chrome";
+          throw new CLIError(
+            `${notFoundInfo}.\n` +
+              "The Chrome browser managed by az2aws is missing or does not match the version this puppeteer release requires. " +
+              "This can happen when the browser download failed or was skipped while installing or updating az2aws.\n" +
+              "To fix, either:\n" +
+              "  1. Reinstall the managed browser: npx puppeteer browsers install chrome\n" +
+              "     (or run: node <az2aws_install_dir>/node_modules/puppeteer/install.mjs)\n" +
+              "  2. Use your own Chrome install by setting the BROWSER_CHROME_BIN environment variable.\n" +
+              "See the Troubleshooting section of the az2aws README for details.",
+          );
+        } else if (
+          e instanceof Error &&
           e.name === "TargetCloseError" &&
           useRememberMe &&
           !paths.userDataDir

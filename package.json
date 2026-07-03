@@ -74,7 +74,7 @@
     "https-proxy-agent": "^9.0.0",
     "ini": "^6.0.0",
     "inquirer": "^14.0.1",
-    "puppeteer": "^25.1.0"
+    "puppeteer": "25.2.1"
   },
   "devDependencies": {
     "@types/debug": "^4.1.12",
