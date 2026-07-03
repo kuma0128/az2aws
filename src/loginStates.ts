@@ -324,13 +324,12 @@ export const states: State[] = [
 
       try {
         debug("Waiting for authentication code to be displayed");
-        await page.waitForSelector(TFA_DISPLAY_SIGN_SELECTOR, {
-          visible: true,
-          timeout: 15000,
-        });
-        debug("Checking if authentication code is displayed");
-        const authenticationCodeElement = await page.$(
+        const authenticationCodeElement = await page.waitForSelector(
           TFA_DISPLAY_SIGN_SELECTOR,
+          {
+            visible: true,
+            timeout: 15000,
+          },
         );
         debug("Reading the authentication code");
         const authenticationCode = await readTextContent(

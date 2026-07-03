@@ -641,7 +641,12 @@ describe("loginStates", () => {
         return Promise.resolve("");
       });
 
-      mockPage.$.mockResolvedValue(mockAuthCodeElement);
+      mockPage.waitForSelector.mockImplementation((selector: string) => {
+        if (selector.includes("_DisplaySign")) {
+          return Promise.resolve(mockAuthCodeElement);
+        }
+        return Promise.resolve(undefined);
+      });
 
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
