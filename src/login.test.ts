@@ -2290,7 +2290,7 @@ describe("login", () => {
         }),
       );
       expect(mockFsWriteFile).toHaveBeenCalledWith(
-        "/tmp/az2aws-chromium-test/Default/Preferences",
+        nodePath.join("/tmp/az2aws-chromium-test", "Default", "Preferences"),
         expect.stringContaining("managed_auto_select_certificate_for_urls"),
       );
       expect(mockFsRm).toHaveBeenCalledWith(
@@ -2327,7 +2327,7 @@ describe("login", () => {
 
       expect(mockFsMkdtemp).not.toHaveBeenCalled();
       expect(mockFsWriteFile).toHaveBeenCalledWith(
-        "/custom/user/data/dir/Default/Preferences",
+        nodePath.join("/custom/user/data/dir", "Default", "Preferences"),
         expect.stringContaining("managed_auto_select_certificate_for_urls"),
       );
     });
@@ -4289,11 +4289,16 @@ describe("configureAutomaticCertificateSelectionAsync", () => {
       true,
     );
 
-    expect(mockFsMkdir).toHaveBeenCalledWith("/data/dir/Default", {
-      recursive: true,
-    });
+    expect(mockFsMkdir).toHaveBeenCalledWith(
+      nodePath.join("/data/dir", "Default"),
+      {
+        recursive: true,
+      },
+    );
     const { writtenPath, preferences } = readWrittenPreferences();
-    expect(writtenPath).toBe("/data/dir/Default/Preferences");
+    expect(writtenPath).toBe(
+      nodePath.join("/data/dir", "Default", "Preferences"),
+    );
     expect(
       preferences.profile.managed_auto_select_certificate_for_urls,
     ).toEqual([
@@ -4319,7 +4324,9 @@ describe("configureAutomaticCertificateSelectionAsync", () => {
     );
 
     const { writtenPath, preferences } = readWrittenPreferences();
-    expect(writtenPath).toBe("/data/dir/CustomProfile/Preferences");
+    expect(writtenPath).toBe(
+      nodePath.join("/data/dir", "CustomProfile", "Preferences"),
+    );
     expect(preferences.profile.exit_type).toBe("Normal");
     expect(preferences.other_setting).toBe(42);
     expect(
