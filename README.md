@@ -297,6 +297,22 @@ If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
 Try:
 `--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
 
+If you are prompted for your password on every login even though "Stay logged
+in" (`azure_default_remember_me`) is enabled, Microsoft Entra ID may be
+refusing to reuse sign-in sessions created by the Chrome for Testing browser
+bundled with Puppeteer, even though the session cookies are saved and sent
+correctly. Point az2aws at your regular Chrome installation with a dedicated
+automation profile:
+
+    # macOS
+    export BROWSER_CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    export BROWSER_USER_DATA_DIR="$HOME/.aws/chrome-profile"
+
+The first login still asks for your credentials; subsequent logins reuse the
+Entra session until it expires. Keep `BROWSER_USER_DATA_DIR` pointed at a
+dedicated directory (not your day-to-day Chrome profile) so az2aws never
+locks or modifies your normal browser data.
+
 If your Microsoft account requires a saved passkey prompt before the username
 or password page appears, that flow is unsupported in `az2aws --mode cli`.
 The prompt is rendered by the browser/OS passkey UI instead of the page DOM,
