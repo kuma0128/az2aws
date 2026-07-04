@@ -41,6 +41,10 @@ async function readTextContent<T extends Node>(
 const PASSWORD_SELECTOR =
   'input[name="Password"]:not(.moveOffScreen),input[name="passwd"]:not(.moveOffScreen)';
 
+// The number-matching code element differs across Entra sign-in page variants.
+const TFA_DISPLAY_SIGN_SELECTOR =
+  "#idRichContext_DisplaySign,#idRemoteNGC_DisplaySign";
+
 function printPageMessage(message: string, allowSensitiveOutput = true): void {
   if (allowSensitiveOutput) {
     console.log(message);
@@ -320,13 +324,13 @@ export const states: State[] = [
 
       try {
         debug("Waiting for authentication code to be displayed");
-        await page.waitForSelector("#idRichContext_DisplaySign", {
+        await page.waitForSelector(TFA_DISPLAY_SIGN_SELECTOR, {
           visible: true,
-          timeout: 5000,
+          timeout: 15000,
         });
         debug("Checking if authentication code is displayed");
         const authenticationCodeElement = await page.$(
-          "#idRichContext_DisplaySign",
+          TFA_DISPLAY_SIGN_SELECTOR,
         );
         debug("Reading the authentication code");
         const authenticationCode = await readTextContent(
@@ -337,6 +341,10 @@ export const states: State[] = [
         printPageMessage(authenticationCode, allowSensitiveOutput);
       } catch {
         debug("No authentication code found on page");
+        console.warn(
+          "Could not read the verification code from the sign-in page. " +
+            "If your Authenticator app asks for a number, rerun az2aws with --mode debug or --mode gui to see it.",
+        );
       }
 
       debug("Waiting for response");

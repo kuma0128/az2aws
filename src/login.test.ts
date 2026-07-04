@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { login } from "./login";
+import nodePath from "path";
+import {
+  login,
+  isCertificateAuthRequest,
+  configureAutomaticCertificateSelectionAsync,
+} from "./login";
 import { CLIError } from "./CLIError";
 
 vi.mock("inquirer", () => ({
@@ -24,18 +29,33 @@ const {
   mockPuppeteerLaunch,
   mockFsMkdir,
   mockFsRm,
+  mockFsMkdtemp,
+  mockFsReadFile,
+  mockFsWriteFile,
+  mockDetectSystemChrome,
+  mockIsSystemChromeDetectionDisabled,
 } = vi.hoisted(() => {
   const mockSend = vi.fn();
   const mockHttpsProxyAgent = vi.fn();
   const mockPuppeteerLaunch = vi.fn();
   const mockFsMkdir = vi.fn();
   const mockFsRm = vi.fn();
+  const mockFsMkdtemp = vi.fn();
+  const mockFsReadFile = vi.fn();
+  const mockFsWriteFile = vi.fn();
+  const mockDetectSystemChrome = vi.fn();
+  const mockIsSystemChromeDetectionDisabled = vi.fn();
   return {
     mockSend,
     mockHttpsProxyAgent,
     mockPuppeteerLaunch,
     mockFsMkdir,
     mockFsRm,
+    mockFsMkdtemp,
+    mockFsReadFile,
+    mockFsWriteFile,
+    mockDetectSystemChrome,
+    mockIsSystemChromeDetectionDisabled,
   };
 });
 
@@ -61,11 +81,21 @@ vi.mock("fs/promises", () => ({
   default: {
     rm: mockFsRm,
     mkdir: mockFsMkdir,
+    mkdtemp: mockFsMkdtemp,
+    readFile: mockFsReadFile,
+    writeFile: mockFsWriteFile,
   },
 }));
 
 vi.mock("node:timers/promises", () => ({
   setTimeout: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Default behavior (both mocks return undefined): detection enabled but no
+// system browser found, so tests exercise the bundled-browser path.
+vi.mock("./systemChrome", () => ({
+  detectSystemChromeAsync: mockDetectSystemChrome,
+  isSystemChromeDetectionDisabled: mockIsSystemChromeDetectionDisabled,
 }));
 
 import inquirer from "inquirer";
@@ -96,6 +126,10 @@ function clearAzureEnv() {
   for (const key of AZURE_ENV_KEYS) {
     delete process.env[key];
   }
+}
+
+function createEnoentError(): NodeJS.ErrnoException {
+  return Object.assign(new Error("ENOENT"), { code: "ENOENT" });
 }
 
 describe("login", () => {
@@ -2078,6 +2112,254 @@ describe("login", () => {
       );
     });
 
+    it("should use an auto-detected system browser when BROWSER_CHROME_BIN is not set", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = undefined;
+      mockDetectSystemChrome.mockResolvedValueOnce(
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      );
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      // The shared launch mock throws, which triggers the bundled-browser
+      // fallback and strips executablePath from the (shared) launch params
+      // object, so snapshot the value passed to each launch call instead.
+      const executablePathPerLaunch: (string | undefined)[] = [];
+      mockPuppeteerLaunch.mockImplementation(
+        (params: { executablePath?: string }) => {
+          executablePathPerLaunch.push(params.executablePath);
+          throw new Error("Mock launch error for testing");
+        },
+      );
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(executablePathPerLaunch[0]).toBe(
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Falling back to the bundled browser"),
+      );
+    });
+
+    it("should prefer BROWSER_CHROME_BIN over the auto-detected browser", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = "/custom/chrome";
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(mockDetectSystemChrome).not.toHaveBeenCalled();
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({ executablePath: "/custom/chrome" }),
+      );
+    });
+
+    it("should skip auto-detection when it is disabled", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = undefined;
+      mockIsSystemChromeDetectionDisabled.mockReturnValueOnce(true);
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(mockDetectSystemChrome).not.toHaveBeenCalled();
+      expect(capturedLaunchArgs).not.toEqual(
+        expect.objectContaining({ executablePath: expect.anything() }),
+      );
+    });
+
+    it("should fall back to the bundled browser when the system browser fails to launch", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = undefined;
+      mockDetectSystemChrome.mockResolvedValueOnce("/detected/system/chrome");
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      const executablePathPerLaunch: (string | undefined)[] = [];
+      mockPuppeteerLaunch.mockImplementation(
+        (params: { executablePath?: string }) => {
+          executablePathPerLaunch.push(params.executablePath);
+          throw new Error("Mock launch error for testing");
+        },
+      );
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw after the bundled-browser retry also fails
+      }
+
+      expect(executablePathPerLaunch).toEqual([
+        "/detected/system/chrome",
+        undefined,
+      ]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Falling back to the bundled browser"),
+      );
+    });
+
+    it("should create a temporary profile with certificate auto-select in headless mode", async () => {
+      mockFsMkdtemp.mockResolvedValueOnce("/tmp/az2aws-chromium-test");
+      mockFsReadFile.mockRejectedValueOnce(createEnoentError());
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true, // headless
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false, // rememberMe
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining([
+            "--user-data-dir=/tmp/az2aws-chromium-test",
+          ]),
+        }),
+      );
+      expect(mockFsWriteFile).toHaveBeenCalledWith(
+        nodePath.join("/tmp/az2aws-chromium-test", "Default", "Preferences"),
+        expect.stringContaining("managed_auto_select_certificate_for_urls"),
+      );
+      expect(mockFsRm).toHaveBeenCalledWith(
+        "/tmp/az2aws-chromium-test",
+        expect.objectContaining({ recursive: true, force: true }),
+      );
+    });
+
+    it("should seed certificate auto-select into the persistent profile in headless mode with rememberMe", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).userDataDir = "/custom/user/data/dir";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).profileDir = undefined;
+      mockFsReadFile.mockRejectedValueOnce(createEnoentError());
+
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          true, // headless
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          true, // rememberMe
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(mockFsMkdtemp).not.toHaveBeenCalled();
+      expect(mockFsWriteFile).toHaveBeenCalledWith(
+        nodePath.join("/custom/user/data/dir", "Default", "Preferences"),
+        expect.stringContaining("managed_auto_select_certificate_for_urls"),
+      );
+    });
+
+    it("should not create a temporary profile in headful mode without rememberMe", async () => {
+      try {
+        await login._performLoginAsync(
+          "https://login.example.com",
+          false, // headless
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false, // rememberMe
+          false,
+          false,
+        );
+      } catch {
+        // Expected to throw
+      }
+
+      expect(mockFsMkdtemp).not.toHaveBeenCalled();
+      expect(mockFsWriteFile).not.toHaveBeenCalled();
+    });
+
     it("should ignore saved profile arguments when incognito=true and rememberMe=true", async () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2632,6 +2914,7 @@ describe("login", () => {
       vi.spyOn(console, "warn").mockImplementation(() => {});
       mockFsRm.mockResolvedValue(undefined);
       mockFsMkdir.mockResolvedValue(undefined);
+      mockFsReadFile.mockRejectedValue(createEnoentError());
       Object.keys(paths).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
@@ -2695,17 +2978,24 @@ describe("login", () => {
         maxRetries: 5,
         retryDelay: 100,
       });
-      expect(mockFsMkdir).toHaveBeenCalledTimes(2);
+      expect(mockFsMkdir).toHaveBeenCalledTimes(3);
       expect(mockFsMkdir).toHaveBeenNthCalledWith(1, "/mock/chromium/path", {
         recursive: true,
       });
-      expect(mockFsMkdir).toHaveBeenNthCalledWith(2, "/mock/chromium/path", {
+      // The second mkdir creates the profile directory holding the
+      // Preferences file used for certificate auto-selection.
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(
+        2,
+        nodePath.join("/mock/chromium/path", "Default"),
+        { recursive: true },
+      );
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(3, "/mock/chromium/path", {
         recursive: true,
       });
       expect(mockFsRm.mock.invocationCallOrder[0]).toBeGreaterThan(
         mockFsMkdir.mock.invocationCallOrder[0],
       );
-      expect(mockFsMkdir.mock.invocationCallOrder[1]).toBeGreaterThan(
+      expect(mockFsMkdir.mock.invocationCallOrder[2]).toBeGreaterThan(
         mockFsRm.mock.invocationCallOrder[0],
       );
       // Verify puppeteer.launch was called twice (initial + retry)
@@ -2762,7 +3052,7 @@ describe("login", () => {
           retryDelay: 100,
         },
       );
-      expect(mockFsMkdir).toHaveBeenCalledTimes(2);
+      expect(mockFsMkdir).toHaveBeenCalledTimes(3);
       expect(mockFsMkdir).toHaveBeenNthCalledWith(
         1,
         "C:\\Users\\alice\\.aws\\chromium",
@@ -2772,6 +3062,13 @@ describe("login", () => {
       );
       expect(mockFsMkdir).toHaveBeenNthCalledWith(
         2,
+        nodePath.join("C:\\Users\\alice\\.aws\\chromium", "Default"),
+        {
+          recursive: true,
+        },
+      );
+      expect(mockFsMkdir).toHaveBeenNthCalledWith(
+        3,
         "C:\\Users\\alice\\.aws\\chromium",
         {
           recursive: true,
@@ -2780,7 +3077,7 @@ describe("login", () => {
       expect(mockFsRm.mock.invocationCallOrder[0]).toBeGreaterThan(
         mockFsMkdir.mock.invocationCallOrder[0],
       );
-      expect(mockFsMkdir.mock.invocationCallOrder[1]).toBeGreaterThan(
+      expect(mockFsMkdir.mock.invocationCallOrder[2]).toBeGreaterThan(
         mockFsRm.mock.invocationCallOrder[0],
       );
       expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(2);
@@ -3752,6 +4049,69 @@ describe("login", () => {
       expect(continueMocks[2]).toHaveBeenCalled();
     });
 
+    it("should warn once when certificate-based authentication is detected", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      const certContinue = vi.fn().mockResolvedValue(undefined);
+
+      const promise = login._performLoginAsync(
+        "https://login.example.com",
+        true, // headless
+        false,
+        false, // cliProxy=false
+        false,
+        false,
+        "",
+        undefined,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      await mockPage.waitForRequestInterception();
+
+      const requestHandler = mockPage.getRequestHandler();
+      if (requestHandler) {
+        requestHandler({
+          url: () =>
+            "https://certauth.login.microsoftonline.com/tenant-id/certauth",
+          postData: () => undefined,
+          respond: vi.fn(),
+          continue: certContinue,
+        });
+        requestHandler({
+          url: () => "https://device.login.microsoftonline.com/probe",
+          postData: () => undefined,
+          respond: vi.fn(),
+          continue: vi.fn().mockResolvedValue(undefined),
+        });
+        requestHandler({
+          url: () => "https://signin.aws.amazon.com/saml",
+          postData: () => "SAMLResponse=validSamlResponse",
+          respond: vi.fn().mockResolvedValue(undefined),
+          continue: vi.fn(),
+        });
+      }
+
+      const result = await promise;
+      expect(result).toBe("validSamlResponse");
+
+      const certificateWarnings = consoleWarnSpy.mock.calls.filter(
+        ([message]) =>
+          String(message).includes("Certificate-based authentication detected"),
+      );
+      expect(certificateWarnings).toHaveLength(1);
+      expect(String(certificateWarnings[0][0])).toContain("--mode debug");
+      // The certificate auth request itself must still be continued.
+      expect(certContinue).toHaveBeenCalled();
+    });
+
     it("should tolerate rejected continue promise before a later SAML response", async () => {
       const mockPage = createMockPage();
       const mockBrowser = createMockBrowser(mockPage);
@@ -3963,5 +4323,293 @@ describe("login", () => {
       expect(error).toBe(assumeRoleError);
       expect((error as Error).message).toBe("STS assume role failed");
     });
+  });
+});
+
+describe("isCertificateAuthRequest", () => {
+  it("should detect the Entra certificate authentication host", () => {
+    expect(
+      isCertificateAuthRequest(
+        "https://certauth.login.microsoftonline.com/tenant-id/certauth",
+      ),
+    ).toBe(true);
+  });
+
+  it("should detect tenant-prefixed certificate authentication hosts", () => {
+    expect(
+      isCertificateAuthRequest(
+        "https://t1234.certauth.login.microsoftonline.com/tenant-id/certauth",
+      ),
+    ).toBe(true);
+  });
+
+  it("should detect the device certificate authentication host", () => {
+    expect(
+      isCertificateAuthRequest(
+        "https://device.login.microsoftonline.com/some/path",
+      ),
+    ).toBe(true);
+  });
+
+  it("should not match the regular login host", () => {
+    expect(
+      isCertificateAuthRequest(
+        "https://login.microsoftonline.com/common/oauth2",
+      ),
+    ).toBe(false);
+  });
+
+  it("should not match lookalike hosts or paths", () => {
+    expect(
+      isCertificateAuthRequest(
+        "https://evil.example.com/certauth.login.microsoftonline.com",
+      ),
+    ).toBe(false);
+    expect(
+      isCertificateAuthRequest(
+        "https://xcertauth.login.microsoftonline.com/certauth",
+      ),
+    ).toBe(false);
+  });
+
+  it("should return false for invalid URLs", () => {
+    expect(isCertificateAuthRequest("not a url")).toBe(false);
+  });
+});
+
+describe("configureAutomaticCertificateSelectionAsync", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFsMkdir.mockResolvedValue(undefined);
+    mockFsWriteFile.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const readWrittenPreferences = () => {
+    const [writtenPath, writtenContent] = mockFsWriteFile.mock.calls[0] as [
+      string,
+      string,
+    ];
+    return { writtenPath, preferences: JSON.parse(writtenContent) };
+  };
+
+  it("should seed the auto-select preference when the preferences file is missing", async () => {
+    mockFsReadFile.mockRejectedValue(createEnoentError());
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "Default",
+      true,
+    );
+
+    expect(mockFsMkdir).toHaveBeenCalledWith(
+      nodePath.join("/data/dir", "Default"),
+      {
+        recursive: true,
+      },
+    );
+    const { writtenPath, preferences } = readWrittenPreferences();
+    expect(writtenPath).toBe(
+      nodePath.join("/data/dir", "Default", "Preferences"),
+    );
+    expect(
+      preferences.profile.managed_auto_select_certificate_for_urls,
+    ).toEqual([
+      JSON.stringify({
+        pattern: "https://[*.]microsoftonline.com",
+        filter: {},
+      }),
+    ]);
+  });
+
+  it("should preserve existing preferences when seeding", async () => {
+    mockFsReadFile.mockResolvedValue(
+      JSON.stringify({
+        profile: { exit_type: "Normal" },
+        other_setting: 42,
+      }),
+    );
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "CustomProfile",
+      true,
+    );
+
+    const { writtenPath, preferences } = readWrittenPreferences();
+    expect(writtenPath).toBe(
+      nodePath.join("/data/dir", "CustomProfile", "Preferences"),
+    );
+    expect(preferences.profile.exit_type).toBe("Normal");
+    expect(preferences.other_setting).toBe(42);
+    expect(
+      preferences.profile.managed_auto_select_certificate_for_urls,
+    ).toBeDefined();
+  });
+
+  it("should remove a previously seeded preference when disabling", async () => {
+    mockFsReadFile.mockResolvedValue(
+      JSON.stringify({
+        profile: {
+          exit_type: "Normal",
+          managed_auto_select_certificate_for_urls: [
+            JSON.stringify({
+              pattern: "https://[*.]microsoftonline.com",
+              filter: {},
+            }),
+          ],
+        },
+      }),
+    );
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "Default",
+      false,
+    );
+
+    const { preferences } = readWrittenPreferences();
+    expect(
+      preferences.profile.managed_auto_select_certificate_for_urls,
+    ).toBeUndefined();
+    expect(preferences.profile.exit_type).toBe("Normal");
+  });
+
+  it("should not write when disabling and no preference was seeded", async () => {
+    mockFsReadFile.mockResolvedValue(JSON.stringify({ profile: {} }));
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "Default",
+      false,
+    );
+
+    expect(mockFsWriteFile).not.toHaveBeenCalled();
+  });
+
+  it("should not remove a user-managed value it did not seed", async () => {
+    mockFsReadFile.mockResolvedValue(
+      JSON.stringify({
+        profile: {
+          managed_auto_select_certificate_for_urls: [
+            JSON.stringify({ pattern: "https://example.com", filter: {} }),
+          ],
+        },
+      }),
+    );
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "Default",
+      false,
+    );
+
+    expect(mockFsWriteFile).not.toHaveBeenCalled();
+  });
+
+  it("should append to existing user-managed entries instead of replacing them", async () => {
+    const userEntry = JSON.stringify({
+      pattern: "https://example.com",
+      filter: {},
+    });
+    mockFsReadFile.mockResolvedValue(
+      JSON.stringify({
+        profile: { managed_auto_select_certificate_for_urls: [userEntry] },
+      }),
+    );
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "Default",
+      true,
+    );
+
+    const { preferences } = readWrittenPreferences();
+    expect(
+      preferences.profile.managed_auto_select_certificate_for_urls,
+    ).toEqual([
+      userEntry,
+      JSON.stringify({
+        pattern: "https://[*.]microsoftonline.com",
+        filter: {},
+      }),
+    ]);
+  });
+
+  it("should not rewrite the preferences file when already seeded", async () => {
+    mockFsReadFile.mockResolvedValue(
+      JSON.stringify({
+        profile: {
+          managed_auto_select_certificate_for_urls: [
+            JSON.stringify({
+              pattern: "https://[*.]microsoftonline.com",
+              filter: {},
+            }),
+          ],
+        },
+      }),
+    );
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "Default",
+      true,
+    );
+
+    expect(mockFsWriteFile).not.toHaveBeenCalled();
+  });
+
+  it("should keep user-managed entries when removing the seeded entry", async () => {
+    const userEntry = JSON.stringify({
+      pattern: "https://example.com",
+      filter: {},
+    });
+    mockFsReadFile.mockResolvedValue(
+      JSON.stringify({
+        profile: {
+          managed_auto_select_certificate_for_urls: [
+            userEntry,
+            JSON.stringify({
+              pattern: "https://[*.]microsoftonline.com",
+              filter: {},
+            }),
+          ],
+        },
+      }),
+    );
+
+    await configureAutomaticCertificateSelectionAsync(
+      "/data/dir",
+      "Default",
+      false,
+    );
+
+    const { preferences } = readWrittenPreferences();
+    expect(
+      preferences.profile.managed_auto_select_certificate_for_urls,
+    ).toEqual([userEntry]);
+  });
+
+  it("should fail without writing when the preferences file is unreadable", async () => {
+    mockFsReadFile.mockRejectedValue(
+      Object.assign(new Error("EACCES"), { code: "EACCES" }),
+    );
+
+    await expect(
+      configureAutomaticCertificateSelectionAsync("/data/dir", "Default", true),
+    ).rejects.toThrow("EACCES");
+    expect(mockFsWriteFile).not.toHaveBeenCalled();
+  });
+
+  it("should fail without writing when the preferences file is corrupted", async () => {
+    mockFsReadFile.mockResolvedValue("{not valid json");
+
+    await expect(
+      configureAutomaticCertificateSelectionAsync("/data/dir", "Default", true),
+    ).rejects.toThrow();
+    expect(mockFsWriteFile).not.toHaveBeenCalled();
   });
 });

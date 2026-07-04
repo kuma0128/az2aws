@@ -12,6 +12,8 @@ import { CLIError } from "./CLIError";
 import { awsConfig, ProfileConfig, ProfileCredentials } from "./awsConfig";
 import { paths } from "./paths";
 import fs from "fs/promises";
+import os from "os";
+import path from "path";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { states } from "./loginStates";
@@ -25,6 +27,10 @@ import {
   redactUrlForLogs,
   shouldAllowSensitiveOutput,
 } from "./sensitiveOutput";
+import {
+  detectSystemChromeAsync,
+  isSystemChromeDetectionDisabled,
+} from "./systemChrome";
 
 const debug = _debug("az2aws");
 
@@ -93,6 +99,122 @@ function printGuiFallbackHint(): void {
   console.log(
     "Login is taking longer than expected. If a browser prompt such as certificate selection is waiting for input, stop this run and retry with --mode=gui.",
   );
+}
+
+// Entra ID performs certificate-based and device-certificate authentication on
+// dedicated hosts that request a TLS client certificate from the browser.
+export function isCertificateAuthRequest(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return (
+      hostname === "certauth.login.microsoftonline.com" ||
+      hostname.endsWith(".certauth.login.microsoftonline.com") ||
+      hostname === "device.login.microsoftonline.com"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function printCertificateAuthHint(headless: boolean): void {
+  if (headless) {
+    console.warn(
+      "Certificate-based authentication detected. az2aws will try to select a client certificate automatically. " +
+        "If the login stalls or fails, rerun with --mode debug or --mode gui and select the certificate in the browser window.",
+    );
+  } else {
+    console.warn(
+      "Certificate-based authentication detected. If the login stalls, check the browser window for a certificate selection dialog.",
+    );
+  }
+}
+
+const AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY =
+  "managed_auto_select_certificate_for_urls";
+// Chrome honors the AutoSelectCertificateForUrls enterprise policy through
+// this profile preference. [*.]microsoftonline.com covers the Entra ID
+// certificate authentication hosts (certauth.login / device.login).
+const AUTO_SELECT_CERTIFICATE_PREFERENCE = JSON.stringify({
+  pattern: "https://[*.]microsoftonline.com",
+  filter: {},
+});
+
+/**
+ * Chrome shows a native dialog when the IdP requests a client certificate,
+ * which headless mode cannot display. Seeding this preference makes Chrome
+ * auto-select the certificate instead of hanging. The az2aws entry is merged
+ * with (and later removed from) any existing entries so user-managed
+ * settings stay intact.
+ */
+export async function configureAutomaticCertificateSelectionAsync(
+  userDataDir: string,
+  profileDirectory: string,
+  enabled: boolean,
+): Promise<void> {
+  const preferencesPath = path.join(
+    userDataDir,
+    profileDirectory,
+    "Preferences",
+  );
+
+  let preferences: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(
+      await fs.readFile(preferencesPath, "utf8"),
+    );
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Preferences file has an unexpected format");
+    }
+    preferences = parsed as Record<string, unknown>;
+  } catch (error) {
+    // Only a missing file is safe to create from scratch. Any other failure
+    // (locked, unreadable, corrupted) could belong to a real Chrome profile
+    // that must not be overwritten, so bail out without writing.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  const profileSection =
+    preferences.profile &&
+    typeof preferences.profile === "object" &&
+    !Array.isArray(preferences.profile)
+      ? (preferences.profile as Record<string, unknown>)
+      : {};
+
+  const existingValue = profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY];
+
+  if (enabled) {
+    // Append the az2aws entry, keeping any user-managed entries. A non-array
+    // value is invalid for this preference and gets replaced.
+    const entries: unknown[] = Array.isArray(existingValue)
+      ? [...(existingValue as unknown[])]
+      : [];
+    if (entries.includes(AUTO_SELECT_CERTIFICATE_PREFERENCE)) {
+      return;
+    }
+    entries.push(AUTO_SELECT_CERTIFICATE_PREFERENCE);
+    profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY] = entries;
+  } else {
+    if (
+      !Array.isArray(existingValue) ||
+      !existingValue.includes(AUTO_SELECT_CERTIFICATE_PREFERENCE)
+    ) {
+      return;
+    }
+    const remainingEntries = existingValue.filter(
+      (entry) => entry !== AUTO_SELECT_CERTIFICATE_PREFERENCE,
+    );
+    if (remainingEntries.length === 0) {
+      delete profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY];
+    } else {
+      profileSection[AUTO_SELECT_CERTIFICATE_PREFERENCE_KEY] = remainingEntries;
+    }
+  }
+
+  preferences.profile = profileSection;
+  await fs.mkdir(path.dirname(preferencesPath), { recursive: true });
+  await fs.writeFile(preferencesPath, JSON.stringify(preferences));
 }
 
 export const login = {
@@ -481,6 +603,7 @@ export const login = {
     debug("Loading login page in Chrome");
 
     let browser: Browser | undefined;
+    let temporaryUserDataDir: string | undefined;
     const useRememberMe = rememberMe && !incognito;
 
     try {
@@ -518,6 +641,31 @@ export const login = {
         );
       }
 
+      try {
+        if (useRememberMe) {
+          await configureAutomaticCertificateSelectionAsync(
+            paths.userDataDir || paths.chromium,
+            paths.profileDir || "Default",
+            headless,
+          );
+        } else if (headless) {
+          const temporaryDir = await fs.mkdtemp(
+            path.join(os.tmpdir(), "az2aws-chromium-"),
+          );
+          temporaryUserDataDir = temporaryDir;
+          await configureAutomaticCertificateSelectionAsync(
+            temporaryDir,
+            "Default",
+            true,
+          );
+          args.push(`--user-data-dir=${temporaryDir}`);
+        }
+      } catch (error) {
+        debug(
+          `Unable to configure automatic certificate selection: ${formatDebugErrorMessage(error)}`,
+        );
+      }
+
       const proxyUrl = getProxyUrl();
       if (proxyUrl) {
         args.push(`--proxy-server=${proxyUrl}`);
@@ -542,8 +690,16 @@ export const login = {
         ignoreDefaultArgs,
       };
 
+      let usingAutoDetectedBrowser = false;
       if (paths.chromeBin) {
         launchParams.executablePath = paths.chromeBin;
+      } else if (!isSystemChromeDetectionDisabled()) {
+        const systemChrome = await detectSystemChromeAsync();
+        if (systemChrome) {
+          debug(`Using system browser: ${systemChrome}`);
+          launchParams.executablePath = systemChrome;
+          usingAutoDetectedBrowser = true;
+        }
       }
 
       try {
@@ -588,6 +744,15 @@ export const login = {
           });
           await fs.mkdir(paths.chromium, { recursive: true });
           browser = await puppeteer.launch(launchParams);
+        } else if (usingAutoDetectedBrowser) {
+          debug(
+            `System browser launch failed: ${formatDebugErrorMessage(e)}. Falling back to the bundled browser.`,
+          );
+          console.warn(
+            "The system browser failed to launch. Falling back to the bundled browser...",
+          );
+          delete launchParams.executablePath;
+          browser = await puppeteer.launch(launchParams);
         } else {
           throw e;
         }
@@ -618,11 +783,16 @@ export const login = {
 
       // Prevent redirection to AWS
       let samlResponseData;
+      let hasDetectedCertificateAuth = false;
       const samlResponsePromise = new Promise((resolve) => {
         page.on("request", (req: HTTPRequest) => {
           const reqURL = req.url();
           const redactedURL = redactUrlForLogs(reqURL);
           debug(`Request: ${redactedURL}`);
+          if (!hasDetectedCertificateAuth && isCertificateAuthRequest(reqURL)) {
+            hasDetectedCertificateAuth = true;
+            printCertificateAuthHint(headless);
+          }
           if (
             reqURL === AWS_SAML_ENDPOINT ||
             reqURL === AWS_GOV_SAML_ENDPOINT ||
@@ -687,6 +857,7 @@ export const login = {
           if (
             passwordSubmittedAt !== undefined &&
             !hasPrintedGuiFallbackHint &&
+            !hasDetectedCertificateAuth &&
             Date.now() - passwordSubmittedAt > GUI_FALLBACK_HINT_DELAY
           ) {
             printGuiFallbackHint();
@@ -786,6 +957,20 @@ export const login = {
     } finally {
       if (browser) {
         await browser.close();
+      }
+      if (temporaryUserDataDir) {
+        try {
+          await fs.rm(temporaryUserDataDir, {
+            recursive: true,
+            force: true,
+            maxRetries: 5,
+            retryDelay: 100,
+          });
+        } catch (error) {
+          debug(
+            `Failed to remove temporary browser profile: ${formatDebugErrorMessage(error)}`,
+          );
+        }
       }
     }
   },
