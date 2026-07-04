@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.3](https://github.com/kuma0128/az2aws/compare/v1.9.2...v1.9.3) (2026-07-04)
+
+
+### Bug Fixes
+
+* MFA code display and password re-prompts caused by the bundled headless browser ([#254](https://github.com/kuma0128/az2aws/issues/254)) ([99897b3](https://github.com/kuma0128/az2aws/commit/99897b39777c3978bec50831bd34dcce3ee1d74f))
+
 ## [1.9.2](https://github.com/kuma0128/az2aws/compare/v1.9.1...v1.9.2) (2026-07-02)
 
 
