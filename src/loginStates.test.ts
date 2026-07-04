@@ -656,8 +656,8 @@ describe("loginStates", () => {
 
       expect(consoleSpy).toHaveBeenCalledWith("Open your Authenticator app");
       expect(mockPage.waitForSelector).toHaveBeenCalledWith(
-        "#idRichContext_DisplaySign",
-        { visible: true, timeout: 5000 },
+        "#idRichContext_DisplaySign,#idRemoteNGC_DisplaySign",
+        { visible: true, timeout: 15000 },
       );
       expect(consoleSpy).toHaveBeenCalledWith("58");
       expect(mockPage.waitForSelector).toHaveBeenCalledWith(
@@ -674,13 +674,16 @@ describe("loginStates", () => {
 
       mockPage.evaluate.mockResolvedValue("Open your Authenticator app");
       mockPage.waitForSelector.mockImplementation((selector: string) => {
-        if (selector === "#idRichContext_DisplaySign") {
+        if (selector.includes("#idRichContext_DisplaySign")) {
           return Promise.reject(new Error("Timeout"));
         }
         return Promise.resolve(undefined);
       });
 
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
 
       await getTfaInstructionsState().handler(
         mockPage as never,
@@ -699,6 +702,46 @@ describe("loginStates", () => {
       );
 
       consoleSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+    });
+
+    it("should warn visibly when the authentication code cannot be read", async () => {
+      const mockPage = createMockPage();
+      const mockSelectedElement = {};
+
+      mockPage.evaluate.mockResolvedValue("Open your Authenticator app");
+      mockPage.waitForSelector.mockImplementation((selector: string) => {
+        if (selector.includes("#idRichContext_DisplaySign")) {
+          return Promise.reject(new Error("Timeout"));
+        }
+        return Promise.resolve(undefined);
+      });
+
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const consoleWarnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      await getTfaInstructionsState().handler(
+        mockPage as never,
+        mockSelectedElement as never,
+        false,
+        "",
+        undefined,
+        false,
+      );
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Could not read the verification code from the sign-in page",
+        ),
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("--mode debug"),
+      );
+
+      consoleSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
     });
   });
 
