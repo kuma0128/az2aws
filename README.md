@@ -355,17 +355,25 @@ silently.
 
 ## Getting Your Tenant ID and App ID URI
 
-Ask your Microsoft Entra ID admin for these values, or extract them from myapps.microsoft.com:
+Ask your Microsoft Entra ID admin for these values, or copy them from the
+Microsoft Entra admin center:
 
-1. Load the myapps.microsoft.com page.
-2. Click the app tile for the login you want.
-3. In the window that pops open, quickly copy the login.microsoftonline.com URL. (You can also use browser DevTools with "Preserve log" enabled to capture it.)
-4. The GUID right after login.microsoftonline.com/ is the tenant ID.
-5. Copy the SAMLRequest URL param.
-6. Paste it into a URL decoder ([like this one](https://www.samltool.com/url.php)) and decode.
-7. Paste the decoded output into a SAML deflated and encoded XML decoder ([like this one](https://www.samltool.com/decode.php)).
-8. In the decoded XML output the value of the `Audience` tag is the App ID URI.
-9. Verify the tenant ID using the `tenantid` attribute in the XML.
+- `azure_tenant_id`: Microsoft Entra ID > Overview > Tenant ID
+- `azure_app_id_uri`: Enterprise applications > your AWS app > Single sign-on >
+  Basic SAML Configuration > Identifier (Entity ID)
+
+If the App ID URI contains `#`, escape it in `~/.aws/config`, for example:
+
+    azure_app_id_uri = https://signin.aws.amazon.com/saml\#example-app
+
+If you need to confirm the tenant ID from myapps.microsoft.com:
+
+1. Open https://myapps.microsoft.com.
+2. Click the AWS app tile.
+3. Copy the `login.microsoftonline.com/<tenant-id>/saml2` URL from the popup or
+   browser DevTools Network tab.
+4. Use the value between `login.microsoftonline.com/` and `/saml2` as
+   `azure_tenant_id`.
 
 ## How It Works
 
