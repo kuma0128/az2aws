@@ -11,6 +11,7 @@ import _debug from "debug";
 import { CLIError } from "./CLIError";
 import { awsConfig, ProfileConfig, ProfileCredentials } from "./awsConfig";
 import { credentialCache } from "./credentialCache";
+import { isAz2awsCredentialProcess } from "./credentialProcess";
 import { paths } from "./paths";
 import fs from "fs/promises";
 import os from "os";
@@ -373,6 +374,11 @@ export const login = {
           profileName,
           credentials,
         );
+        // Profiles wired before credential caching was introduced may still
+        // have static credentials. AWS resolves those before
+        // credential_process, so remove the legacy section only after fresh
+        // credentials have been obtained and handed to the cache.
+        await awsConfig.removeProfileCredentialsAsync(profileName);
         console.log(
           "Cached credentials for AWS CLI credential_process refresh.",
         );
@@ -402,13 +408,14 @@ export const login = {
       if (!forceRefresh) {
         // Classic profiles keep credentials in the shared credentials file;
         // credential_process-wired profiles keep them in the az2aws cache.
-        // Either source being fresh means the profile is not due yet.
-        const credentialsFileFresh =
-          !(await awsConfig.isProfileAboutToExpireAsync(profile));
-        if (
-          credentialsFileFresh ||
-          (await credentialCache.isCacheFreshAsync(profile))
-        ) {
+        const profileConfig = await awsConfig.getProfileConfigAsync(profile);
+        const usesCredentialProcess =
+          profileConfig !== undefined &&
+          this._isManagedByCredentialProcess(profileConfig);
+        const credentialsFresh = usesCredentialProcess
+          ? await credentialCache.isCacheFreshAsync(profile)
+          : !(await awsConfig.isProfileAboutToExpireAsync(profile));
+        if (credentialsFresh) {
           debug(`Profile ${profile} not yet due for refresh.`);
           continue;
         }
@@ -545,12 +552,7 @@ export const login = {
    * are ignored so az2aws never interferes with them.
    */
   _isManagedByCredentialProcess(profile: ProfileConfig): boolean {
-    const credentialProcess = profile.credential_process;
-    return (
-      typeof credentialProcess === "string" &&
-      credentialProcess.includes("az2aws") &&
-      credentialProcess.includes("--credential-process")
-    );
+    return isAz2awsCredentialProcess(profile.credential_process);
   },
 
   // Load the profile

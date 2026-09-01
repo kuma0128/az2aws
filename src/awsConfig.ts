@@ -230,6 +230,20 @@ export const awsConfig = {
     await this._saveAsync("credentials", credentials);
   },
 
+  async removeProfileCredentialsAsync(profileName: string): Promise<void> {
+    const credentials = await this._loadAsync<{
+      [key: string]: ProfileCredentials;
+    }>("credentials");
+
+    if (!credentials || credentials[profileName] === undefined) {
+      return;
+    }
+
+    debug(`Removing credentials for profile '${profileName}'`);
+    delete credentials[profileName];
+    await this._saveAsync("credentials", credentials);
+  },
+
   async getAllProfileNames(): Promise<string[]> {
     debug(`Getting all configured profiles from config.`);
     const config =

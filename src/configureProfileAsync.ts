@@ -2,25 +2,15 @@ import inquirer from "inquirer";
 import { CLIError } from "./CLIError";
 import { awsConfig } from "./awsConfig";
 import {
+  buildCredentialProcessCommand,
+  buildLoginCommand,
+  isAz2awsCredentialProcess,
+} from "./credentialProcess";
+import {
   parseSessionDurationHours,
   sessionDurationHoursValidationMessage,
   validateSessionDurationHours,
 } from "./sessionDuration";
-
-function buildCredentialProcessCommand(profileName: string): string {
-  const profileArgument = /\s/.test(profileName)
-    ? `"${profileName}"`
-    : profileName;
-  return `az2aws --profile ${profileArgument} --credential-process`;
-}
-
-function isAz2awsCredentialProcess(value: unknown): boolean {
-  return (
-    typeof value === "string" &&
-    value.includes("az2aws") &&
-    value.includes("--credential-process")
-  );
-}
 
 export async function configureProfileAsync(
   profileName: string,
@@ -35,6 +25,8 @@ export async function configureProfileAsync(
   const hasForeignCredentialProcess =
     existingCredentialProcess !== undefined &&
     !isAz2awsCredentialProcess(existingCredentialProcess);
+  const foreignCredentialProcessMessage =
+    "Existing credential_process is managed by another tool and cannot be overwritten.";
 
   const questions = [
     {
@@ -78,8 +70,13 @@ export async function configureProfileAsync(
         "Let AWS CLI refresh credentials automatically via credential_process (true|false)",
       default: hasForeignCredentialProcess ? "false" : "true",
       validate: (input: string): boolean | string => {
-        if (input === "true" || input === "false") return true;
-        return "credential_process must be either true or false";
+        if (input !== "true" && input !== "false") {
+          return "credential_process must be either true or false";
+        }
+        if (input === "true" && hasForeignCredentialProcess) {
+          return foreignCredentialProcessMessage;
+        }
+        return true;
       },
     },
     {
@@ -115,6 +112,10 @@ export async function configureProfileAsync(
 
   const wireCredentialProcess =
     (answers.credentialProcess as string) === "true";
+  // Keep the invariant even when the prompt layer is mocked or bypassed.
+  if (wireCredentialProcess && hasForeignCredentialProcess) {
+    throw new CLIError(foreignCredentialProcessMessage);
+  }
   const values: Record<string, unknown> = {
     azure_tenant_id: answers.tenantId as string,
     azure_app_id_uri: answers.appIdUri as string,
@@ -134,11 +135,13 @@ export async function configureProfileAsync(
   }
 
   await awsConfig.setProfileConfigValuesAsync(profileName, values);
+  if (wireCredentialProcess) {
+    await awsConfig.removeProfileCredentialsAsync(profileName);
+  }
 
   console.log("Profile saved.");
   if (wireCredentialProcess) {
-    const loginCommand =
-      profileName === "default" ? "az2aws" : `az2aws --profile ${profileName}`;
+    const loginCommand = buildLoginCommand(profileName);
     console.log(
       "AWS CLI will refresh credentials automatically via credential_process.",
     );

@@ -7,8 +7,21 @@ import type { ProfileCredentials } from "./awsConfig";
 import { paths } from "./paths";
 
 const originalCacheDir = paths.az2awsCache;
+const originalConfigPath = paths.config;
 const isWindows = process.platform === "win32";
 let tempDir: string;
+
+async function findCacheFileAsync(profileName: string): Promise<string> {
+  const prefix = `${encodeURIComponent(profileName)}.`;
+  const entries = await readdir(paths.az2awsCache);
+  const entry = entries.find(
+    (candidate) => candidate.startsWith(prefix) && candidate.endsWith(".json"),
+  );
+  if (!entry) {
+    throw new Error(`Cache file for '${profileName}' was not found`);
+  }
+  return path.join(paths.az2awsCache, entry);
+}
 
 function credentialsExpiringIn(minutes: number): ProfileCredentials {
   return {
@@ -23,10 +36,12 @@ describe("credentialCache", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(path.join(os.tmpdir(), "az2aws-cache-test-"));
     paths.az2awsCache = path.join(tempDir, "az2aws", "cache");
+    paths.config = path.join(tempDir, "aws-config-a");
   });
 
   afterEach(async () => {
     paths.az2awsCache = originalCacheDir;
+    paths.config = originalConfigPath;
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -94,7 +109,7 @@ describe("credentialCache", () => {
       "default",
       credentialsExpiringIn(60),
     );
-    await writeFile(path.join(paths.az2awsCache, "default.json"), "{nope");
+    await writeFile(await findCacheFileAsync("default"), "{nope");
 
     const cached =
       await credentialCache.getValidCachedCredentialsAsync("default");
@@ -107,7 +122,7 @@ describe("credentialCache", () => {
       credentialsExpiringIn(60),
     );
     await writeFile(
-      path.join(paths.az2awsCache, "default.json"),
+      await findCacheFileAsync("default"),
       JSON.stringify({ version: 2, credentials: {} }),
     );
 
@@ -152,6 +167,52 @@ describe("credentialCache", () => {
     ).toEqual(otherCredentials);
   });
 
+  it("should keep identical profile names separate across AWS config files", async () => {
+    const configA = path.join(tempDir, "aws-config-a");
+    const configB = path.join(tempDir, "aws-config-b");
+    const credentialsA = credentialsExpiringIn(60);
+    const credentialsB = {
+      ...credentialsExpiringIn(60),
+      aws_session_token: "account-b-token",
+    };
+
+    paths.config = configA;
+    await credentialCache.setCachedCredentialsAsync("default", credentialsA);
+
+    paths.config = configB;
+    expect(
+      await credentialCache.getValidCachedCredentialsAsync("default"),
+    ).toBeUndefined();
+    await credentialCache.setCachedCredentialsAsync("default", credentialsB);
+    expect(
+      await credentialCache.getValidCachedCredentialsAsync("default"),
+    ).toEqual(credentialsB);
+
+    paths.config = configA;
+    expect(
+      await credentialCache.getValidCachedCredentialsAsync("default"),
+    ).toEqual(credentialsA);
+    expect(await readdir(paths.az2awsCache)).toHaveLength(2);
+  });
+
+  it("should reject cache metadata that does not match the active configuration", async () => {
+    const credentials = credentialsExpiringIn(60);
+    await credentialCache.setCachedCredentialsAsync("default", credentials);
+    await writeFile(
+      await findCacheFileAsync("default"),
+      JSON.stringify({
+        version: 2,
+        configurationId: "another-configuration",
+        profileName: "default",
+        credentials,
+      }),
+    );
+
+    expect(
+      await credentialCache.getValidCachedCredentialsAsync("default"),
+    ).toBeUndefined();
+  });
+
   it("should encode profile names that are not filesystem-safe", async () => {
     const credentials = credentialsExpiringIn(60);
     await credentialCache.setCachedCredentialsAsync(
@@ -160,7 +221,12 @@ describe("credentialCache", () => {
     );
 
     const entries = await readdir(paths.az2awsCache);
-    expect(entries).toContain("my%2Fteam%20profile.json");
+    expect(
+      entries.some(
+        (entry) =>
+          entry.startsWith("my%2Fteam%20profile.") && entry.endsWith(".json"),
+      ),
+    ).toBe(true);
     expect(
       await credentialCache.getValidCachedCredentialsAsync("my/team profile"),
     ).toEqual(credentials);
@@ -176,7 +242,7 @@ describe("credentialCache", () => {
 
       const dirMode = (await stat(paths.az2awsCache)).mode & 0o777;
       const fileMode =
-        (await stat(path.join(paths.az2awsCache, "default.json"))).mode & 0o777;
+        (await stat(await findCacheFileAsync("default"))).mode & 0o777;
       expect(dirMode).toBe(0o700);
       expect(fileMode).toBe(0o600);
     },

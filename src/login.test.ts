@@ -20,6 +20,7 @@ vi.mock("./awsConfig", () => ({
     getAllProfileNames: vi.fn(),
     getAz2awsProfileNames: vi.fn(),
     isProfileAboutToExpireAsync: vi.fn(),
+    removeProfileCredentialsAsync: vi.fn(),
   },
 }));
 
@@ -1431,6 +1432,9 @@ describe("login", () => {
         "default",
         credentials,
       );
+      expect(awsConfig.removeProfileCredentialsAsync).toHaveBeenCalledWith(
+        "default",
+      );
     });
 
     it("should throw when the wired login yields no credentials", async () => {
@@ -1466,6 +1470,7 @@ describe("login", () => {
       expect((error as CLIError).message).toBe(
         "Unable to retrieve credentials.",
       );
+      expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
     });
 
     it("should keep writing the credentials file when credential_process points at another tool", async () => {
@@ -1499,6 +1504,7 @@ describe("login", () => {
 
       expect(assumeRoleSpy.mock.calls[0][6]).toBe(true);
       expect(credentialCache.setCachedCredentialsAsync).not.toHaveBeenCalled();
+      expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
     });
   });
 
@@ -1532,6 +1538,23 @@ describe("login", () => {
       ).toBe(false);
     });
 
+    it("should ignore similarly named executables and flag substrings", () => {
+      expect(
+        login._isManagedByCredentialProcess({
+          ...baseProfile,
+          credential_process:
+            "my-az2aws-helper --profile myprofile --credential-process",
+        }),
+      ).toBe(false);
+      expect(
+        login._isManagedByCredentialProcess({
+          ...baseProfile,
+          credential_process:
+            "az2aws --profile myprofile --credential-process-helper",
+        }),
+      ).toBe(false);
+    });
+
     it("should ignore profiles without credential_process", () => {
       expect(login._isManagedByCredentialProcess({ ...baseProfile })).toBe(
         false,
@@ -1542,6 +1565,7 @@ describe("login", () => {
   describe("loginAll", () => {
     beforeEach(() => {
       vi.clearAllMocks();
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
     });
@@ -1803,8 +1827,19 @@ describe("login", () => {
   });
 
   describe("loginAll credential cache handling", () => {
+    const baseProfile = {
+      azure_tenant_id: "tenant",
+      azure_app_id_uri: "app",
+      azure_default_username: "user",
+      azure_default_role_arn: "role",
+      azure_default_duration_hours: "1",
+      azure_default_remember_me: false,
+      region: "us-east-1",
+    };
+
     beforeEach(() => {
       vi.clearAllMocks();
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
     });
@@ -1818,8 +1853,12 @@ describe("login", () => {
         "wired-profile",
         "stale-profile",
       ]);
-      // Neither profile has fresh credentials in the credentials file.
-      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(true);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockImplementation(
+        async (profileName) => ({
+          ...baseProfile,
+          credential_process: `az2aws --profile ${profileName} --credential-process`,
+        }),
+      );
       vi.mocked(credentialCache.isCacheFreshAsync)
         .mockResolvedValueOnce(true) // wired-profile: cache fresh
         .mockResolvedValueOnce(false); // stale-profile: cache stale
@@ -1842,6 +1881,7 @@ describe("login", () => {
 
       expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
       expect(loginAsyncSpy.mock.calls[0][0]).toBe("stale-profile");
+      expect(awsConfig.isProfileAboutToExpireAsync).not.toHaveBeenCalled();
     });
 
     it("should not consult the cache when the credentials file is fresh", async () => {
@@ -1868,6 +1908,71 @@ describe("login", () => {
 
       expect(credentialCache.isCacheFreshAsync).not.toHaveBeenCalled();
       expect(loginAsyncSpy).not.toHaveBeenCalled();
+    });
+
+    it("should ignore a fresh cache for a classic profile", async () => {
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "classic-profile",
+      ]);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        ...baseProfile,
+      });
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(true);
+      vi.mocked(credentialCache.isCacheFreshAsync).mockResolvedValue(true);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(credentialCache.isCacheFreshAsync).not.toHaveBeenCalled();
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("should ignore shared credentials for a credential-process profile", async () => {
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "wired-profile",
+      ]);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        ...baseProfile,
+        credential_process:
+          "az2aws --profile wired-profile --credential-process",
+      });
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(false);
+      vi.mocked(credentialCache.isCacheFreshAsync).mockResolvedValue(false);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(awsConfig.isProfileAboutToExpireAsync).not.toHaveBeenCalled();
+      expect(credentialCache.isCacheFreshAsync).toHaveBeenCalledWith(
+        "wired-profile",
+      );
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
     });
   });
 

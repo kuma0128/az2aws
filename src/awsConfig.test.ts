@@ -1258,4 +1258,58 @@ aws_secret_access_key = existingsecret
       expect(writtenData).toContain("aws_access_key_id=NEWKEY");
     });
   });
+
+  describe("removeProfileCredentialsAsync", () => {
+    it("should remove only the requested credentials section", async () => {
+      let writtenData = "";
+      const existingCredentials = `
+[target]
+aws_access_key_id = TARGETKEY
+aws_secret_access_key = target-secret
+
+[other]
+aws_access_key_id = OTHERKEY
+aws_secret_access_key = other-secret
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => callback(null, existingCredentials),
+      );
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.removeProfileCredentialsAsync("target");
+
+      expect(writtenData).not.toContain("[target]");
+      expect(writtenData).not.toContain("TARGETKEY");
+      expect(writtenData).toContain("[other]");
+      expect(writtenData).toContain("OTHERKEY");
+    });
+
+    it("should not rewrite the file when the profile is absent", async () => {
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => callback(null, "[other]\naws_access_key_id = OTHERKEY\n"),
+      );
+
+      await awsConfig.removeProfileCredentialsAsync("missing");
+
+      expect(fs.writeFile).not.toHaveBeenCalled();
+    });
+  });
 });

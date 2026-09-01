@@ -12,13 +12,23 @@ const cacheFileMode = 0o600;
 
 interface CacheFileContents {
   version: number;
+  configurationId: string;
+  profileName: string;
   credentials: ProfileCredentials;
 }
 
+function activeConfigurationId(): string {
+  return crypto
+    .createHash("sha256")
+    .update(path.resolve(paths.config))
+    .digest("hex");
+}
+
 function cacheFilePath(profileName: string): string {
+  const configurationId = activeConfigurationId();
   return path.join(
     paths.az2awsCache,
-    `${encodeURIComponent(profileName)}.json`,
+    `${encodeURIComponent(profileName)}.${configurationId}.json`,
   );
 }
 
@@ -74,7 +84,10 @@ export const credentialCache = {
     if (
       !contents ||
       typeof contents !== "object" ||
-      (contents as CacheFileContents).version !== 1 ||
+      (contents as CacheFileContents).version !== 2 ||
+      (contents as CacheFileContents).configurationId !==
+        activeConfigurationId() ||
+      (contents as CacheFileContents).profileName !== profileName ||
       !isProfileCredentials((contents as CacheFileContents).credentials)
     ) {
       debug(
@@ -125,7 +138,12 @@ export const credentialCache = {
         recursive: true,
         mode: cacheDirMode,
       });
-      const contents: CacheFileContents = { version: 1, credentials };
+      const contents: CacheFileContents = {
+        version: 2,
+        configurationId: activeConfigurationId(),
+        profileName,
+        credentials,
+      };
       await fs.writeFile(tempPath, JSON.stringify(contents), {
         mode: cacheFileMode,
       });
