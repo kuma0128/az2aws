@@ -622,7 +622,7 @@ describe("configureProfileAsync", () => {
       expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
         "myprofile",
         expect.objectContaining({
-          credential_process: "az2aws --profile myprofile --credential-process",
+          credential_process: "az2aws --profile=myprofile --credential-process",
         }),
       );
       // Static credentials remain available until the initial login has
@@ -646,7 +646,7 @@ describe("configureProfileAsync", () => {
         "my profile",
         expect.objectContaining({
           credential_process:
-            'az2aws --profile "my profile" --credential-process',
+            'az2aws --profile="my profile" --credential-process',
         }),
       );
     });
@@ -841,7 +841,7 @@ describe("configureProfileAsync", () => {
         "AWS CLI will refresh credentials automatically via credential_process.",
       );
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining("Run 'az2aws --profile myprofile' once"),
+        expect.stringContaining("Run 'az2aws --profile=myprofile' once"),
       );
     });
 
@@ -855,7 +855,7 @@ describe("configureProfileAsync", () => {
       await configureProfileAsync("default");
 
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining("Run 'az2aws --profile default' once"),
+        expect.stringContaining("Run 'az2aws --profile=default' once"),
       );
     });
 
@@ -869,8 +869,48 @@ describe("configureProfileAsync", () => {
       await configureProfileAsync("my profile");
 
       expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining(`Run 'az2aws --profile "my profile"' once`),
+        expect.stringContaining(`Run 'az2aws --profile="my profile"' once`),
       );
     });
+
+    it.each(["", "   "])(
+      "should repair an empty credential_process value %j",
+      async (credentialProcess) => {
+        vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+          azure_tenant_id: "tenant",
+          azure_app_id_uri: "https://app.example.com",
+          azure_default_username: "",
+          azure_default_role_arn: "",
+          azure_default_duration_hours: "1",
+          azure_default_remember_me: true,
+          region: "",
+          credential_process: credentialProcess,
+        });
+
+        let capturedQuestions: unknown[] = [];
+        vi.mocked(inquirer.prompt).mockImplementation((questions) => {
+          capturedQuestions = questions as unknown[];
+          return Promise.resolve({
+            ...baseAnswers,
+            credentialProcess: "true",
+          });
+        });
+
+        await configureProfileAsync("myprofile");
+
+        const credentialProcessQuestion = capturedQuestions.find(
+          (question: unknown) =>
+            (question as { name: string }).name === "credentialProcess",
+        ) as { default: string };
+        expect(credentialProcessQuestion.default).toBe("true");
+        expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
+          "myprofile",
+          expect.objectContaining({
+            credential_process:
+              "az2aws --profile=myprofile --credential-process",
+          }),
+        );
+      },
+    );
   });
 });

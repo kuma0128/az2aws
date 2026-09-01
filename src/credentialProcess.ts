@@ -110,11 +110,11 @@ export function quoteCommandArgument(
 }
 
 export function buildCredentialProcessCommand(profileName: string): string {
-  return `az2aws --profile ${quoteCommandArgument(profileName)} --credential-process`;
+  return `az2aws --profile=${quoteCommandArgument(profileName)} --credential-process`;
 }
 
 export function buildLoginCommand(profileName: string): string {
-  return `az2aws --profile ${quoteCommandArgument(profileName)}`;
+  return `az2aws --profile=${quoteCommandArgument(profileName)}`;
 }
 
 export function isAz2awsCredentialProcess(

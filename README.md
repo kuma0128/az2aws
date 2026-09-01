@@ -180,9 +180,9 @@ helps avoid reusing an existing browser session, and it overrides any saved
 automatically (default: yes). It writes this line for you:
 
     [profile myprofile]
-    credential_process = az2aws --profile myprofile --credential-process
+    credential_process = az2aws --profile=myprofile --credential-process
 
-After wiring, run `az2aws --profile myprofile` once to sign in. From then on,
+After wiring, run `az2aws --profile=myprofile` once to sign in. From then on,
 every `aws` command refreshes credentials on its own — no more manual `az2aws`
 runs (az2aws must be on `PATH` for the AWS CLI to invoke it).
 

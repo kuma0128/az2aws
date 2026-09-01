@@ -23,7 +23,8 @@ export async function configureProfileAsync(
   // to another tool, which az2aws must not overwrite.
   const existingCredentialProcess = profile?.credential_process;
   const hasForeignCredentialProcess =
-    existingCredentialProcess !== undefined &&
+    typeof existingCredentialProcess === "string" &&
+    existingCredentialProcess.trim().length > 0 &&
     !isAz2awsCredentialProcess(existingCredentialProcess);
   const foreignCredentialProcessMessage =
     "Existing credential_process is managed by another tool and cannot be overwritten.";

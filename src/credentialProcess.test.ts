@@ -10,12 +10,19 @@ import {
 describe("credentialProcess", () => {
   it("should quote profile names consistently", () => {
     expect(buildCredentialProcessCommand("my profile")).toBe(
-      'az2aws --profile "my profile" --credential-process',
+      'az2aws --profile="my profile" --credential-process',
     );
     expect(buildLoginCommand("my profile")).toBe(
-      'az2aws --profile "my profile"',
+      'az2aws --profile="my profile"',
     );
-    expect(buildLoginCommand("default")).toBe("az2aws --profile default");
+    expect(buildLoginCommand("default")).toBe("az2aws --profile=default");
+  });
+
+  it("should attach profile values that begin with a hyphen", () => {
+    expect(buildCredentialProcessCommand("-prod")).toBe(
+      "az2aws --profile=-prod --credential-process",
+    );
+    expect(buildLoginCommand("-prod")).toBe("az2aws --profile=-prod");
   });
 
   it.each([
@@ -39,7 +46,7 @@ describe("credentialProcess", () => {
   ])("should quote shell metacharacters in profile %s", (profile, quoted) => {
     const command = buildCredentialProcessCommand(profile);
 
-    expect(command).toBe(`az2aws --profile ${quoted} --credential-process`);
+    expect(command).toBe(`az2aws --profile=${quoted} --credential-process`);
     expect(isAz2awsCredentialProcess(command)).toBe(true);
   });
 
@@ -49,7 +56,7 @@ describe("credentialProcess", () => {
       const profile =
         'R&D prod$HOME $(printf injected) `printf injected` "quoted" \\slash';
       const command = buildCredentialProcessCommand(profile);
-      const prefix = "az2aws --profile ";
+      const prefix = "az2aws --profile=";
       const suffix = " --credential-process";
       const quotedArgument = command.slice(prefix.length, -suffix.length);
 
