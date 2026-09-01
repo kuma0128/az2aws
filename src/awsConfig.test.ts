@@ -1186,13 +1186,15 @@ credential_process = aws-vault export --format=json existing
           callback(null);
         },
       );
-      const profileName = "team-R&D#prod";
+      const profileName = "team=.R&D#prod";
       const command = buildCredentialProcessCommand(profileName);
 
       await awsConfig.setProfileConfigValuesAsync(profileName, {
         credential_process: command,
       });
 
+      expect(writtenData).toContain("[profile team=\\.R&D#prod]");
+      expect(writtenData).not.toContain('["profile team=');
       expect(writtenData).toContain(`credential_process=${command}`);
       expect(writtenData).not.toContain('credential_process="az2aws');
     });

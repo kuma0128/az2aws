@@ -149,6 +149,24 @@ function stringifyAwsIni(type: string, data: SaveData): string {
   return text
     .split(eol)
     .map((line) => {
+      if (line.startsWith('["') && line.endsWith('"]')) {
+        try {
+          const sectionName = JSON.parse(line.slice(1, -1)) as unknown;
+          if (
+            typeof sectionName === "string" &&
+            !/[\r\n\]]/.test(sectionName)
+          ) {
+            // ini quotes section names containing '=' as JSON strings. AWS
+            // does not recognize that form, but does accept ini's escaped
+            // literal dots. Leave ordinary dotted paths untouched and only
+            // unwrap the quoted form here.
+            return `[${sectionName}]`;
+          }
+        } catch {
+          return line;
+        }
+      }
+
       if (!line.startsWith("credential_process=")) {
         return line;
       }
