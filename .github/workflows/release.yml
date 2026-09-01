@@ -31,7 +31,6 @@ jobs:
       publish_binaries: ${{ steps.resolve.outputs.publish_binaries }}
       release_tag: ${{ steps.resolve.outputs.release_tag }}
       docker_image_tag: ${{ steps.resolve.outputs.docker_image_tag }}
-      source_ref: ${{ steps.resolve.outputs.source_ref }}
     steps:
       - id: resolve
         shell: bash
@@ -50,7 +49,6 @@ jobs:
             docker_tag="$DISPATCH_DOCKER_TAG"
           fi
 
-          source_ref="$GITHUB_REF"
           docker_image_tag=""
           publish_npm=false
           publish_docker=false
@@ -121,7 +119,6 @@ jobs:
             echo "publish_binaries=$publish_binaries"
             echo "release_tag=$release_tag"
             echo "docker_image_tag=$docker_image_tag"
-            echo "source_ref=$source_ref"
           } >> "$GITHUB_OUTPUT"
 
   build:
@@ -133,7 +130,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
@@ -163,7 +159,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -191,7 +186,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -276,7 +270,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.release-inputs.outputs.source_ref }}
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
