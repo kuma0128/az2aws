@@ -278,6 +278,10 @@ export const login = {
       // issued for an earlier tenant, application, role, or user cannot be
       // returned after the effective profile configuration changes.
       const profile = await this._loadProfileAsync(profileName);
+      const wiredToCredentialProcess = this._isManagedByCredentialProcess(
+        profile,
+        profileName,
+      );
       if (credentialProcess && !forceRefresh) {
         const cachedCredentials =
           await credentialCache.getValidCachedCredentialsAsync(
@@ -333,13 +337,18 @@ export const login = {
         allowSensitiveOutput,
       );
       const roles = this._parseRolesFromSamlResponse(samlResponse);
+      const useConfiguredRole = effectiveNoPrompt || wiredToCredentialProcess;
+      const configuredRoleModeLabel =
+        credentialProcess || wiredToCredentialProcess
+          ? "--credential-process"
+          : "--no-prompt";
       const { role, durationHours } =
         await this._askUserForRoleAndDurationAsync(
           roles,
-          effectiveNoPrompt,
+          useConfiguredRole,
           profile.azure_default_role_arn,
           profile.azure_default_duration_hours,
-          credentialProcess ? "--credential-process" : "--no-prompt",
+          configuredRoleModeLabel,
         );
 
       // Profiles wired to credential_process must not receive static keys in
@@ -347,10 +356,6 @@ export const login = {
       // credential_process in the AWS credential resolver, so they would
       // shadow the wiring and keep serving stale keys after expiry. Cache the
       // credentials for later credential_process runs instead.
-      const wiredToCredentialProcess = this._isManagedByCredentialProcess(
-        profile,
-        profileName,
-      );
       const credentials = await this._assumeRoleAsync(
         profileName,
         samlResponse,

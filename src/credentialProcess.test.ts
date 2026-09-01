@@ -89,6 +89,21 @@ describe("credentialProcess", () => {
     expect(quoteCommandArgument("trailing\\", "win32")).toBe('"trailing\\\\"');
   });
 
+  it("should round-trip Windows UNC and internal backslash pairs", () => {
+    const profile = String.raw`\\server\\team profile`;
+    const command = `az2aws --profile=${quoteCommandArgument(
+      profile,
+      "win32",
+    )} --credential-process`;
+
+    expect(
+      isAz2awsCredentialProcess(command, {
+        platform: "win32",
+        profileName: profile,
+      }),
+    ).toBe(true);
+  });
+
   it("should reject Windows expansion characters that cannot be quoted reliably", () => {
     expect(() => quoteCommandArgument("prod%HOME%", "win32")).toThrow(
       "cannot be safely used",

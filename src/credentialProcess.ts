@@ -13,6 +13,27 @@ function parseCommandTokens(
     const character = command[index];
 
     if (quote) {
+      if (platform === "win32" && quote === '"' && character === "\\") {
+        let slashCount = 1;
+        while (command[index + slashCount] === "\\") {
+          slashCount += 1;
+        }
+
+        if (command[index + slashCount] === '"') {
+          current += "\\".repeat(Math.floor(slashCount / 2));
+          if (slashCount % 2 === 0) {
+            quote = undefined;
+          } else {
+            current += '"';
+          }
+          index += slashCount;
+        } else {
+          current += "\\".repeat(slashCount);
+          index += slashCount - 1;
+        }
+        continue;
+      }
+
       if (character === quote) {
         quote = undefined;
       } else if (
@@ -40,7 +61,7 @@ function parseCommandTokens(
       continue;
     }
 
-    if (character === "'" || character === '"') {
+    if (character === '"' || (platform !== "win32" && character === "'")) {
       quote = character;
       tokenStarted = true;
       continue;
@@ -49,11 +70,7 @@ function parseCommandTokens(
     if (
       character === "\\" &&
       command[index + 1] !== undefined &&
-      (platform !== "win32" ||
-        /\s/.test(command[index + 1]) ||
-        command[index + 1] === "'" ||
-        command[index + 1] === '"' ||
-        command[index + 1] === "\\")
+      platform !== "win32"
     ) {
       current += command[index + 1];
       tokenStarted = true;

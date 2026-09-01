@@ -1466,6 +1466,12 @@ describe("login", () => {
       );
 
       expect(assumeRoleSpy.mock.calls[0][6]).toBe(false);
+      expect(
+        vi.mocked(login._askUserForRoleAndDurationAsync).mock.calls[0][1],
+      ).toBe(true);
+      expect(
+        vi.mocked(login._askUserForRoleAndDurationAsync).mock.calls[0][4],
+      ).toBe("--credential-process");
       expect(credentialCache.setCachedCredentialsAsync).toHaveBeenCalledWith(
         "default",
         credentials,
