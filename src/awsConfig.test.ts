@@ -1087,6 +1087,86 @@ custom_field = should-be-preserved
       // Should preserve custom fields
       expect(writtenData).toContain("custom_field=should-be-preserved");
     });
+
+    it("should remove keys whose value is undefined", async () => {
+      let writtenData = "";
+      const existingConfig = `
+[profile existing]
+azure_tenant_id = old-tenant
+credential_process = az2aws --profile existing --credential-process
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => {
+          callback(null, existingConfig);
+        },
+      );
+
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.setProfileConfigValuesAsync("existing", {
+        azure_tenant_id: "updated-tenant",
+        credential_process: undefined,
+      });
+
+      expect(fs.writeFile).toHaveBeenCalled();
+      expect(writtenData).toContain("azure_tenant_id=updated-tenant");
+      expect(writtenData).not.toContain("credential_process");
+      expect(writtenData).not.toContain("undefined");
+    });
+
+    it("should keep keys that are simply omitted from the values", async () => {
+      let writtenData = "";
+      const existingConfig = `
+[profile existing]
+azure_tenant_id = old-tenant
+credential_process = aws-vault export --format=json existing
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => {
+          callback(null, existingConfig);
+        },
+      );
+
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.setProfileConfigValuesAsync("existing", {
+        azure_tenant_id: "updated-tenant",
+      });
+
+      // The ini serializer quotes values containing "=", but the entry itself
+      // must survive the rewrite.
+      expect(writtenData).toContain(
+        'credential_process="aws-vault export --format=json existing"',
+      );
+    });
   });
 
   describe("setProfileCredentialsAsync", () => {

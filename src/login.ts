@@ -10,6 +10,7 @@ import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
 import { awsConfig, ProfileConfig, ProfileCredentials } from "./awsConfig";
+import { credentialCache } from "./credentialCache";
 import { paths } from "./paths";
 import fs from "fs/promises";
 import os from "os";
@@ -83,6 +84,16 @@ function printCredentialsReadyMessage(
   console.log();
   console.log(`Credentials expire at ${credentials.aws_expiration}.`);
   console.log(`Use them with AWS CLI by passing --profile "${profileName}".`);
+}
+
+function credentialProcessPayload(credentials: AwsCredentials): string {
+  return JSON.stringify({
+    Version: 1,
+    AccessKeyId: credentials.aws_access_key_id,
+    SecretAccessKey: credentials.aws_secret_access_key,
+    SessionToken: credentials.aws_session_token,
+    Expiration: credentials.aws_expiration,
+  });
 }
 
 function handleBackgroundPromise(
@@ -238,7 +249,19 @@ export const login = {
     disableGpu: boolean,
     incognito = false,
     credentialProcess = false,
+    forceRefresh = false,
   ): Promise<void> {
+    // Fast path: the AWS CLI re-runs credential_process on every invocation,
+    // so serve still-valid cached credentials without launching a browser.
+    if (credentialProcess && !forceRefresh) {
+      const cachedCredentials =
+        await credentialCache.getValidCachedCredentialsAsync(profileName);
+      if (cachedCredentials) {
+        console.log(credentialProcessPayload(cachedCredentials));
+        return;
+      }
+    }
+
     const originalConsoleLog = console.log;
     const effectiveNoPrompt = credentialProcess ? true : noPrompt;
 
@@ -314,6 +337,13 @@ export const login = {
           credentialProcess ? "--credential-process" : "--no-prompt",
         );
 
+      // Profiles wired to credential_process must not receive static keys in
+      // the shared credentials file: those keys take precedence over
+      // credential_process in the AWS credential resolver, so they would
+      // shadow the wiring and keep serving stale keys after expiry. Cache the
+      // credentials for later credential_process runs instead.
+      const wiredToCredentialProcess =
+        this._isManagedByCredentialProcess(profile);
       const credentials = await this._assumeRoleAsync(
         profileName,
         samlResponse,
@@ -321,7 +351,7 @@ export const login = {
         durationHours,
         awsNoVerifySsl,
         profile.region,
-        !credentialProcess,
+        !credentialProcess && !wiredToCredentialProcess,
       );
 
       if (credentialProcess) {
@@ -329,15 +359,24 @@ export const login = {
           throw new CLIError("Unable to retrieve credentials.");
         }
 
-        originalConsoleLog(
-          JSON.stringify({
-            Version: 1,
-            AccessKeyId: credentials.aws_access_key_id,
-            SecretAccessKey: credentials.aws_secret_access_key,
-            SessionToken: credentials.aws_session_token,
-            Expiration: credentials.aws_expiration,
-          }),
+        await credentialCache.setCachedCredentialsAsync(
+          profileName,
+          credentials,
         );
+        originalConsoleLog(credentialProcessPayload(credentials));
+      } else if (wiredToCredentialProcess) {
+        if (!credentials) {
+          throw new CLIError("Unable to retrieve credentials.");
+        }
+
+        await credentialCache.setCachedCredentialsAsync(
+          profileName,
+          credentials,
+        );
+        console.log(
+          "Cached credentials for AWS CLI credential_process refresh.",
+        );
+        printCredentialsReadyMessage(profileName, credentials);
       }
     } finally {
       console.log = originalConsoleLog;
@@ -360,12 +399,19 @@ export const login = {
 
     for (const profile of profiles) {
       debug(`Check if profile ${profile} is expired or is about to expire`);
-      if (
-        !forceRefresh &&
-        !(await awsConfig.isProfileAboutToExpireAsync(profile))
-      ) {
-        debug(`Profile ${profile} not yet due for refresh.`);
-        continue;
+      if (!forceRefresh) {
+        // Classic profiles keep credentials in the shared credentials file;
+        // credential_process-wired profiles keep them in the az2aws cache.
+        // Either source being fresh means the profile is not due yet.
+        const credentialsFileFresh =
+          !(await awsConfig.isProfileAboutToExpireAsync(profile));
+        if (
+          credentialsFileFresh ||
+          (await credentialCache.isCacheFreshAsync(profile))
+        ) {
+          debug(`Profile ${profile} not yet due for refresh.`);
+          continue;
+        }
       }
 
       debug(`Run login for profile: ${profile}`);
@@ -491,6 +537,20 @@ export const login = {
     }
 
     return normalizedProfile;
+  },
+
+  /**
+   * True when the profile delegates credential retrieval to az2aws through
+   * the AWS CLI `credential_process` setting. Entries pointing at other tools
+   * are ignored so az2aws never interferes with them.
+   */
+  _isManagedByCredentialProcess(profile: ProfileConfig): boolean {
+    const credentialProcess = profile.credential_process;
+    return (
+      typeof credentialProcess === "string" &&
+      credentialProcess.includes("az2aws") &&
+      credentialProcess.includes("--credential-process")
+    );
   },
 
   // Load the profile

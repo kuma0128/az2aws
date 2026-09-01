@@ -7,12 +7,34 @@ import {
   validateSessionDurationHours,
 } from "./sessionDuration";
 
+function buildCredentialProcessCommand(profileName: string): string {
+  const profileArgument = /\s/.test(profileName)
+    ? `"${profileName}"`
+    : profileName;
+  return `az2aws --profile ${profileArgument} --credential-process`;
+}
+
+function isAz2awsCredentialProcess(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    value.includes("az2aws") &&
+    value.includes("--credential-process")
+  );
+}
+
 export async function configureProfileAsync(
   profileName: string,
 ): Promise<void> {
   console.log(`Configuring profile '${profileName}'`);
 
   const profile = await awsConfig.getProfileConfigAsync(profileName);
+
+  // Default to wiring credential_process unless the profile already delegates
+  // to another tool, which az2aws must not overwrite.
+  const existingCredentialProcess = profile?.credential_process;
+  const hasForeignCredentialProcess =
+    existingCredentialProcess !== undefined &&
+    !isAz2awsCredentialProcess(existingCredentialProcess);
 
   const questions = [
     {
@@ -51,6 +73,17 @@ export async function configureProfileAsync(
     },
     {
       type: "input" as const,
+      name: "credentialProcess",
+      message:
+        "Let AWS CLI refresh credentials automatically via credential_process (true|false)",
+      default: hasForeignCredentialProcess ? "false" : "true",
+      validate: (input: string): boolean | string => {
+        if (input === "true" || input === "false") return true;
+        return "credential_process must be either true or false";
+      },
+    },
+    {
+      type: "input" as const,
       name: "defaultRoleArn",
       message: "Default Role ARN (if multiple):",
       default: profile && profile.azure_default_role_arn,
@@ -80,7 +113,9 @@ export async function configureProfileAsync(
     throw new CLIError(sessionDurationHoursValidationMessage);
   }
 
-  await awsConfig.setProfileConfigValuesAsync(profileName, {
+  const wireCredentialProcess =
+    (answers.credentialProcess as string) === "true";
+  const values: Record<string, unknown> = {
     azure_tenant_id: answers.tenantId as string,
     azure_app_id_uri: answers.appIdUri as string,
     azure_default_username: answers.username as string,
@@ -88,7 +123,27 @@ export async function configureProfileAsync(
     azure_default_duration_hours: String(defaultDurationHours),
     azure_default_remember_me: (answers.rememberMe as string) === "true",
     region: answers.region as string,
-  });
+  };
+
+  if (wireCredentialProcess) {
+    values.credential_process = buildCredentialProcessCommand(profileName);
+  } else if (isAz2awsCredentialProcess(existingCredentialProcess)) {
+    // undefined removes the previously wired az2aws entry; a foreign entry is
+    // left untouched by omitting the key entirely.
+    values.credential_process = undefined;
+  }
+
+  await awsConfig.setProfileConfigValuesAsync(profileName, values);
 
   console.log("Profile saved.");
+  if (wireCredentialProcess) {
+    const loginCommand =
+      profileName === "default" ? "az2aws" : `az2aws --profile ${profileName}`;
+    console.log(
+      "AWS CLI will refresh credentials automatically via credential_process.",
+    );
+    console.log(
+      `Run '${loginCommand}' once to sign in; afterwards aws commands refresh on their own (az2aws must be on PATH).`,
+    );
+  }
 }

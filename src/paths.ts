@@ -8,6 +8,7 @@ export const paths: {
   config: string;
   credentials: string;
   chromium: string;
+  az2awsCache: string;
   chromeBin?: string;
   userDataDir?: string;
   profileDir?: string;
@@ -18,6 +19,8 @@ export const paths: {
   credentials:
     process.env.AWS_SHARED_CREDENTIALS_FILE || path.join(awsDir, "credentials"),
   chromium: path.join(awsDir, "chromium"),
+  az2awsCache:
+    process.env.AZ2AWS_CACHE_DIR || path.join(awsDir, "az2aws", "cache"),
   chromeBin: process.env.BROWSER_CHROME_BIN,
   userDataDir: process.env.BROWSER_USER_DATA_DIR,
   profileDir: process.env.BROWSER_PROFILE_DIR,

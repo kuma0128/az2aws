@@ -110,7 +110,7 @@ async function atomicWriteTextFile(
 }
 
 // Autorefresh credential time limit in milliseconds
-const refreshLimitInMs = 11 * 60 * 1000;
+export const refreshLimitInMs = 11 * 60 * 1000;
 
 export interface ProfileConfig {
   azure_tenant_id: string;
@@ -138,7 +138,7 @@ interface SaveData {
 export const awsConfig = {
   async setProfileConfigValuesAsync(
     profileName: string,
-    values: ProfileConfig,
+    values: ProfileConfig | Record<string, unknown>,
   ): Promise<void> {
     const sectionName =
       profileName === "default" ? "default" : `profile ${profileName}`;
@@ -148,10 +148,17 @@ export const awsConfig = {
     const config =
       (await this._loadAsync<{ [key: string]: ProfileConfig }>("config")) || {};
 
-    config[sectionName] = {
+    const section: Record<string, unknown> = {
       ...config[sectionName],
       ...values,
     };
+    // A value of undefined means "remove this key from the profile".
+    for (const key of Object.keys(section)) {
+      if (section[key] === undefined) {
+        delete section[key];
+      }
+    }
+    config[sectionName] = section as ProfileConfig;
 
     await this._saveAsync("config", config);
   },
