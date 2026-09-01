@@ -242,7 +242,15 @@ if (hasFlag("--archive")) {
   fs.rmSync(assetPath, { force: true });
   if (isWindowsTarget) {
     // bsdtar (preinstalled on all GitHub runners) picks zip from the extension.
-    execFileSync("tar", ["-a", "-cf", assetPath, "-C", stageDir, binaryName], {
+    // A drive-qualified archive path (for example D:\\...) is interpreted as
+    // a remote archive by tar, so run inside the stage directory and pass a
+    // relative path with portable separators instead.
+    const relativeAssetPath = path
+      .relative(stageDir, assetPath)
+      .split(path.sep)
+      .join("/");
+    execFileSync("tar", ["-a", "-cf", relativeAssetPath, binaryName], {
+      cwd: stageDir,
       stdio: "inherit",
     });
   } else {
