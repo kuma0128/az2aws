@@ -135,9 +135,6 @@ export async function configureProfileAsync(
   }
 
   await awsConfig.setProfileConfigValuesAsync(profileName, values);
-  if (wireCredentialProcess) {
-    await awsConfig.removeProfileCredentialsAsync(profileName);
-  }
 
   console.log("Profile saved.");
   if (wireCredentialProcess) {

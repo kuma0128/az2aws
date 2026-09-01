@@ -3,7 +3,11 @@ import fs from "fs/promises";
 import path from "path";
 import _debug from "debug";
 import { paths } from "./paths";
-import { ProfileCredentials, refreshLimitInMs } from "./awsConfig";
+import {
+  ProfileConfig,
+  ProfileCredentials,
+  refreshLimitInMs,
+} from "./awsConfig";
 
 const debug = _debug("az2aws");
 
@@ -17,18 +21,51 @@ interface CacheFileContents {
   credentials: ProfileCredentials;
 }
 
-function activeConfigurationId(): string {
+function activeConfigPathId(): string {
   return crypto
     .createHash("sha256")
     .update(path.resolve(paths.config))
     .digest("hex");
 }
 
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalize);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [
+          key,
+          canonicalize((value as Record<string, unknown>)[key]),
+        ]),
+    );
+  }
+  return value;
+}
+
+function profileConfigurationId(
+  profileName: string,
+  profile: ProfileConfig,
+): string {
+  return crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify({
+        configPath: path.resolve(paths.config),
+        profileName,
+        profile: canonicalize(profile),
+      }),
+    )
+    .digest("hex");
+}
+
 function cacheFilePath(profileName: string): string {
-  const configurationId = activeConfigurationId();
+  const configPathId = activeConfigPathId();
   return path.join(
     paths.az2awsCache,
-    `${encodeURIComponent(profileName)}.${configurationId}.json`,
+    `${encodeURIComponent(profileName)}.${configPathId}.json`,
   );
 }
 
@@ -63,6 +100,7 @@ function isProfileCredentials(value: unknown): value is ProfileCredentials {
 export const credentialCache = {
   async getValidCachedCredentialsAsync(
     profileName: string,
+    profile: ProfileConfig,
   ): Promise<ProfileCredentials | undefined> {
     const filePath = cacheFilePath(profileName);
 
@@ -84,9 +122,9 @@ export const credentialCache = {
     if (
       !contents ||
       typeof contents !== "object" ||
-      (contents as CacheFileContents).version !== 2 ||
+      (contents as CacheFileContents).version !== 3 ||
       (contents as CacheFileContents).configurationId !==
-        activeConfigurationId() ||
+        profileConfigurationId(profileName, profile) ||
       (contents as CacheFileContents).profileName !== profileName ||
       !isProfileCredentials((contents as CacheFileContents).credentials)
     ) {
@@ -114,19 +152,23 @@ export const credentialCache = {
     return credentials;
   },
 
-  async isCacheFreshAsync(profileName: string): Promise<boolean> {
-    return !!(await this.getValidCachedCredentialsAsync(profileName));
+  async isCacheFreshAsync(
+    profileName: string,
+    profile: ProfileConfig,
+  ): Promise<boolean> {
+    return !!(await this.getValidCachedCredentialsAsync(profileName, profile));
   },
 
   /**
-   * Persist credentials for later credential_process runs. Failures are
-   * swallowed (with a debug log): the login itself succeeded, and a broken
-   * cache only costs an extra login next time.
+   * Persist credentials for later credential_process runs. The return value
+   * makes failures observable to callers that must not remove fallback
+   * credentials until the cache is durable.
    */
   async setCachedCredentialsAsync(
     profileName: string,
     credentials: ProfileCredentials,
-  ): Promise<void> {
+    profile: ProfileConfig,
+  ): Promise<boolean> {
     const filePath = cacheFilePath(profileName);
     const tempPath = path.join(
       paths.az2awsCache,
@@ -139,8 +181,8 @@ export const credentialCache = {
         mode: cacheDirMode,
       });
       const contents: CacheFileContents = {
-        version: 2,
-        configurationId: activeConfigurationId(),
+        version: 3,
+        configurationId: profileConfigurationId(profileName, profile),
         profileName,
         credentials,
       };
@@ -153,6 +195,7 @@ export const credentialCache = {
         // an earlier az2aws version left a wider mode on an existing file.
         await fs.chmod(filePath, cacheFileMode).catch(() => undefined);
       }
+      return true;
     } catch (error) {
       debug(
         `Failed to write credential cache for profile '${profileName}': ${String(
@@ -160,6 +203,7 @@ export const credentialCache = {
         )}`,
       );
       await fs.rm(tempPath, { force: true }).catch(() => undefined);
+      return false;
     }
   },
 };

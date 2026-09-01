@@ -252,23 +252,28 @@ export const login = {
     credentialProcess = false,
     forceRefresh = false,
   ): Promise<void> {
-    // Fast path: the AWS CLI re-runs credential_process on every invocation,
-    // so serve still-valid cached credentials without launching a browser.
-    if (credentialProcess && !forceRefresh) {
-      const cachedCredentials =
-        await credentialCache.getValidCachedCredentialsAsync(profileName);
-      if (cachedCredentials) {
-        console.log(credentialProcessPayload(cachedCredentials));
-        return;
-      }
-    }
-
     const originalConsoleLog = console.log;
     const effectiveNoPrompt = credentialProcess ? true : noPrompt;
 
     try {
       if (credentialProcess) {
         console.log = (...args: unknown[]) => console.error(...args);
+      }
+
+      // Load environment overrides before consulting the cache so credentials
+      // issued for an earlier tenant, application, role, or user cannot be
+      // returned after the effective profile configuration changes.
+      const profile = await this._loadProfileAsync(profileName);
+      if (credentialProcess && !forceRefresh) {
+        const cachedCredentials =
+          await credentialCache.getValidCachedCredentialsAsync(
+            profileName,
+            profile,
+          );
+        if (cachedCredentials) {
+          originalConsoleLog(credentialProcessPayload(cachedCredentials));
+          return;
+        }
       }
 
       let headless, cliProxy;
@@ -285,7 +290,6 @@ export const login = {
         throw new CLIError("Invalid mode");
       }
 
-      const profile = await this._loadProfileAsync(profileName);
       console.log(
         `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`,
       );
@@ -363,6 +367,7 @@ export const login = {
         await credentialCache.setCachedCredentialsAsync(
           profileName,
           credentials,
+          profile,
         );
         originalConsoleLog(credentialProcessPayload(credentials));
       } else if (wiredToCredentialProcess) {
@@ -370,14 +375,20 @@ export const login = {
           throw new CLIError("Unable to retrieve credentials.");
         }
 
-        await credentialCache.setCachedCredentialsAsync(
+        const cachePersisted = await credentialCache.setCachedCredentialsAsync(
           profileName,
           credentials,
+          profile,
         );
+        if (!cachePersisted) {
+          throw new CLIError(
+            "Unable to persist the credential cache; existing shared credentials were left unchanged.",
+          );
+        }
         // Profiles wired before credential caching was introduced may still
         // have static credentials. AWS resolves those before
-        // credential_process, so remove the legacy section only after fresh
-        // credentials have been obtained and handed to the cache.
+        // credential_process, so remove the legacy section only after the
+        // replacement credentials have been written successfully.
         await awsConfig.removeProfileCredentialsAsync(profileName);
         console.log(
           "Cached credentials for AWS CLI credential_process refresh.",
@@ -408,12 +419,15 @@ export const login = {
       if (!forceRefresh) {
         // Classic profiles keep credentials in the shared credentials file;
         // credential_process-wired profiles keep them in the az2aws cache.
-        const profileConfig = await awsConfig.getProfileConfigAsync(profile);
+        const rawProfileConfig = await awsConfig.getProfileConfigAsync(profile);
+        const profileConfig = rawProfileConfig
+          ? this._applyProfileEnvironment(rawProfileConfig)
+          : undefined;
         const usesCredentialProcess =
           profileConfig !== undefined &&
           this._isManagedByCredentialProcess(profileConfig);
         const credentialsFresh = usesCredentialProcess
-          ? await credentialCache.isCacheFreshAsync(profile)
+          ? await credentialCache.isCacheFreshAsync(profile, profileConfig)
           : !(await awsConfig.isProfileAboutToExpireAsync(profile));
         if (credentialsFresh) {
           debug(`Profile ${profile} not yet due for refresh.`);
@@ -546,6 +560,17 @@ export const login = {
     return normalizedProfile;
   },
 
+  _applyProfileEnvironment(profile: ProfileConfig): ProfileConfig {
+    const effectiveProfile = this._normalizeProfileAliases(profile);
+    const env = this._loadProfileFromEnv();
+    for (const prop in env) {
+      if (env[prop]) {
+        effectiveProfile[prop] = env[prop];
+      }
+    }
+    return this._normalizeProfileAliases(effectiveProfile);
+  },
+
   /**
    * True when the profile delegates credential retrieval to az2aws through
    * the AWS CLI `credential_process` setting. Entries pointing at other tools
@@ -564,15 +589,7 @@ export const login = {
         `Unknown profile '${profileName}'. You must configure it first with --configure.`,
       );
 
-    let profile = this._normalizeProfileAliases(rawProfile);
-
-    const env = this._loadProfileFromEnv();
-    for (const prop in env) {
-      if (env[prop]) {
-        profile[prop] = env[prop] === null ? profile[prop] : env[prop];
-      }
-    }
-    profile = this._normalizeProfileAliases(profile);
+    const profile = this._applyProfileEnvironment(rawProfile);
 
     if (!profile.azure_tenant_id || !profile.azure_app_id_uri)
       throw new CLIError(

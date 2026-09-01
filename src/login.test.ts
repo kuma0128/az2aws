@@ -1148,6 +1148,15 @@ describe("login", () => {
       aws_session_token: "session-token",
       aws_expiration: "2024-01-01T00:00:00.000Z",
     };
+    const profile = {
+      azure_tenant_id: "tenant",
+      azure_app_id_uri: "app",
+      azure_default_username: "user",
+      azure_default_role_arn: "role",
+      azure_default_duration_hours: "1",
+      azure_default_remember_me: false,
+      region: "us-east-1",
+    };
     beforeEach(() => {
       vi.clearAllMocks();
       for (const key of AZURE_ENV_KEYS) {
@@ -1156,15 +1165,7 @@ describe("login", () => {
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "error").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
-      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
-        azure_tenant_id: "tenant",
-        azure_app_id_uri: "app",
-        azure_default_username: "user",
-        azure_default_role_arn: "role",
-        azure_default_duration_hours: "1",
-        azure_default_remember_me: false,
-        region: "us-east-1",
-      });
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(profile);
     });
 
     afterEach(() => {
@@ -1285,6 +1286,9 @@ describe("login", () => {
       );
 
       expect(performLoginSpy).not.toHaveBeenCalled();
+      expect(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).toHaveBeenCalledWith("default", profile);
       expect(credentialCache.setCachedCredentialsAsync).not.toHaveBeenCalled();
       expect(console.log).toHaveBeenCalledTimes(1);
       expect(
@@ -1362,6 +1366,7 @@ describe("login", () => {
       expect(credentialCache.setCachedCredentialsAsync).toHaveBeenCalledWith(
         "default",
         credentials,
+        profile,
       );
     });
   });
@@ -1377,6 +1382,16 @@ describe("login", () => {
       aws_session_token: "session-token",
       aws_expiration: "2024-01-01T00:00:00.000Z",
     };
+    const wiredProfile = {
+      azure_tenant_id: "tenant",
+      azure_app_id_uri: "app",
+      azure_default_username: "user",
+      azure_default_role_arn: "role",
+      azure_default_duration_hours: "1",
+      azure_default_remember_me: false,
+      region: "us-east-1",
+      credential_process: "az2aws --profile default --credential-process",
+    };
 
     beforeEach(() => {
       vi.clearAllMocks();
@@ -1391,6 +1406,9 @@ describe("login", () => {
         role,
         durationHours: 1,
       });
+      vi.mocked(credentialCache.setCachedCredentialsAsync).mockResolvedValue(
+        true,
+      );
     });
 
     afterEach(() => {
@@ -1399,16 +1417,9 @@ describe("login", () => {
     });
 
     it("should cache instead of writing the credentials file when wired to az2aws", async () => {
-      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
-        azure_tenant_id: "tenant",
-        azure_app_id_uri: "app",
-        azure_default_username: "user",
-        azure_default_role_arn: "role",
-        azure_default_duration_hours: "1",
-        azure_default_remember_me: false,
-        region: "us-east-1",
-        credential_process: "az2aws --profile default --credential-process",
-      });
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(
+        wiredProfile,
+      );
       const assumeRoleSpy = vi
         .spyOn(login, "_assumeRoleAsync")
         .mockResolvedValue(credentials);
@@ -1431,6 +1442,7 @@ describe("login", () => {
       expect(credentialCache.setCachedCredentialsAsync).toHaveBeenCalledWith(
         "default",
         credentials,
+        wiredProfile,
       );
       expect(awsConfig.removeProfileCredentialsAsync).toHaveBeenCalledWith(
         "default",
@@ -1438,16 +1450,9 @@ describe("login", () => {
     });
 
     it("should throw when the wired login yields no credentials", async () => {
-      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
-        azure_tenant_id: "tenant",
-        azure_app_id_uri: "app",
-        azure_default_username: "user",
-        azure_default_role_arn: "role",
-        azure_default_duration_hours: "1",
-        azure_default_remember_me: false,
-        region: "us-east-1",
-        credential_process: "az2aws --profile default --credential-process",
-      });
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(
+        wiredProfile,
+      );
       vi.spyOn(login, "_assumeRoleAsync").mockResolvedValue(undefined);
 
       const error = await login
@@ -1470,6 +1475,33 @@ describe("login", () => {
       expect((error as CLIError).message).toBe(
         "Unable to retrieve credentials.",
       );
+      expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
+    it("should keep shared credentials when the cache write fails", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(
+        wiredProfile,
+      );
+      vi.spyOn(login, "_assumeRoleAsync").mockResolvedValue(credentials);
+      vi.mocked(credentialCache.setCachedCredentialsAsync).mockResolvedValue(
+        false,
+      );
+
+      await expect(
+        login.loginAsync(
+          "default",
+          "cli",
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+        ),
+      ).rejects.toThrow("Unable to persist the credential cache");
       expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
     });
 
@@ -1971,6 +2003,10 @@ describe("login", () => {
       expect(awsConfig.isProfileAboutToExpireAsync).not.toHaveBeenCalled();
       expect(credentialCache.isCacheFreshAsync).toHaveBeenCalledWith(
         "wired-profile",
+        expect.objectContaining({
+          credential_process:
+            "az2aws --profile wired-profile --credential-process",
+        }),
       );
       expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
     });

@@ -625,9 +625,9 @@ describe("configureProfileAsync", () => {
           credential_process: "az2aws --profile myprofile --credential-process",
         }),
       );
-      expect(awsConfig.removeProfileCredentialsAsync).toHaveBeenCalledWith(
-        "myprofile",
-      );
+      // Static credentials remain available until the initial login has
+      // durably populated the credential cache.
+      expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
     });
 
     it("should quote profile names containing whitespace", async () => {

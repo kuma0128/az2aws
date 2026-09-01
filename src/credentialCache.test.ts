@@ -2,14 +2,57 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { credentialCache } from "./credentialCache";
-import type { ProfileCredentials } from "./awsConfig";
+import { credentialCache as credentialCacheImplementation } from "./credentialCache";
+import type { ProfileConfig, ProfileCredentials } from "./awsConfig";
 import { paths } from "./paths";
 
 const originalCacheDir = paths.az2awsCache;
 const originalConfigPath = paths.config;
 const isWindows = process.platform === "win32";
 let tempDir: string;
+
+const cacheProfile: ProfileConfig = {
+  azure_tenant_id: "tenant",
+  azure_app_id_uri: "app",
+  azure_default_username: "user",
+  azure_default_role_arn: "role",
+  azure_default_duration_hours: "1",
+  azure_default_remember_me: false,
+  region: "us-east-1",
+  credential_process: "az2aws --profile default --credential-process",
+};
+
+const credentialCache = {
+  getValidCachedCredentialsAsync(
+    profileName: string,
+    profile: ProfileConfig = cacheProfile,
+  ) {
+    return credentialCacheImplementation.getValidCachedCredentialsAsync(
+      profileName,
+      profile,
+    );
+  },
+  isCacheFreshAsync(
+    profileName: string,
+    profile: ProfileConfig = cacheProfile,
+  ) {
+    return credentialCacheImplementation.isCacheFreshAsync(
+      profileName,
+      profile,
+    );
+  },
+  setCachedCredentialsAsync(
+    profileName: string,
+    credentials: ProfileCredentials,
+    profile: ProfileConfig = cacheProfile,
+  ) {
+    return credentialCacheImplementation.setCachedCredentialsAsync(
+      profileName,
+      credentials,
+      profile,
+    );
+  },
+};
 
 async function findCacheFileAsync(profileName: string): Promise<string> {
   const prefix = `${encodeURIComponent(profileName)}.`;
@@ -47,7 +90,9 @@ describe("credentialCache", () => {
 
   it("should round-trip credentials that are still valid", async () => {
     const credentials = credentialsExpiringIn(60);
-    await credentialCache.setCachedCredentialsAsync("default", credentials);
+    await expect(
+      credentialCache.setCachedCredentialsAsync("default", credentials),
+    ).resolves.toBe(true);
 
     const cached =
       await credentialCache.getValidCachedCredentialsAsync("default");
@@ -201,7 +246,7 @@ describe("credentialCache", () => {
     await writeFile(
       await findCacheFileAsync("default"),
       JSON.stringify({
-        version: 2,
+        version: 3,
         configurationId: "another-configuration",
         profileName: "default",
         credentials,
@@ -211,6 +256,28 @@ describe("credentialCache", () => {
     expect(
       await credentialCache.getValidCachedCredentialsAsync("default"),
     ).toBeUndefined();
+  });
+
+  it("should reject credentials issued for different effective profile settings", async () => {
+    const credentials = credentialsExpiringIn(60);
+    await credentialCache.setCachedCredentialsAsync("default", credentials);
+
+    const changedProfile = {
+      ...cacheProfile,
+      azure_default_role_arn: "another-role",
+    };
+    expect(
+      await credentialCache.getValidCachedCredentialsAsync(
+        "default",
+        changedProfile,
+      ),
+    ).toBeUndefined();
+    expect(
+      await credentialCache.getValidCachedCredentialsAsync(
+        "default",
+        cacheProfile,
+      ),
+    ).toEqual(credentials);
   });
 
   it("should encode profile names that are not filesystem-safe", async () => {
@@ -248,7 +315,7 @@ describe("credentialCache", () => {
     },
   );
 
-  it("should swallow write failures instead of failing the login", async () => {
+  it("should report write failures without throwing", async () => {
     // Point the cache directory below a regular file so mkdir fails.
     const blockingFile = path.join(tempDir, "blocking");
     await writeFile(blockingFile, "");
@@ -259,7 +326,7 @@ describe("credentialCache", () => {
         "default",
         credentialsExpiringIn(60),
       ),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
   });
 
   describe("isCacheFreshAsync", () => {
