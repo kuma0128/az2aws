@@ -17,6 +17,7 @@ import { paths } from "./paths";
 
 const originalCacheDir = paths.az2awsCache;
 const originalConfigPath = paths.config;
+const originalAwsDir = paths.awsDir;
 const isWindows = process.platform === "win32";
 let tempDir: string;
 
@@ -92,6 +93,7 @@ describe("credentialCache", () => {
   afterEach(async () => {
     paths.az2awsCache = originalCacheDir;
     paths.config = originalConfigPath;
+    paths.awsDir = originalAwsDir;
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -379,6 +381,7 @@ describe("credentialCache", () => {
   it.skipIf(isWindows)(
     "should harden an existing cache directory",
     async () => {
+      paths.awsDir = tempDir;
       await mkdir(paths.az2awsCache, { recursive: true });
       await chmod(paths.az2awsCache, 0o777);
 
@@ -386,6 +389,41 @@ describe("credentialCache", () => {
         "default",
         credentialsExpiringIn(60),
       );
+
+      expect((await stat(paths.az2awsCache)).mode & 0o777).toBe(0o700);
+    },
+  );
+
+  it.skipIf(isWindows)(
+    "should reject an unsafe existing custom cache directory without changing it",
+    async () => {
+      await mkdir(paths.az2awsCache, { recursive: true });
+      await chmod(paths.az2awsCache, 0o755);
+
+      await expect(
+        credentialCache.setCachedCredentialsAsync(
+          "default",
+          credentialsExpiringIn(60),
+        ),
+      ).resolves.toBe(false);
+
+      expect((await stat(paths.az2awsCache)).mode & 0o777).toBe(0o755);
+      expect(await readdir(paths.az2awsCache)).toEqual([]);
+    },
+  );
+
+  it.skipIf(isWindows)(
+    "should use a safe existing custom cache directory without changing it",
+    async () => {
+      await mkdir(paths.az2awsCache, { recursive: true });
+      await chmod(paths.az2awsCache, 0o700);
+
+      await expect(
+        credentialCache.setCachedCredentialsAsync(
+          "default",
+          credentialsExpiringIn(60),
+        ),
+      ).resolves.toBe(true);
 
       expect((await stat(paths.az2awsCache)).mode & 0o777).toBe(0o700);
     },

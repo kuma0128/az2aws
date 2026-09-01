@@ -22,10 +22,13 @@ export async function configureProfileAsync(
   // Default to wiring credential_process unless the profile already delegates
   // to another tool, which az2aws must not overwrite.
   const existingCredentialProcess = profile?.credential_process;
+  const hasAz2awsCredentialProcess = isAz2awsCredentialProcess(
+    existingCredentialProcess,
+  );
   const hasForeignCredentialProcess =
     typeof existingCredentialProcess === "string" &&
     existingCredentialProcess.trim().length > 0 &&
-    !isAz2awsCredentialProcess(existingCredentialProcess, { profileName });
+    !hasAz2awsCredentialProcess;
   const foreignCredentialProcessMessage =
     "Existing credential_process is managed by another tool and cannot be overwritten.";
 
@@ -129,9 +132,7 @@ export async function configureProfileAsync(
 
   if (wireCredentialProcess) {
     values.credential_process = buildCredentialProcessCommand(profileName);
-  } else if (
-    isAz2awsCredentialProcess(existingCredentialProcess, { profileName })
-  ) {
+  } else if (hasAz2awsCredentialProcess) {
     // undefined removes the previously wired az2aws entry; a foreign entry is
     // left untouched by omitting the key entirely.
     values.credential_process = undefined;

@@ -651,7 +651,7 @@ describe("configureProfileAsync", () => {
       );
     });
 
-    it("should remove an az2aws-managed entry when the answer is false", async () => {
+    it("should remove stale az2aws-managed wiring when the answer is false", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
         azure_tenant_id: "tenant",
         azure_app_id_uri: "https://app.example.com",
@@ -660,7 +660,7 @@ describe("configureProfileAsync", () => {
         azure_default_duration_hours: "1",
         azure_default_remember_me: true,
         region: "",
-        credential_process: "az2aws --profile myprofile --credential-process",
+        credential_process: "az2aws --profile oldprofile --credential-process",
       });
       vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
         undefined,
@@ -676,6 +676,32 @@ describe("configureProfileAsync", () => {
         .calls[0][1] as Record<string, unknown>;
       expect("credential_process" in savedValues).toBe(true);
       expect(savedValues.credential_process).toBeUndefined();
+    });
+
+    it("should repair stale az2aws-managed wiring when the answer is true", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "https://app.example.com",
+        azure_default_username: "",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: true,
+        region: "",
+        credential_process: "az2aws --profile oldprofile --credential-process",
+      });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "true",
+      });
+
+      await configureProfileAsync("myprofile");
+
+      expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
+        "myprofile",
+        expect.objectContaining({
+          credential_process: buildCredentialProcessCommand("myprofile"),
+        }),
+      );
     });
 
     it("should leave a foreign credential_process untouched when the answer is false", async () => {

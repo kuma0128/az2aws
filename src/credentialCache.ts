@@ -14,6 +14,13 @@ const debug = _debug("az2aws");
 const cacheDirMode = 0o700;
 const cacheFileMode = 0o600;
 
+function isDefaultCacheDirectory(): boolean {
+  return (
+    path.resolve(paths.az2awsCache) ===
+    path.resolve(paths.awsDir, "az2aws", "cache")
+  );
+}
+
 interface CacheFileContents {
   version: number;
   configurationId: string;
@@ -170,15 +177,29 @@ export const credentialCache = {
     );
 
     try {
-      await fs.mkdir(paths.az2awsCache, {
+      const createdDirectory = await fs.mkdir(paths.az2awsCache, {
         recursive: true,
         mode: cacheDirMode,
       });
       if (process.platform !== "win32") {
-        // mkdir's mode is ignored for an existing directory. Reapply it so a
-        // legacy or user-supplied cache directory cannot remain accessible to
-        // other local users.
-        await fs.chmod(paths.az2awsCache, cacheDirMode);
+        const directoryStat = await fs.lstat(paths.az2awsCache);
+        if (!directoryStat.isDirectory()) {
+          throw new Error("Credential cache path must be a directory");
+        }
+
+        if (isDefaultCacheDirectory() || createdDirectory !== undefined) {
+          // mkdir's mode is ignored for an existing directory. The default
+          // path is dedicated to az2aws, and a newly created custom path is
+          // ours, so both can be hardened safely.
+          await fs.chmod(paths.az2awsCache, cacheDirMode);
+        } else if ((directoryStat.mode & 0o077) !== 0) {
+          // A pre-existing override may be shared with another application.
+          // Do not change it destructively; refuse to place credentials there
+          // until the owner restricts its permissions explicitly.
+          throw new Error(
+            "Existing custom credential cache directory must not grant group or other access",
+          );
+        }
       }
       const contents: CacheFileContents = {
         version: 3,
