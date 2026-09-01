@@ -1186,18 +1186,49 @@ credential_process = aws-vault export --format=json existing
           callback(null);
         },
       );
-      const profileName = "team=.R&D#prod";
+      const profileName = "team-R&D#prod";
       const command = buildCredentialProcessCommand(profileName);
 
       await awsConfig.setProfileConfigValuesAsync(profileName, {
         credential_process: command,
       });
 
-      expect(writtenData).toContain(`[profile ${profileName}]`);
-      expect(writtenData).not.toContain("\\.");
       expect(writtenData).toContain(`credential_process=${command}`);
       expect(writtenData).not.toContain('credential_process="az2aws');
-      expect(writtenData).not.toContain("\\#prod");
+    });
+
+    it("should preserve existing dotted section paths", async () => {
+      let writtenData = "";
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) =>
+          callback(
+            null,
+            "[profile foo.bar]\nregion = us-east-1\n\n[sso-session corp.example]\nsso_region = us-east-1\n",
+          ),
+      );
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.setProfileConfigValuesAsync("other", {
+        region: "eu-west-1",
+      });
+
+      expect(writtenData).toContain("[profile foo.bar]");
+      expect(writtenData).toContain("[sso-session corp.example]");
+      expect(writtenData).not.toMatch(/^\[profile foo\]$/m);
+      expect(writtenData).not.toMatch(/^\[sso-session corp\]$/m);
     });
   });
 

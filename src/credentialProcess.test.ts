@@ -8,9 +8,12 @@ import {
 } from "./credentialProcess";
 
 describe("credentialProcess", () => {
+  const credentialProcessExecutable =
+    process.platform === "win32" ? "az2aws.cmd" : "az2aws";
+
   it("should quote profile names consistently", () => {
     expect(buildCredentialProcessCommand("my profile")).toBe(
-      'az2aws --profile="my profile" --credential-process',
+      `${credentialProcessExecutable} --profile="my profile" --credential-process`,
     );
     expect(buildLoginCommand("my profile")).toBe(
       'az2aws --profile="my profile"',
@@ -20,7 +23,7 @@ describe("credentialProcess", () => {
 
   it("should attach profile values that begin with a hyphen", () => {
     expect(buildCredentialProcessCommand("-prod")).toBe(
-      "az2aws --profile=-prod --credential-process",
+      `${credentialProcessExecutable} --profile=-prod --credential-process`,
     );
     expect(buildLoginCommand("-prod")).toBe("az2aws --profile=-prod");
   });
@@ -46,7 +49,9 @@ describe("credentialProcess", () => {
   ])("should quote shell metacharacters in profile %s", (profile, quoted) => {
     const command = buildCredentialProcessCommand(profile);
 
-    expect(command).toBe(`az2aws --profile=${quoted} --credential-process`);
+    expect(command).toBe(
+      `${credentialProcessExecutable} --profile=${quoted} --credential-process`,
+    );
     expect(isAz2awsCredentialProcess(command, { profileName: profile })).toBe(
       true,
     );
@@ -58,7 +63,7 @@ describe("credentialProcess", () => {
       const profile =
         'R&D prod$HOME $(printf injected) `printf injected` "quoted" \\slash';
       const command = buildCredentialProcessCommand(profile);
-      const prefix = "az2aws --profile=";
+      const prefix = `${credentialProcessExecutable} --profile=`;
       const suffix = " --credential-process";
       const quotedArgument = command.slice(prefix.length, -suffix.length);
 
@@ -89,12 +94,15 @@ describe("credentialProcess", () => {
     expect(quoteCommandArgument("trailing\\", "win32")).toBe('"trailing\\\\"');
   });
 
+  it("should name the npm command shim on Windows", () => {
+    expect(buildCredentialProcessCommand("default", "win32")).toBe(
+      "az2aws.cmd --profile=default --credential-process",
+    );
+  });
+
   it("should round-trip Windows UNC and internal backslash pairs", () => {
     const profile = String.raw`\\server\\team profile`;
-    const command = `az2aws --profile=${quoteCommandArgument(
-      profile,
-      "win32",
-    )} --credential-process`;
+    const command = buildCredentialProcessCommand(profile, "win32");
 
     expect(
       isAz2awsCredentialProcess(command, {

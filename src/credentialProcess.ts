@@ -133,8 +133,12 @@ export function quoteCommandArgument(
   return `"${value.replace(/["\\$`]/g, "\\$&")}"`;
 }
 
-export function buildCredentialProcessCommand(profileName: string): string {
-  return `az2aws --profile=${quoteCommandArgument(profileName)} --credential-process`;
+export function buildCredentialProcessCommand(
+  profileName: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const executable = platform === "win32" ? "az2aws.cmd" : "az2aws";
+  return `${executable} --profile=${quoteCommandArgument(profileName, platform)} --credential-process`;
 }
 
 export function buildLoginCommand(profileName: string): string {

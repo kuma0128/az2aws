@@ -149,19 +149,6 @@ function stringifyAwsIni(type: string, data: SaveData): string {
   return text
     .split(eol)
     .map((line) => {
-      if (line.startsWith("[") && line.endsWith("]")) {
-        const parsedSection = ini.parse(`${line}\nvalue=true`) as Record<
-          string,
-          unknown
-        >;
-        const sectionName = Object.keys(parsedSection)[0];
-        if (sectionName && !/[\r\n\]]/.test(sectionName)) {
-          // ini treats dots as nested-section separators and quotes '=' in a
-          // section name. AWS profile names use both literally.
-          return `[${sectionName}]`;
-        }
-      }
-
       if (!line.startsWith("credential_process=")) {
         return line;
       }

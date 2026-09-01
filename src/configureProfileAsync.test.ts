@@ -17,6 +17,7 @@ vi.mock("./awsConfig", () => ({
 
 import inquirer from "inquirer";
 import { awsConfig } from "./awsConfig";
+import { buildCredentialProcessCommand } from "./credentialProcess";
 
 describe("configureProfileAsync", () => {
   beforeEach(() => {
@@ -622,7 +623,7 @@ describe("configureProfileAsync", () => {
       expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
         "myprofile",
         expect.objectContaining({
-          credential_process: "az2aws --profile=myprofile --credential-process",
+          credential_process: buildCredentialProcessCommand("myprofile"),
         }),
       );
       // Static credentials remain available until the initial login has
@@ -645,8 +646,7 @@ describe("configureProfileAsync", () => {
       expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
         "my profile",
         expect.objectContaining({
-          credential_process:
-            'az2aws --profile="my profile" --credential-process',
+          credential_process: buildCredentialProcessCommand("my profile"),
         }),
       );
     });
@@ -906,8 +906,7 @@ describe("configureProfileAsync", () => {
         expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
           "myprofile",
           expect.objectContaining({
-            credential_process:
-              "az2aws --profile=myprofile --credential-process",
+            credential_process: buildCredentialProcessCommand("myprofile"),
           }),
         );
       },
