@@ -294,17 +294,26 @@ export function extractRoleAttributeValues(samlText: string): string[] {
   return stack.length === 0 ? values : [];
 }
 
-// Keep the runtime import as native `import()` so CommonJS output can load
-// the ESM-only https-proxy-agent package.
-// eslint-disable-next-line @typescript-eslint/no-implied-eval
-const importHttpsProxyAgent = Function(
-  'return import("https-proxy-agent")',
-) as () => Promise<{
+type HttpsProxyAgentModule = {
   HttpsProxyAgent: new (
     proxy: string,
     opts?: Record<string, unknown>,
   ) => import("http").Agent;
-}>;
+};
+
+// The SEA build injects this loader so esbuild statically bundles the ESM-only
+// dependency. Regular CommonJS builds fall back to a native runtime import.
+declare const __az2awsImportHttpsProxyAgent:
+  (() => Promise<HttpsProxyAgentModule>) | undefined;
+
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const runtimeImportHttpsProxyAgent = Function(
+  'return import("https-proxy-agent")',
+) as () => Promise<HttpsProxyAgentModule>;
+const importHttpsProxyAgent =
+  typeof __az2awsImportHttpsProxyAgent === "function"
+    ? __az2awsImportHttpsProxyAgent
+    : runtimeImportHttpsProxyAgent;
 
 const getProxyUrl = (): string | undefined =>
   process.env.https_proxy ||

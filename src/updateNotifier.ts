@@ -2,8 +2,10 @@ import https from "https";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { isSea } from "node:sea";
 
 const PACKAGE_NAME = "az2aws";
+const RELEASES_URL = "https://github.com/kuma0128/az2aws/releases/latest";
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
 const FAKE_LATEST_VERSION_ENV = "AZ2AWS_FAKE_LATEST_VERSION";
 const ANSI_YELLOW = "\u001b[33m";
@@ -11,7 +13,7 @@ const ANSI_RESET = "\u001b[0m";
 const CONFIG_DIR_MODE = 0o700;
 const CACHE_FILE_MODE = 0o600;
 
-type InstallMethod = "mise" | "snap" | "unknown";
+type InstallMethod = "mise" | "mise-ubi" | "snap" | "binary" | "unknown";
 
 interface CacheData {
   latestVersion: string;
@@ -126,7 +128,18 @@ function detectInstallMethod(
     return "snap";
   }
 
-  if (executablePath?.includes(`${path.sep}mise${path.sep}`)) {
+  const installedViaMise = executablePath?.includes(
+    `${path.sep}mise${path.sep}`,
+  );
+
+  // Single-executable builds are distributed through GitHub Releases (npm
+  // versions and release tags always match, so the npm registry stays the
+  // version source). The mise ubi backend installs those same binaries.
+  if (isSea()) {
+    return installedViaMise ? "mise-ubi" : "binary";
+  }
+
+  if (installedViaMise) {
     return "mise";
   }
 
@@ -142,11 +155,15 @@ function getUpdateInstructions(installMethod: InstallMethod): string {
   switch (installMethod) {
     case "mise":
       return `Run: mise use -g npm:${PACKAGE_NAME}`;
+    case "mise-ubi":
+      return `Run: mise use -g ubi:kuma0128/${PACKAGE_NAME}`;
     case "snap":
       return [
         "The Snap channel remains on az2aws v1 and cannot install this update.",
         `Migrate to npm: npm install -g ${PACKAGE_NAME}`,
       ].join("\n");
+    case "binary":
+      return `Download: ${RELEASES_URL}`;
     default:
       return `Run: npm install -g ${PACKAGE_NAME}`;
   }

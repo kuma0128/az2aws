@@ -12,6 +12,7 @@ on:
           - all
           - npm
           - docker
+          - binaries
       docker_tag:
         description: Git tag to publish, e.g. v1.9.0 (required for Docker publish)
         required: false
@@ -27,6 +28,8 @@ jobs:
     outputs:
       publish_npm: ${{ steps.resolve.outputs.publish_npm }}
       publish_docker: ${{ steps.resolve.outputs.publish_docker }}
+      publish_binaries: ${{ steps.resolve.outputs.publish_binaries }}
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
       docker_image_tag: ${{ steps.resolve.outputs.docker_image_tag }}
       source_ref: ${{ steps.resolve.outputs.source_ref }}
     steps:
@@ -51,17 +54,23 @@ jobs:
           docker_image_tag=""
           publish_npm=false
           publish_docker=false
+          publish_binaries=false
+          release_tag="$RELEASE_TAG_NAME"
 
           case "$publish_target" in
             all)
               publish_npm=true
               publish_docker=true
+              publish_binaries=true
               ;;
             npm)
               publish_npm=true
               ;;
             docker)
               publish_docker=true
+              ;;
+            binaries)
+              publish_binaries=true
               ;;
             *)
               echo "::error::Unsupported publish_target: $publish_target"
@@ -109,6 +118,8 @@ jobs:
           {
             echo "publish_npm=$publish_npm"
             echo "publish_docker=$publish_docker"
+            echo "publish_binaries=$publish_binaries"
+            echo "release_tag=$release_tag"
             echo "docker_image_tag=$docker_image_tag"
             echo "source_ref=$source_ref"
           } >> "$GITHUB_OUTPUT"
@@ -235,3 +246,73 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.docker-tags.outputs.version }}
+
+  # Standalone single-executable binaries (Node SEA). Each target is built,
+  # signed where applicable, and smoke-tested on its native architecture.
+  build-binaries:
+    needs:
+      - release-inputs
+      - build
+    if: needs.release-inputs.outputs.publish_binaries == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            targets: linux-x64
+          - os: ubuntu-24.04-arm
+            targets: linux-arm64
+          - os: macos-latest
+            targets: darwin-arm64
+          - os: macos-15-intel
+            targets: darwin-x64
+          - os: windows-latest
+            targets: win-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.release-inputs.outputs.source_ref }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 24
+      - run: corepack enable pnpm
+        shell: bash
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build binaries
+        shell: bash
+        env:
+          TARGETS: ${{ matrix.targets }}
+        run: |
+          set -euo pipefail
+          for target in $TARGETS; do
+            node scripts/build-sea.mjs --target "$target" --archive
+          done
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: binaries-${{ matrix.os }}
+          path: |
+            dist/release/*.tar.gz
+            dist/release/*.zip
+            dist/release/*.sha256
+
+      - name: Upload binaries to the GitHub Release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-inputs.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::release_tag is empty."
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" dist/release/* --clobber

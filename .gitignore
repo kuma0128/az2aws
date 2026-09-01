@@ -38,3 +38,6 @@ node_modules
 lib
 .worktrees/
 az2aws-unrecognized-state.png
+
+# build artifacts
+dist

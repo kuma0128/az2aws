@@ -16,3 +16,5 @@ docker-launch.sh
 Dockerfile
 snapcraft.yaml
 tsconfig.json
+scripts
+dist

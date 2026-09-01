@@ -31,6 +31,7 @@ Firefox and Safari are not supported.
 
 - [Installation](#installation)
   - [mise (Recommended)](#mise-recommended)
+  - [Standalone binary](#standalone-binary)
   - [npm](#npm)
   - [Docker](#docker)
   - [Snap](#snap)
@@ -68,7 +69,25 @@ Activate mise in your shell:
 
 Install az2aws:
 
+    # Standalone binary from GitHub Releases (no Node.js required)
+    mise use -g ubi:kuma0128/az2aws
+
+    # Or the npm package (requires Node.js)
     mise use -g npm:az2aws
+
+### Standalone binary
+
+Self-contained executables (no Node.js required) are published to
+[GitHub Releases](https://github.com/kuma0128/az2aws/releases/latest) for
+Linux, macOS, and Windows:
+
+    # Example: macOS on Apple Silicon
+    curl -fL https://github.com/kuma0128/az2aws/releases/latest/download/az2aws-darwin-arm64.tar.gz | tar -xz
+    sudo mv az2aws /usr/local/bin/
+
+Assets follow the pattern `az2aws-{linux,darwin}-{x64,arm64}.tar.gz` and
+`az2aws-windows-x64.zip`, each with a matching `.sha256` checksum file. A
+Chromium-based browser must still be installed (see the note at the top).
 
 ### npm
 
