@@ -1263,13 +1263,15 @@ credential_process = aws-vault export --format=json existing
           callback(null);
         },
       );
-      const profileName = "hash#semi;prod";
+      const profileName = String.raw`hash\path#semi;prod`;
 
       await awsConfig.setProfileConfigValuesAsync(profileName, {
         region: "us-east-1",
       });
 
-      expect(writtenData).toContain("[profile hash\\#semi\\;prod]");
+      expect(writtenData).toContain(
+        String.raw`[profile hash\\path\#semi\;prod]`,
+      );
       await expect(
         awsConfig.getProfileConfigAsync(profileName),
       ).resolves.toEqual({ region: "us-east-1" });
