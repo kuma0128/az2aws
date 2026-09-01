@@ -190,6 +190,22 @@ describe("checkForUpdate", () => {
     expect(consoleSpy).not.toHaveBeenCalled();
   });
 
+  it("should direct Snap installs to a supported channel", async () => {
+    const message = await checkForUpdate("1.9.3", {
+      env: {
+        AZ2AWS_FAKE_LATEST_VERSION: "2.0.0",
+        SNAP: "/snap/az2aws/current",
+      },
+    });
+
+    expect(message).toContain(
+      "The Snap channel remains on az2aws v1 and cannot install this update.",
+    );
+    expect(message).toContain("Migrate to npm: npm install -g az2aws");
+    expect(message).not.toContain("snap refresh");
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
   it("should allow forcing the latest version through an environment variable", async () => {
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({

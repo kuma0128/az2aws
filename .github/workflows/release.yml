@@ -12,7 +12,6 @@ on:
           - all
           - npm
           - docker
-          - snap
       docker_tag:
         description: Git tag to publish, e.g. v1.9.0 (required for Docker publish)
         required: false
@@ -28,7 +27,6 @@ jobs:
     outputs:
       publish_npm: ${{ steps.resolve.outputs.publish_npm }}
       publish_docker: ${{ steps.resolve.outputs.publish_docker }}
-      publish_snap: ${{ steps.resolve.outputs.publish_snap }}
       docker_image_tag: ${{ steps.resolve.outputs.docker_image_tag }}
       source_ref: ${{ steps.resolve.outputs.source_ref }}
     steps:
@@ -53,22 +51,17 @@ jobs:
           docker_image_tag=""
           publish_npm=false
           publish_docker=false
-          publish_snap=false
 
           case "$publish_target" in
             all)
               publish_npm=true
               publish_docker=true
-              publish_snap=true
               ;;
             npm)
               publish_npm=true
               ;;
             docker)
               publish_docker=true
-              ;;
-            snap)
-              publish_snap=true
               ;;
             *)
               echo "::error::Unsupported publish_target: $publish_target"
@@ -116,7 +109,6 @@ jobs:
           {
             echo "publish_npm=$publish_npm"
             echo "publish_docker=$publish_docker"
-            echo "publish_snap=$publish_snap"
             echo "docker_image_tag=$docker_image_tag"
             echo "source_ref=$source_ref"
           } >> "$GITHUB_OUTPUT"
@@ -243,34 +235,3 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.docker-tags.outputs.version }}
-
-  publish-snap:
-    needs:
-      - release-inputs
-      - build
-    if: needs.release-inputs.outputs.publish_snap == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ needs.release-inputs.outputs.source_ref }}
-
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: lib
-          path: lib
-
-      - uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79 # v1
-        id: build
-        with:
-          snapcraft-args: --destructive-mode
-
-      - uses: snapcore/action-publish@214b86e5ca036ead1668c79afb81e550e6c54d40 # v1
-        env:
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-        with:
-          snap: ${{ steps.build.outputs.snap }}
-          release: stable

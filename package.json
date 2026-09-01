@@ -26,7 +26,7 @@
     "credential-helper",
     "sts",
     "assume-role",
-    "puppeteer"
+    "puppeteer-core"
   ],
   "homepage": "https://github.com/kuma0128/az2aws#readme",
   "repository": {
@@ -40,8 +40,7 @@
   "packageManager": "pnpm@10.33.2",
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild",
-      "puppeteer"
+      "esbuild"
     ],
     "overrides": {
       "basic-ftp@<5.3.0": "5.3.0",
@@ -60,7 +59,8 @@
     "prettier:write": "prettier --write \"src/**/*.{ts,json}\"",
     "prettier:check": "prettier --check \"src/**/*.ts\"",
     "test": "vitest run",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts src/login.e2e.test.ts",
+    "test:e2e:local": "vitest run --config vitest.e2e.config.ts src/login.local.e2e.test.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "pnpm eslint && pnpm prettier:check"
@@ -68,13 +68,12 @@
   "dependencies": {
     "@aws-sdk/client-sts": "^3.1009.0",
     "@smithy/node-http-handler": "^4.4.16",
-    "cheerio": "^1.2.0",
     "commander": "^15.0.0",
     "debug": "^4.4.3",
     "https-proxy-agent": "^9.0.0",
     "ini": "^6.0.0",
     "inquirer": "^14.0.1",
-    "puppeteer": "^25.1.0"
+    "puppeteer-core": "^25.1.0"
   },
   "devDependencies": {
     "@types/debug": "^4.1.12",

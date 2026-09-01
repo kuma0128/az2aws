@@ -36,7 +36,7 @@ program
   )
   .option(
     "--no-sandbox",
-    "Disable the Puppeteer sandbox (usually necessary on Linux)",
+    "Disable the browser sandbox (usually necessary on Linux/Docker)",
   )
   .option(
     "--no-prompt",
@@ -56,12 +56,9 @@ program
   )
   .option(
     "--no-disable-extensions",
-    "Tell Puppeteer not to pass the --disable-extensions flag to Chromium",
+    "Do not pass the --disable-extensions flag to the browser",
   )
-  .option(
-    "--disable-gpu",
-    "Tell Puppeteer to pass the --disable-gpu flag to Chromium",
-  )
+  .option("--disable-gpu", "Pass the --disable-gpu flag to the browser")
   .option(
     "--credential-process",
     "Output credentials in JSON format for AWS CLI credential_process",

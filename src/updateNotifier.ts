@@ -143,7 +143,10 @@ function getUpdateInstructions(installMethod: InstallMethod): string {
     case "mise":
       return `Run: mise use -g npm:${PACKAGE_NAME}`;
     case "snap":
-      return `Run: sudo snap refresh ${PACKAGE_NAME}`;
+      return [
+        "The Snap channel remains on az2aws v1 and cannot install this update.",
+        `Migrate to npm: npm install -g ${PACKAGE_NAME}`,
+      ].join("\n");
     default:
       return `Run: npm install -g ${PACKAGE_NAME}`;
   }
