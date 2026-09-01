@@ -86,6 +86,18 @@ describe("credentialProcess", () => {
     );
   });
 
+  it.each(["hash#prod", "semi;prod"])(
+    "should reject INI comment markers in profile %s",
+    (profile) => {
+      expect(() => buildCredentialProcessCommand(profile)).toThrow(
+        "cannot be safely used with credential_process",
+      );
+      expect(() => buildLoginCommand(profile)).toThrow(
+        "cannot be safely used with credential_process",
+      );
+    },
+  );
+
   it("should safely quote Windows shell operators", () => {
     expect(quoteCommandArgument("R&D", "win32")).toBe('"R&D"');
     expect(quoteCommandArgument("$(echo injected)", "win32")).toBe(

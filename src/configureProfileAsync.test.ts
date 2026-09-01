@@ -651,6 +651,22 @@ describe("configureProfileAsync", () => {
       );
     });
 
+    it.each(["hash#prod", "semi;prod"])(
+      "should reject profile name %s before saving unsafe wiring",
+      async (profileName) => {
+        vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+        vi.mocked(inquirer.prompt).mockResolvedValue({
+          ...baseAnswers,
+          credentialProcess: "true",
+        });
+
+        await expect(configureProfileAsync(profileName)).rejects.toThrow(
+          "cannot be safely used with credential_process",
+        );
+        expect(awsConfig.setProfileConfigValuesAsync).not.toHaveBeenCalled();
+      },
+    );
+
     it("should remove stale az2aws-managed wiring when the answer is false", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
         azure_tenant_id: "tenant",

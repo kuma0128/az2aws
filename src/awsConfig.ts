@@ -135,6 +135,45 @@ interface SaveData {
   [key: string]: ProfileConfig | ProfileCredentials;
 }
 
+function flattenIniSections(
+  parsed: Record<string, unknown>,
+): Record<string, unknown> {
+  const flattenedEntries: Array<[string, unknown]> = [];
+
+  const visitSection = (
+    sectionPath: string,
+    section: Record<string, unknown>,
+  ): void => {
+    const values: Array<[string, unknown]> = [];
+    const childSections: Array<[string, Record<string, unknown>]> = [];
+
+    for (const [key, value] of Object.entries(section)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        childSections.push([key, value as Record<string, unknown>]);
+      } else {
+        values.push([key, value]);
+      }
+    }
+
+    if (values.length > 0 || childSections.length === 0) {
+      flattenedEntries.push([sectionPath, Object.fromEntries(values)]);
+    }
+    for (const [key, childSection] of childSections) {
+      visitSection(`${sectionPath}.${key}`, childSection);
+    }
+  };
+
+  for (const [key, value] of Object.entries(parsed)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      visitSection(key, value as Record<string, unknown>);
+    } else {
+      flattenedEntries.push([key, value]);
+    }
+  }
+
+  return Object.fromEntries(flattenedEntries);
+}
+
 function encodeIniSectionNames(data: SaveData): {
   encodedData: SaveData;
   sectionNames: Map<string, string>;
@@ -205,6 +244,14 @@ function stringifyAwsIni(type: string, data: SaveData): string {
       };
       const command = parsed.profile?.credential_process;
       if (typeof command !== "string" || /[\r\n]/.test(command)) {
+        return line;
+      }
+      if (/[#;]/.test(command)) {
+        // Keep ini's quoted representation so this module can read an
+        // arbitrary pre-existing command back without treating its contents
+        // as an inline comment. Generated az2aws commands reject these
+        // markers because the quoted representation is not executable by all
+        // AWS credential_process consumers.
         return line;
       }
       return `credential_process=${command}`;
@@ -398,7 +445,11 @@ export const awsConfig = {
         }
 
         debug("Parsing data");
-        const parsedIni = ini.parse(data) as T;
+        // ini interprets dots in section headers as nested object paths, while
+        // AWS treats the complete header as one literal section name. Flatten
+        // only those section objects here so callers can address profiles such
+        // as `foo.bar` by their real AWS name.
+        const parsedIni = flattenIniSections(ini.parse(data)) as T;
         return resolve(parsedIni);
       });
     });

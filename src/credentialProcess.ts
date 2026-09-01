@@ -103,6 +103,17 @@ export function quoteCommandArgument(
     );
   }
 
+  // npm ini and several AWS shared-config readers treat these as inline
+  // comment markers before handing credential_process to a shell. There is no
+  // representation that round-trips consistently across POSIX shells,
+  // cmd.exe, and the supported config parsers, so refuse to generate wiring
+  // that would target a different profile after the config is reloaded.
+  if (/[#;]/.test(value)) {
+    throw new CLIError(
+      "Profile names containing # or ; cannot be safely used with credential_process.",
+    );
+  }
+
   if (platform === "win32") {
     // cmd.exe expands percent variables even inside double quotes, and quote
     // and delayed-expansion semantics make these characters impossible to

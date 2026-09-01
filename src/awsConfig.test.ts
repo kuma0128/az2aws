@@ -4,7 +4,10 @@ import { chmod, mkdir, rename, rm } from "node:fs/promises";
 import os from "os";
 import path from "path";
 import { awsConfig } from "./awsConfig";
-import { buildCredentialProcessCommand } from "./credentialProcess";
+import {
+  buildCredentialProcessCommand,
+  isAz2awsCredentialProcess,
+} from "./credentialProcess";
 import { paths } from "./paths";
 
 vi.mock("fs");
@@ -1174,7 +1177,7 @@ credential_process = aws-vault export --format=json existing
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
           callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
-        ) => callback(null, ""),
+        ) => callback(null, writtenData),
       );
       vi.mocked(fs.writeFile).mockImplementation(
         (
@@ -1186,17 +1189,25 @@ credential_process = aws-vault export --format=json existing
           callback(null);
         },
       );
-      const profileName = "team=.R&D#prod";
+      const profileName = "team=.R&D$prod";
       const command = buildCredentialProcessCommand(profileName);
 
       await awsConfig.setProfileConfigValuesAsync(profileName, {
         credential_process: command,
       });
 
-      expect(writtenData).toContain("[profile team=.R&D#prod]");
-      expect(writtenData).not.toContain("[profile team=\\.R&D#prod]");
+      expect(writtenData).toContain("[profile team=.R&D$prod]");
+      expect(writtenData).not.toContain("[profile team=\\.R&D$prod]");
       expect(writtenData).toContain(`credential_process=${command}`);
       expect(writtenData).not.toContain('credential_process="az2aws');
+
+      const reloaded = await awsConfig.getProfileConfigAsync(profileName);
+      expect(reloaded?.credential_process).toBe(command);
+      expect(
+        isAz2awsCredentialProcess(reloaded?.credential_process, {
+          profileName,
+        }),
+      ).toBe(true);
     });
 
     it("should preserve existing dotted section paths", async () => {
