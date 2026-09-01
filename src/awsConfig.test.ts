@@ -1244,14 +1244,14 @@ credential_process = aws-vault export --format=json existing
       expect(writtenData).not.toMatch(/^\[sso-session corp\]$/m);
     });
 
-    it("should preserve literal backslashes in restored section names", async () => {
+    it("should round-trip comment markers in section names", async () => {
       let writtenData = "";
       vi.mocked(fs.readFile).mockImplementation(
         (
           _path: fs.PathOrFileDescriptor,
           _encoding: BufferEncoding | fs.ObjectEncodingOptions,
           callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
-        ) => callback(null, ""),
+        ) => callback(null, writtenData),
       );
       vi.mocked(fs.writeFile).mockImplementation(
         (
@@ -1263,12 +1263,16 @@ credential_process = aws-vault export --format=json existing
           callback(null);
         },
       );
+      const profileName = "hash#semi;prod";
 
-      await awsConfig.setProfileConfigValuesAsync(String.raw`team=\.prod`, {
+      await awsConfig.setProfileConfigValuesAsync(profileName, {
         region: "us-east-1",
       });
 
-      expect(writtenData).toContain(String.raw`[profile team=\.prod]`);
+      expect(writtenData).toContain("[profile hash\\#semi\\;prod]");
+      await expect(
+        awsConfig.getProfileConfigAsync(profileName),
+      ).resolves.toEqual({ region: "us-east-1" });
     });
   });
 

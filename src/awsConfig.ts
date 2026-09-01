@@ -231,7 +231,11 @@ function stringifyAwsIni(type: string, data: SaveData): string {
           if (/[\r\n\]]/.test(sectionName)) {
             throw new Error("AWS section names cannot contain newlines or ']'");
           }
-          return `[${sectionName}]`;
+          // npm ini treats these as comment markers in section headers. AWS
+          // CLI accepts the conventional backslash escapes, which also let
+          // this module recover the original name on the next load.
+          const escapedSectionName = sectionName.replace(/[#;]/g, "\\$&");
+          return `[${escapedSectionName}]`;
         }
       }
 
