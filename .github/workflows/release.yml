@@ -247,9 +247,8 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.docker-tags.outputs.version }}
 
-  # Standalone single-executable binaries (Node SEA). Each runner builds the
-  # targets it can sign and smoke-test natively; macOS also cross-builds
-  # darwin-x64 because codesign only runs on macOS.
+  # Standalone single-executable binaries (Node SEA). Each target is built,
+  # signed where applicable, and smoke-tested on its native architecture.
   build-binaries:
     needs:
       - release-inputs
@@ -264,7 +263,9 @@ jobs:
           - os: ubuntu-24.04-arm
             targets: linux-arm64
           - os: macos-latest
-            targets: darwin-arm64 darwin-x64
+            targets: darwin-arm64
+          - os: macos-15-intel
+            targets: darwin-x64
           - os: windows-latest
             targets: win-x64
     runs-on: ${{ matrix.os }}
