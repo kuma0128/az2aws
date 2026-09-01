@@ -47,7 +47,9 @@ describe("credentialProcess", () => {
     const command = buildCredentialProcessCommand(profile);
 
     expect(command).toBe(`az2aws --profile=${quoted} --credential-process`);
-    expect(isAz2awsCredentialProcess(command)).toBe(true);
+    expect(isAz2awsCredentialProcess(command, { profileName: profile })).toBe(
+      true,
+    );
   });
 
   it.skipIf(process.platform === "win32")(
@@ -105,11 +107,13 @@ describe("credentialProcess", () => {
     expect(
       isAz2awsCredentialProcess(
         "C:\\tools\\az2aws.exe --profile default --credential-process",
+        { platform: "win32" },
       ),
     ).toBe(true);
     expect(
       isAz2awsCredentialProcess(
         "C:\\tools\\az2aws.cmd --profile default --credential-process",
+        { platform: "win32" },
       ),
     ).toBe(true);
     expect(

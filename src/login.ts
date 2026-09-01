@@ -428,8 +428,12 @@ export const login = {
         const usesCredentialProcess =
           profileConfig !== undefined &&
           this._isManagedByCredentialProcess(profileConfig, profile);
+        const hasLegacyCredentials =
+          usesCredentialProcess &&
+          (await awsConfig.hasProfileCredentialsAsync(profile));
         const credentialsFresh = usesCredentialProcess
-          ? await credentialCache.isCacheFreshAsync(profile, profileConfig)
+          ? !hasLegacyCredentials &&
+            (await credentialCache.isCacheFreshAsync(profile, profileConfig))
           : !(await awsConfig.isProfileAboutToExpireAsync(profile));
         if (credentialsFresh) {
           debug(`Profile ${profile} not yet due for refresh.`);

@@ -1,6 +1,9 @@
 import { CLIError } from "./CLIError";
 
-function parseCommandTokens(command: string): string[] | undefined {
+function parseCommandTokens(
+  command: string,
+  platform: NodeJS.Platform,
+): string[] | undefined {
   const tokens: string[] = [];
   let current = "";
   let quote: "'" | '"' | undefined;
@@ -15,7 +18,10 @@ function parseCommandTokens(command: string): string[] | undefined {
       } else if (
         character === "\\" &&
         quote === '"' &&
-        (command[index + 1] === '"' || command[index + 1] === "\\")
+        (command[index + 1] === '"' ||
+          command[index + 1] === "\\" ||
+          (platform !== "win32" &&
+            (command[index + 1] === "$" || command[index + 1] === "`")))
       ) {
         current += command[index + 1];
         index += 1;
@@ -43,7 +49,8 @@ function parseCommandTokens(command: string): string[] | undefined {
     if (
       character === "\\" &&
       command[index + 1] !== undefined &&
-      (/\s/.test(command[index + 1]) ||
+      (platform !== "win32" ||
+        /\s/.test(command[index + 1]) ||
         command[index + 1] === "'" ||
         command[index + 1] === '"' ||
         command[index + 1] === "\\")
@@ -128,14 +135,14 @@ export function isAz2awsCredentialProcess(
     return false;
   }
 
-  const tokens = parseCommandTokens(value);
+  const platform = options.platform ?? process.platform;
+  const tokens = parseCommandTokens(value, platform);
   if (!tokens || tokens.length === 0) {
     return false;
   }
 
   const executableParts = tokens[0].split(/[\\/]/);
   const executableName = executableParts[executableParts.length - 1];
-  const platform = options.platform ?? process.platform;
   const isBareAz2aws =
     platform === "win32"
       ? executableName.toLowerCase() === "az2aws"

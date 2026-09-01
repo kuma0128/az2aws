@@ -135,6 +135,49 @@ interface SaveData {
   [key: string]: ProfileConfig | ProfileCredentials;
 }
 
+function stringifyAwsIni(type: string, data: SaveData): string {
+  const text = ini.stringify(data);
+  if (type !== "config") {
+    return text;
+  }
+
+  // ini.stringify quotes a whole value when it contains '=' and escapes '#'
+  // and ';'. AWS treats credential_process as a command line, where those
+  // transformations change the executable or its arguments. Decode only this
+  // key back to the exact command after the rest of the INI is serialized.
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  return text
+    .split(eol)
+    .map((line) => {
+      if (line.startsWith("[") && line.endsWith("]")) {
+        const parsedSection = ini.parse(`${line}\nvalue=true`) as Record<
+          string,
+          unknown
+        >;
+        const sectionName = Object.keys(parsedSection)[0];
+        if (sectionName && !/[\r\n\]]/.test(sectionName)) {
+          // ini treats dots as nested-section separators and quotes '=' in a
+          // section name. AWS profile names use both literally.
+          return `[${sectionName}]`;
+        }
+      }
+
+      if (!line.startsWith("credential_process=")) {
+        return line;
+      }
+
+      const parsed = ini.parse(`[profile]\n${line}`) as {
+        profile?: { credential_process?: unknown };
+      };
+      const command = parsed.profile?.credential_process;
+      if (typeof command !== "string" || /[\r\n]/.test(command)) {
+        return line;
+      }
+      return `credential_process=${command}`;
+    })
+    .join(eol);
+}
+
 export const awsConfig = {
   async setProfileConfigValuesAsync(
     profileName: string,
@@ -244,6 +287,13 @@ export const awsConfig = {
     await this._saveAsync("credentials", credentials);
   },
 
+  async hasProfileCredentialsAsync(profileName: string): Promise<boolean> {
+    const credentials = await this._loadAsync<{
+      [key: string]: ProfileCredentials;
+    }>("credentials");
+    return credentials?.[profileName] !== undefined;
+  },
+
   async getAllProfileNames(): Promise<string[]> {
     debug(`Getting all configured profiles from config.`);
     const config =
@@ -326,7 +376,7 @@ export const awsConfig = {
     if (!data) throw new Error(`You must provide data for saving.`);
 
     debug(`Stringifying ${type} INI data`);
-    const text = ini.stringify(data);
+    const text = stringifyAwsIni(type, data);
     const targetDir = path.dirname(targetPath);
     const isDefaultAwsDir =
       path.resolve(targetDir) === path.resolve(paths.awsDir);

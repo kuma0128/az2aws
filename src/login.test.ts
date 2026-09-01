@@ -20,6 +20,7 @@ vi.mock("./awsConfig", () => ({
     getAllProfileNames: vi.fn(),
     getAz2awsProfileNames: vi.fn(),
     isProfileAboutToExpireAsync: vi.fn(),
+    hasProfileCredentialsAsync: vi.fn(),
     removeProfileCredentialsAsync: vi.fn(),
   },
 }));
@@ -2046,6 +2047,38 @@ describe("login", () => {
             "az2aws --profile wired-profile --credential-process",
         }),
       );
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("should retry login while legacy credentials still shadow the cache", async () => {
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "wired-profile",
+      ]);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        ...baseProfile,
+        credential_process:
+          "az2aws --profile=wired-profile --credential-process",
+      });
+      vi.mocked(awsConfig.hasProfileCredentialsAsync).mockResolvedValue(true);
+      vi.mocked(credentialCache.isCacheFreshAsync).mockResolvedValue(true);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(credentialCache.isCacheFreshAsync).not.toHaveBeenCalled();
       expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
     });
   });

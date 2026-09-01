@@ -4,6 +4,7 @@ import { chmod, mkdir, rename, rm } from "node:fs/promises";
 import os from "os";
 import path from "path";
 import { awsConfig } from "./awsConfig";
+import { buildCredentialProcessCommand } from "./credentialProcess";
 import { paths } from "./paths";
 
 vi.mock("fs");
@@ -1161,11 +1162,42 @@ credential_process = aws-vault export --format=json existing
         azure_tenant_id: "updated-tenant",
       });
 
-      // The ini serializer quotes values containing "=", but the entry itself
-      // must survive the rewrite.
       expect(writtenData).toContain(
-        'credential_process="aws-vault export --format=json existing"',
+        "credential_process=aws-vault export --format=json existing",
       );
+    });
+
+    it("should write credential_process as an executable AWS command", async () => {
+      let writtenData = "";
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => callback(null, ""),
+      );
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+      const profileName = "team=.R&D#prod";
+      const command = buildCredentialProcessCommand(profileName);
+
+      await awsConfig.setProfileConfigValuesAsync(profileName, {
+        credential_process: command,
+      });
+
+      expect(writtenData).toContain(`[profile ${profileName}]`);
+      expect(writtenData).not.toContain("\\.");
+      expect(writtenData).toContain(`credential_process=${command}`);
+      expect(writtenData).not.toContain('credential_process="az2aws');
+      expect(writtenData).not.toContain("\\#prod");
     });
   });
 
@@ -1310,6 +1342,29 @@ aws_secret_access_key = other-secret
       await awsConfig.removeProfileCredentialsAsync("missing");
 
       expect(fs.writeFile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("hasProfileCredentialsAsync", () => {
+    it("should report whether the requested credentials section exists", async () => {
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) =>
+          callback(
+            null,
+            "[present]\naws_access_key_id = KEY\naws_secret_access_key = SECRET\n",
+          ),
+      );
+
+      await expect(
+        awsConfig.hasProfileCredentialsAsync("present"),
+      ).resolves.toBe(true);
+      await expect(
+        awsConfig.hasProfileCredentialsAsync("missing"),
+      ).resolves.toBe(false);
     });
   });
 });
