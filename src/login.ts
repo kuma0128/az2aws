@@ -86,6 +86,22 @@ function decodeXmlEntities(text: string): string {
   );
 }
 
+function extractXmlText(innerXml: string): string {
+  let text = "";
+  let lastIndex = 0;
+  const markup = /<!\[CDATA\[([\s\S]*?)\]\]>|<!--[\s\S]*?-->|<[^>]*>/g;
+
+  for (const match of innerXml.matchAll(markup)) {
+    text += decodeXmlEntities(innerXml.slice(lastIndex, match.index));
+    if (match[1] !== undefined) {
+      text += match[1];
+    }
+    lastIndex = (match.index ?? 0) + match[0].length;
+  }
+
+  return text + decodeXmlEntities(innerXml.slice(lastIndex));
+}
+
 /**
  * Extract the text of every AttributeValue inside Role attributes of a SAML
  * assertion. az2aws only ever needs this one lookup, so a scoped scanner
@@ -102,7 +118,7 @@ export function extractRoleAttributeValues(samlText: string): string[] {
     }
 
     for (const valueMatch of attributeMatch[2].matchAll(ATTRIBUTE_VALUE_RE)) {
-      values.push(decodeXmlEntities(valueMatch[1]));
+      values.push(extractXmlText(valueMatch[1]));
     }
   }
   return values;

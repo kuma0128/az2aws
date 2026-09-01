@@ -121,7 +121,10 @@ You can also install the docker-launch.sh script to your PATH:
 
 ### Snap
 
-https://snapcraft.io/az2aws
+The [Snap Store](https://snapcraft.io/az2aws) remains available for existing
+v1 installations, but az2aws v2 and later are not published there. v2 drives
+an installed Chromium-based browser, which is not accessible from the current
+strictly confined Snap. Use npm or Docker for current releases.
 
 ## Command Options
 

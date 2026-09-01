@@ -410,6 +410,29 @@ describe("login", () => {
         "arn:aws:iam::123456789012:saml-provider/Test&Provider",
       );
     });
+
+    it("should extract CDATA while ignoring XML markup in role values", () => {
+      const samlAssertion = Buffer.from(
+        `
+        <Response>
+          <Assertion>
+            <AttributeStatement>
+              <Attribute Name="https://aws.amazon.com/SAML/Attributes/Role">
+                <AttributeValue><?source azure?><![CDATA[arn:aws:iam::123456789012:role/TestRole,]]><!-- separator --><![CDATA[arn:aws:iam::123456789012:saml-provider/TestProvider]]></AttributeValue>
+              </Attribute>
+            </AttributeStatement>
+          </Assertion>
+        </Response>
+      `,
+      ).toString("base64");
+
+      expect(login._parseRolesFromSamlResponse(samlAssertion)).toEqual([
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+      ]);
+    });
   });
 
   describe("_createLoginUrlAsync", () => {
