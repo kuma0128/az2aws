@@ -156,6 +156,20 @@ export function buildLoginCommand(profileName: string): string {
   return `az2aws --profile=${quoteCommandArgument(profileName)}`;
 }
 
+const credentialProcessRuntimeFlags = new Map<string, string>([
+  ["--force-refresh", "--force-refresh"],
+  ["--no-sandbox", "--no-sandbox"],
+  ["--no-prompt", "--no-prompt"],
+  ["--enable-chrome-network-service", "--enable-chrome-network-service"],
+  ["--no-verify-ssl", "--no-verify-ssl"],
+  ["--enable-chrome-seamless-sso", "--enable-chrome-seamless-sso"],
+  ["--no-disable-extensions", "--no-disable-extensions"],
+  ["--disable-gpu", "--disable-gpu"],
+  ["--incognito", "--incognito"],
+]);
+
+const credentialProcessModes = new Set(["cli", "gui", "debug"]);
+
 export function isAz2awsCredentialProcess(
   value: unknown,
   options: {
@@ -184,8 +198,10 @@ export function isAz2awsCredentialProcess(
   }
 
   let commandProfile: string | undefined;
+  let commandMode: string | undefined;
   let hasCredentialProcessFlag = false;
-  for (let index = 1; index < tokens.length; index += 1) {
+  const seenRuntimeFlags = new Set<string>();
+  tokenLoop: for (let index = 1; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (token === "--credential-process" && !hasCredentialProcessFlag) {
       hasCredentialProcessFlag = true;
@@ -193,9 +209,7 @@ export function isAz2awsCredentialProcess(
     }
     if (token === "--profile" && commandProfile === undefined) {
       const profileValue = tokens[index + 1];
-      // A leading hyphen is parsed as another option by Commander; only the
-      // attached-value form can represent such a profile safely.
-      if (!profileValue || profileValue.startsWith("-")) {
+      if (!profileValue) {
         return false;
       }
       commandProfile = profileValue;
@@ -207,6 +221,81 @@ export function isAz2awsCredentialProcess(
       if (!commandProfile) {
         return false;
       }
+      continue;
+    }
+
+    const modeOption = token === "--mode";
+    const attachedMode = token.startsWith("--mode=")
+      ? token.slice("--mode=".length)
+      : undefined;
+    if (
+      (modeOption || attachedMode !== undefined) &&
+      commandMode === undefined
+    ) {
+      const modeValue = attachedMode ?? tokens[index + 1];
+      if (!modeValue || !credentialProcessModes.has(modeValue)) {
+        return false;
+      }
+      commandMode = modeValue;
+      if (modeOption) {
+        index += 1;
+      }
+      continue;
+    }
+
+    // Commander accepts required short-option values either as the next token
+    // or attached to the option, and permits a boolean flag before them in the
+    // same cluster (for example -pdefault, -mdebug, or -fpdefault).
+    if (token.startsWith("-") && !token.startsWith("--")) {
+      const shortOptions = token.slice(1);
+      if (!shortOptions) {
+        return false;
+      }
+
+      for (let offset = 0; offset < shortOptions.length; offset += 1) {
+        const shortOption = shortOptions[offset];
+        if (shortOption === "f") {
+          if (seenRuntimeFlags.has("--force-refresh")) {
+            return false;
+          }
+          seenRuntimeFlags.add("--force-refresh");
+          continue;
+        }
+
+        if (shortOption === "p" && commandProfile === undefined) {
+          const attachedProfile = shortOptions.slice(offset + 1);
+          const profileValue = attachedProfile || tokens[index + 1];
+          if (!profileValue) {
+            return false;
+          }
+          commandProfile = profileValue;
+          if (!attachedProfile) {
+            index += 1;
+          }
+          continue tokenLoop;
+        }
+
+        if (shortOption === "m" && commandMode === undefined) {
+          const attachedMode = shortOptions.slice(offset + 1);
+          const modeValue = attachedMode || tokens[index + 1];
+          if (!modeValue || !credentialProcessModes.has(modeValue)) {
+            return false;
+          }
+          commandMode = modeValue;
+          if (!attachedMode) {
+            index += 1;
+          }
+          continue tokenLoop;
+        }
+
+        return false;
+      }
+      continue;
+    }
+
+    const runtimeFlag = credentialProcessRuntimeFlags.get(token);
+    if (runtimeFlag && !seenRuntimeFlags.has(runtimeFlag)) {
+      seenRuntimeFlags.add(runtimeFlag);
       continue;
     }
     return false;
