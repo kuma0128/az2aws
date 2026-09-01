@@ -30,34 +30,30 @@ function cacheFileId(profileName: string): string {
     .digest("hex");
 }
 
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(canonicalize);
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.keys(value)
-        .sort()
-        .map((key) => [
-          key,
-          canonicalize((value as Record<string, unknown>)[key]),
-        ]),
-    );
-  }
-  return value;
-}
-
 function profileConfigurationId(
   profileName: string,
   profile: ProfileConfig,
 ): string {
+  // Only settings that determine the issued AWS credentials belong in this
+  // fingerprint. In particular, never hash azure_default_password: doing so
+  // would leave a deterministic password verifier in every cache entry.
+  const profileIdentity = {
+    azureTenantId: profile.azure_tenant_id,
+    azureAppIdUri: profile.azure_app_id_uri,
+    azureDefaultUsername: profile.azure_default_username,
+    azureDefaultRoleArn: profile.azure_default_role_arn,
+    azureDefaultDurationHours: profile.azure_default_duration_hours,
+    region: profile.region,
+    credentialProcess: profile.credential_process,
+  };
+
   return crypto
     .createHash("sha256")
     .update(
       JSON.stringify({
         configPath: path.resolve(paths.config),
         profileName,
-        profile: canonicalize(profile),
+        profile: profileIdentity,
       }),
     )
     .digest("hex");

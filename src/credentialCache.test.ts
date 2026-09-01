@@ -297,6 +297,30 @@ describe("credentialCache", () => {
     ).toEqual(credentials);
   });
 
+  it("should not bind cache metadata to the Azure password", async () => {
+    const credentials = credentialsExpiringIn(60);
+    const originalProfile = {
+      ...cacheProfile,
+      azure_default_password: "original-password",
+    };
+    await credentialCache.setCachedCredentialsAsync(
+      "default",
+      credentials,
+      originalProfile,
+    );
+
+    const reauthenticatedProfile = {
+      ...originalProfile,
+      azure_default_password: "changed-password",
+    };
+    expect(
+      await credentialCache.getValidCachedCredentialsAsync(
+        "default",
+        reauthenticatedProfile,
+      ),
+    ).toEqual(credentials);
+  });
+
   it("should hash profile names that are not filesystem-safe", async () => {
     const credentials = credentialsExpiringIn(60);
     await credentialCache.setCachedCredentialsAsync(

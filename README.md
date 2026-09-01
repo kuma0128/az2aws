@@ -188,10 +188,11 @@ runs (az2aws must be on `PATH` for the AWS CLI to invoke it).
 
 **Credential caching.** The AWS CLI re-runs credential_process on every
 invocation, so az2aws caches issued credentials in
-`~/.aws/az2aws/cache/` (file permissions `0600`). Filenames combine the
-profile name and active AWS config path into a fixed-length hash, and each entry
-is also bound to the effective profile settings. az2aws serves a matching entry
-without launching a browser while it is valid for more than 11 more minutes.
+`~/.aws/az2aws/cache/` (cache files use `0600` permissions on POSIX systems).
+Filenames combine the profile name and active AWS config path into a
+fixed-length hash, and each entry is also bound to the effective profile
+settings. az2aws serves a matching entry without launching a browser while it
+is valid for more than 11 more minutes.
 Use `--force-refresh` to bypass the cache. Profiles wired to
 credential_process intentionally do **not** get static keys written to
 `~/.aws/credentials`: static keys there would take precedence over
