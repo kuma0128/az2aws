@@ -347,8 +347,10 @@ export const login = {
       // credential_process in the AWS credential resolver, so they would
       // shadow the wiring and keep serving stale keys after expiry. Cache the
       // credentials for later credential_process runs instead.
-      const wiredToCredentialProcess =
-        this._isManagedByCredentialProcess(profile);
+      const wiredToCredentialProcess = this._isManagedByCredentialProcess(
+        profile,
+        profileName,
+      );
       const credentials = await this._assumeRoleAsync(
         profileName,
         samlResponse,
@@ -425,7 +427,7 @@ export const login = {
           : undefined;
         const usesCredentialProcess =
           profileConfig !== undefined &&
-          this._isManagedByCredentialProcess(profileConfig);
+          this._isManagedByCredentialProcess(profileConfig, profile);
         const credentialsFresh = usesCredentialProcess
           ? await credentialCache.isCacheFreshAsync(profile, profileConfig)
           : !(await awsConfig.isProfileAboutToExpireAsync(profile));
@@ -576,8 +578,13 @@ export const login = {
    * the AWS CLI `credential_process` setting. Entries pointing at other tools
    * are ignored so az2aws never interferes with them.
    */
-  _isManagedByCredentialProcess(profile: ProfileConfig): boolean {
-    return isAz2awsCredentialProcess(profile.credential_process);
+  _isManagedByCredentialProcess(
+    profile: ProfileConfig,
+    profileName?: string,
+  ): boolean {
+    return isAz2awsCredentialProcess(profile.credential_process, {
+      profileName,
+    });
   },
 
   // Load the profile

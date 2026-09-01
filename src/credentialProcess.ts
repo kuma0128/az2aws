@@ -119,7 +119,10 @@ export function buildLoginCommand(profileName: string): string {
 
 export function isAz2awsCredentialProcess(
   value: unknown,
-  platform: NodeJS.Platform = process.platform,
+  options: {
+    platform?: NodeJS.Platform;
+    profileName?: string;
+  } = {},
 ): boolean {
   if (typeof value !== "string") {
     return false;
@@ -132,12 +135,48 @@ export function isAz2awsCredentialProcess(
 
   const executableParts = tokens[0].split(/[\\/]/);
   const executableName = executableParts[executableParts.length - 1];
+  const platform = options.platform ?? process.platform;
   const isBareAz2aws =
     platform === "win32"
       ? executableName.toLowerCase() === "az2aws"
       : executableName === "az2aws";
+  if (!isBareAz2aws && !/^az2aws\.(?:exe|cmd)$/i.test(executableName)) {
+    return false;
+  }
+
+  let commandProfile: string | undefined;
+  let hasCredentialProcessFlag = false;
+  for (let index = 1; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === "--credential-process" && !hasCredentialProcessFlag) {
+      hasCredentialProcessFlag = true;
+      continue;
+    }
+    if (token === "--profile" && commandProfile === undefined) {
+      const profileValue = tokens[index + 1];
+      // A leading hyphen is parsed as another option by Commander; only the
+      // attached-value form can represent such a profile safely.
+      if (!profileValue || profileValue.startsWith("-")) {
+        return false;
+      }
+      commandProfile = profileValue;
+      index += 1;
+      continue;
+    }
+    if (token.startsWith("--profile=") && commandProfile === undefined) {
+      commandProfile = token.slice("--profile=".length);
+      if (!commandProfile) {
+        return false;
+      }
+      continue;
+    }
+    return false;
+  }
+
   return (
-    (isBareAz2aws || /^az2aws\.(?:exe|cmd)$/i.test(executableName)) &&
-    tokens.includes("--credential-process")
+    hasCredentialProcessFlag &&
+    commandProfile !== undefined &&
+    (options.profileName === undefined ||
+      commandProfile === options.profileName)
   );
 }

@@ -115,13 +115,13 @@ describe("credentialProcess", () => {
     expect(
       isAz2awsCredentialProcess(
         "AZ2AWS --profile default --credential-process",
-        "win32",
+        { platform: "win32" },
       ),
     ).toBe(true);
     expect(
       isAz2awsCredentialProcess(
         "AZ2AWS --profile default --credential-process",
-        "linux",
+        { platform: "linux" },
       ),
     ).toBe(false);
   });
@@ -142,6 +142,41 @@ describe("credentialProcess", () => {
         "helper az2aws --profile default --credential-process",
       ),
     ).toBe(false);
+  });
+
+  it("should reject commands that target another profile or add arguments", () => {
+    expect(
+      isAz2awsCredentialProcess("az2aws --profile=other --credential-process", {
+        profileName: "default",
+      }),
+    ).toBe(false);
+    expect(
+      isAz2awsCredentialProcess(
+        "az2aws --profile=default --credential-process --unexpected",
+        { profileName: "default" },
+      ),
+    ).toBe(false);
+    expect(
+      isAz2awsCredentialProcess(
+        "az2aws --profile=default -- --credential-process",
+        { profileName: "default" },
+      ),
+    ).toBe(false);
+  });
+
+  it("should recognize legacy and reordered valid arguments", () => {
+    expect(
+      isAz2awsCredentialProcess(
+        "az2aws --profile default --credential-process",
+        { profileName: "default" },
+      ),
+    ).toBe(true);
+    expect(
+      isAz2awsCredentialProcess(
+        "az2aws --credential-process --profile=default",
+        { profileName: "default" },
+      ),
+    ).toBe(true);
   });
 
   it("should reject malformed quoted commands", () => {

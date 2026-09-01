@@ -1587,6 +1587,18 @@ describe("login", () => {
       ).toBe(true);
     });
 
+    it("should reject an az2aws entry wired to a different profile", () => {
+      expect(
+        login._isManagedByCredentialProcess(
+          {
+            ...baseProfile,
+            credential_process: "az2aws --profile=other --credential-process",
+          },
+          "myprofile",
+        ),
+      ).toBe(false);
+    });
+
     it("should ignore entries pointing at other tools", () => {
       expect(
         login._isManagedByCredentialProcess({
