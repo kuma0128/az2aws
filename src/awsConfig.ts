@@ -110,7 +110,7 @@ async function atomicWriteTextFile(
 }
 
 // Autorefresh credential time limit in milliseconds
-const refreshLimitInMs = 11 * 60 * 1000;
+export const refreshLimitInMs = 11 * 60 * 1000;
 
 export interface ProfileConfig {
   azure_tenant_id: string;
@@ -135,10 +135,140 @@ interface SaveData {
   [key: string]: ProfileConfig | ProfileCredentials;
 }
 
+function flattenIniSections(
+  parsed: Record<string, unknown>,
+): Record<string, unknown> {
+  const flattenedEntries: Array<[string, unknown]> = [];
+
+  const visitSection = (
+    sectionPath: string,
+    section: Record<string, unknown>,
+  ): void => {
+    const values: Array<[string, unknown]> = [];
+    const childSections: Array<[string, Record<string, unknown>]> = [];
+
+    for (const [key, value] of Object.entries(section)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        childSections.push([key, value as Record<string, unknown>]);
+      } else {
+        values.push([key, value]);
+      }
+    }
+
+    if (values.length > 0 || childSections.length === 0) {
+      flattenedEntries.push([sectionPath, Object.fromEntries(values)]);
+    }
+    for (const [key, childSection] of childSections) {
+      visitSection(`${sectionPath}.${key}`, childSection);
+    }
+  };
+
+  for (const [key, value] of Object.entries(parsed)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      visitSection(key, value as Record<string, unknown>);
+    } else {
+      flattenedEntries.push([key, value]);
+    }
+  }
+
+  return Object.fromEntries(flattenedEntries);
+}
+
+function encodeIniSectionNames(data: SaveData): {
+  encodedData: SaveData;
+  sectionNames: Map<string, string>;
+} {
+  const sectionNames = new Map<string, string>();
+  const placeholderPrefix = `az2awssection${crypto.randomBytes(12).toString("hex")}`;
+  let nextSectionId = 0;
+
+  const encodeRecord = (
+    record: Record<string, unknown>,
+  ): Record<string, unknown> => {
+    const encoded: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(record)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        const placeholder = `${placeholderPrefix}${nextSectionId}`;
+        nextSectionId += 1;
+        sectionNames.set(placeholder, key);
+        encoded[placeholder] = encodeRecord(value as Record<string, unknown>);
+      } else {
+        encoded[key] = value;
+      }
+    }
+    return encoded;
+  };
+
+  return {
+    encodedData: encodeRecord(data) as SaveData,
+    sectionNames,
+  };
+}
+
+function stringifyAwsIni(type: string, data: SaveData): string {
+  // npm ini escapes literal dots in object keys and quotes section names
+  // containing '='. AWS shared-config parsers treat section names literally,
+  // so serialize opaque placeholders and restore the original path segments.
+  // Encoding every object-valued segment also preserves nested sections that
+  // ini.parse created from existing dotted paths.
+  const { encodedData, sectionNames } = encodeIniSectionNames(data);
+  const text = ini.stringify(encodedData);
+
+  // ini.stringify quotes a whole value when it contains '=' and escapes '#'
+  // and ';'. AWS treats credential_process as a command line, where those
+  // transformations change the executable or its arguments. Decode only this
+  // key back to the exact command after the rest of the INI is serialized.
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  return text
+    .split(eol)
+    .map((line) => {
+      if (line.startsWith("[") && line.endsWith("]")) {
+        const encodedPath = line.slice(1, -1).split(".");
+        if (encodedPath.every((segment) => sectionNames.has(segment))) {
+          const sectionName = encodedPath
+            .map((segment) => sectionNames.get(segment))
+            .join(".");
+          if (/[\r\n\]]/.test(sectionName)) {
+            throw new Error("AWS section names cannot contain newlines or ']'");
+          }
+          // npm ini treats these as comment markers in section headers. AWS
+          // CLI accepts the conventional backslash escapes, which also let
+          // this module recover the original name on the next load.
+          const escapedSectionName = sectionName
+            .replace(/\\/g, "\\\\")
+            .replace(/[#;]/g, "\\$&");
+          return `[${escapedSectionName}]`;
+        }
+      }
+
+      if (type !== "config" || !line.startsWith("credential_process=")) {
+        return line;
+      }
+
+      const parsed = ini.parse(`[profile]\n${line}`) as {
+        profile?: { credential_process?: unknown };
+      };
+      const command = parsed.profile?.credential_process;
+      if (typeof command !== "string" || /[\r\n]/.test(command)) {
+        return line;
+      }
+      if (/[#;]/.test(command)) {
+        // Keep ini's quoted representation so this module can read an
+        // arbitrary pre-existing command back without treating its contents
+        // as an inline comment. Generated az2aws commands reject these
+        // markers because the quoted representation is not executable by all
+        // AWS credential_process consumers.
+        return line;
+      }
+      return `credential_process=${command}`;
+    })
+    .join(eol);
+}
+
 export const awsConfig = {
   async setProfileConfigValuesAsync(
     profileName: string,
-    values: ProfileConfig,
+    values: ProfileConfig | Record<string, unknown>,
   ): Promise<void> {
     const sectionName =
       profileName === "default" ? "default" : `profile ${profileName}`;
@@ -148,10 +278,17 @@ export const awsConfig = {
     const config =
       (await this._loadAsync<{ [key: string]: ProfileConfig }>("config")) || {};
 
-    config[sectionName] = {
+    const section: Record<string, unknown> = {
       ...config[sectionName],
       ...values,
     };
+    // A value of undefined means "remove this key from the profile".
+    for (const key of Object.keys(section)) {
+      if (section[key] === undefined) {
+        delete section[key];
+      }
+    }
+    config[sectionName] = section as ProfileConfig;
 
     await this._saveAsync("config", config);
   },
@@ -221,6 +358,27 @@ export const awsConfig = {
     debug(`Setting credentials for profile '${profileName}'`);
     credentials[profileName] = values;
     await this._saveAsync("credentials", credentials);
+  },
+
+  async removeProfileCredentialsAsync(profileName: string): Promise<void> {
+    const credentials = await this._loadAsync<{
+      [key: string]: ProfileCredentials;
+    }>("credentials");
+
+    if (!credentials || credentials[profileName] === undefined) {
+      return;
+    }
+
+    debug(`Removing credentials for profile '${profileName}'`);
+    delete credentials[profileName];
+    await this._saveAsync("credentials", credentials);
+  },
+
+  async hasProfileCredentialsAsync(profileName: string): Promise<boolean> {
+    const credentials = await this._loadAsync<{
+      [key: string]: ProfileCredentials;
+    }>("credentials");
+    return credentials?.[profileName] !== undefined;
   },
 
   async getAllProfileNames(): Promise<string[]> {
@@ -293,7 +451,11 @@ export const awsConfig = {
         }
 
         debug("Parsing data");
-        const parsedIni = ini.parse(data) as T;
+        // ini interprets dots in section headers as nested object paths, while
+        // AWS treats the complete header as one literal section name. Flatten
+        // only those section objects here so callers can address profiles such
+        // as `foo.bar` by their real AWS name.
+        const parsedIni = flattenIniSections(ini.parse(data)) as T;
         return resolve(parsedIni);
       });
     });
@@ -305,7 +467,7 @@ export const awsConfig = {
     if (!data) throw new Error(`You must provide data for saving.`);
 
     debug(`Stringifying ${type} INI data`);
-    const text = ini.stringify(data);
+    const text = stringifyAwsIni(type, data);
     const targetDir = path.dirname(targetPath);
     const isDefaultAwsDir =
       path.resolve(targetDir) === path.resolve(paths.awsDir);

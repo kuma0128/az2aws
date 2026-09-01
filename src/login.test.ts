@@ -20,6 +20,16 @@ vi.mock("./awsConfig", () => ({
     getAllProfileNames: vi.fn(),
     getAz2awsProfileNames: vi.fn(),
     isProfileAboutToExpireAsync: vi.fn(),
+    hasProfileCredentialsAsync: vi.fn(),
+    removeProfileCredentialsAsync: vi.fn(),
+  },
+}));
+
+vi.mock("./credentialCache", () => ({
+  credentialCache: {
+    getValidCachedCredentialsAsync: vi.fn(),
+    setCachedCredentialsAsync: vi.fn(),
+    isCacheFreshAsync: vi.fn(),
   },
 }));
 
@@ -100,6 +110,7 @@ vi.mock("./systemChrome", () => ({
 
 import inquirer from "inquirer";
 import { awsConfig } from "./awsConfig";
+import { credentialCache } from "./credentialCache";
 import { states } from "./loginStates";
 import { paths } from "./paths";
 
@@ -1138,6 +1149,15 @@ describe("login", () => {
       aws_session_token: "session-token",
       aws_expiration: "2024-01-01T00:00:00.000Z",
     };
+    const profile = {
+      azure_tenant_id: "tenant",
+      azure_app_id_uri: "app",
+      azure_default_username: "user",
+      azure_default_role_arn: "role",
+      azure_default_duration_hours: "1",
+      azure_default_remember_me: false,
+      region: "us-east-1",
+    };
     beforeEach(() => {
       vi.clearAllMocks();
       for (const key of AZURE_ENV_KEYS) {
@@ -1146,15 +1166,7 @@ describe("login", () => {
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "error").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
-      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
-        azure_tenant_id: "tenant",
-        azure_app_id_uri: "app",
-        azure_default_username: "user",
-        azure_default_role_arn: "role",
-        azure_default_duration_hours: "1",
-        azure_default_remember_me: false,
-        region: "us-east-1",
-      });
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(profile);
     });
 
     afterEach(() => {
@@ -1253,11 +1265,384 @@ describe("login", () => {
       );
       expect(assumeRoleSpy).not.toHaveBeenCalled();
     });
+
+    it("should serve cached credentials without performing a login", async () => {
+      vi.mocked(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).mockResolvedValue(credentials);
+      const performLoginSpy = vi.spyOn(login, "_performLoginAsync");
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+      );
+
+      expect(performLoginSpy).not.toHaveBeenCalled();
+      expect(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).toHaveBeenCalledWith("default", profile);
+      expect(credentialCache.setCachedCredentialsAsync).not.toHaveBeenCalled();
+      expect(console.log).toHaveBeenCalledTimes(1);
+      expect(
+        JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string),
+      ).toEqual({
+        Version: 1,
+        AccessKeyId: credentials.aws_access_key_id,
+        SecretAccessKey: credentials.aws_secret_access_key,
+        SessionToken: credentials.aws_session_token,
+        Expiration: credentials.aws_expiration,
+      });
+    });
+
+    it("should validate mode before consulting the credential cache", async () => {
+      vi.mocked(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).mockResolvedValue(credentials);
+
+      await expect(
+        login.loginAsync(
+          "default",
+          "invalid-mode",
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+        ),
+      ).rejects.toThrow("Invalid mode");
+
+      expect(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("should bypass the cache when forceRefresh is set", async () => {
+      vi.mocked(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).mockResolvedValue(credentials);
+      const performLoginSpy = vi
+        .spyOn(login, "_performLoginAsync")
+        .mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([role]);
+      vi.spyOn(login, "_askUserForRoleAndDurationAsync").mockResolvedValue({
+        role,
+        durationHours: 1,
+      });
+      vi.spyOn(login, "_assumeRoleAsync").mockResolvedValue(credentials);
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+      );
+
+      expect(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).not.toHaveBeenCalled();
+      expect(performLoginSpy).toHaveBeenCalled();
+    });
+
+    it("should cache credentials after a fresh credential_process login", async () => {
+      vi.mocked(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).mockResolvedValue(undefined);
+      vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([role]);
+      vi.spyOn(login, "_askUserForRoleAndDurationAsync").mockResolvedValue({
+        role,
+        durationHours: 1,
+      });
+      vi.spyOn(login, "_assumeRoleAsync").mockResolvedValue(credentials);
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+      );
+
+      expect(credentialCache.setCachedCredentialsAsync).toHaveBeenCalledWith(
+        "default",
+        credentials,
+        profile,
+      );
+    });
+  });
+
+  describe("loginAsync with credential_process-wired profiles", () => {
+    const role = {
+      roleArn: "arn:aws:iam::123456789012:role/TestRole",
+      principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+    };
+    const credentials = {
+      aws_access_key_id: "AKIAIOSFODNN7EXAMPLE",
+      aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+      aws_session_token: "session-token",
+      aws_expiration: "2024-01-01T00:00:00.000Z",
+    };
+    const wiredProfile = {
+      azure_tenant_id: "tenant",
+      azure_app_id_uri: "app",
+      azure_default_username: "user",
+      azure_default_role_arn: "role",
+      azure_default_duration_hours: "1",
+      azure_default_remember_me: false,
+      region: "us-east-1",
+      credential_process: "az2aws --profile default --credential-process",
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      for (const key of AZURE_ENV_KEYS) {
+        vi.stubEnv(key, "");
+      }
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
+      vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([role]);
+      vi.spyOn(login, "_askUserForRoleAndDurationAsync").mockResolvedValue({
+        role,
+        durationHours: 1,
+      });
+      vi.mocked(credentialCache.setCachedCredentialsAsync).mockResolvedValue(
+        true,
+      );
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.restoreAllMocks();
+    });
+
+    it("should cache instead of writing the credentials file when wired to az2aws", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(
+        wiredProfile,
+      );
+      const assumeRoleSpy = vi
+        .spyOn(login, "_assumeRoleAsync")
+        .mockResolvedValue(credentials);
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(assumeRoleSpy.mock.calls[0][6]).toBe(false);
+      expect(
+        vi.mocked(login._askUserForRoleAndDurationAsync).mock.calls[0][1],
+      ).toBe(true);
+      expect(
+        vi.mocked(login._askUserForRoleAndDurationAsync).mock.calls[0][4],
+      ).toBe("--credential-process");
+      expect(credentialCache.setCachedCredentialsAsync).toHaveBeenCalledWith(
+        "default",
+        credentials,
+        wiredProfile,
+      );
+      expect(awsConfig.removeProfileCredentialsAsync).toHaveBeenCalledWith(
+        "default",
+      );
+    });
+
+    it("should throw when the wired login yields no credentials", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(
+        wiredProfile,
+      );
+      vi.spyOn(login, "_assumeRoleAsync").mockResolvedValue(undefined);
+
+      const error = await login
+        .loginAsync(
+          "default",
+          "cli",
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toBe(
+        "Unable to retrieve credentials.",
+      );
+      expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
+    it("should keep shared credentials when the cache write fails", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(
+        wiredProfile,
+      );
+      vi.spyOn(login, "_assumeRoleAsync").mockResolvedValue(credentials);
+      vi.mocked(credentialCache.setCachedCredentialsAsync).mockResolvedValue(
+        false,
+      );
+
+      await expect(
+        login.loginAsync(
+          "default",
+          "cli",
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+        ),
+      ).rejects.toThrow("Unable to persist the credential cache");
+      expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
+    it("should keep writing the credentials file when credential_process points at another tool", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+        credential_process: "aws-vault export --format=json myprofile",
+      });
+      const assumeRoleSpy = vi
+        .spyOn(login, "_assumeRoleAsync")
+        .mockResolvedValue(credentials);
+
+      await login.loginAsync(
+        "default",
+        "cli",
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(assumeRoleSpy.mock.calls[0][6]).toBe(true);
+      expect(credentialCache.setCachedCredentialsAsync).not.toHaveBeenCalled();
+      expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("_isManagedByCredentialProcess", () => {
+    const baseProfile = {
+      azure_tenant_id: "tenant",
+      azure_app_id_uri: "app",
+      azure_default_username: "user",
+      azure_default_role_arn: "role",
+      azure_default_duration_hours: "1",
+      azure_default_remember_me: false,
+      region: "us-east-1",
+    };
+
+    it("should detect an az2aws credential_process entry", () => {
+      expect(
+        login._isManagedByCredentialProcess({
+          ...baseProfile,
+          credential_process:
+            "az2aws --profile my-profile --credential-process",
+        }),
+      ).toBe(true);
+    });
+
+    it("should reject an az2aws entry wired to a different profile", () => {
+      expect(
+        login._isManagedByCredentialProcess(
+          {
+            ...baseProfile,
+            credential_process: "az2aws --profile=other --credential-process",
+          },
+          "myprofile",
+        ),
+      ).toBe(false);
+    });
+
+    it("should ignore entries pointing at other tools", () => {
+      expect(
+        login._isManagedByCredentialProcess({
+          ...baseProfile,
+          credential_process: "aws-vault export --format=json myprofile",
+        }),
+      ).toBe(false);
+    });
+
+    it("should ignore similarly named executables and flag substrings", () => {
+      expect(
+        login._isManagedByCredentialProcess({
+          ...baseProfile,
+          credential_process:
+            "my-az2aws-helper --profile myprofile --credential-process",
+        }),
+      ).toBe(false);
+      expect(
+        login._isManagedByCredentialProcess({
+          ...baseProfile,
+          credential_process:
+            "az2aws --profile myprofile --credential-process-helper",
+        }),
+      ).toBe(false);
+    });
+
+    it("should ignore profiles without credential_process", () => {
+      expect(login._isManagedByCredentialProcess({ ...baseProfile })).toBe(
+        false,
+      );
+    });
   });
 
   describe("loginAll", () => {
     beforeEach(() => {
       vi.clearAllMocks();
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
     });
@@ -1515,6 +1900,192 @@ describe("login", () => {
         false,
         false,
       );
+    });
+  });
+
+  describe("loginAll credential cache handling", () => {
+    const baseProfile = {
+      azure_tenant_id: "tenant",
+      azure_app_id_uri: "app",
+      azure_default_username: "user",
+      azure_default_role_arn: "role",
+      azure_default_duration_hours: "1",
+      azure_default_remember_me: false,
+      region: "us-east-1",
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+      vi.spyOn(console, "log").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should skip profiles whose credential cache is still fresh", async () => {
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "wired-profile",
+        "stale-profile",
+      ]);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockImplementation(
+        async (profileName) => ({
+          ...baseProfile,
+          credential_process: `az2aws --profile ${profileName} --credential-process`,
+        }),
+      );
+      vi.mocked(credentialCache.isCacheFreshAsync)
+        .mockResolvedValueOnce(true) // wired-profile: cache fresh
+        .mockResolvedValueOnce(false); // stale-profile: cache stale
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
+      expect(loginAsyncSpy.mock.calls[0][0]).toBe("stale-profile");
+      expect(awsConfig.isProfileAboutToExpireAsync).not.toHaveBeenCalled();
+    });
+
+    it("should not consult the cache when the credentials file is fresh", async () => {
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "fresh-profile",
+      ]);
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(false);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(credentialCache.isCacheFreshAsync).not.toHaveBeenCalled();
+      expect(loginAsyncSpy).not.toHaveBeenCalled();
+    });
+
+    it("should ignore a fresh cache for a classic profile", async () => {
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "classic-profile",
+      ]);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        ...baseProfile,
+      });
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(true);
+      vi.mocked(credentialCache.isCacheFreshAsync).mockResolvedValue(true);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(credentialCache.isCacheFreshAsync).not.toHaveBeenCalled();
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("should ignore shared credentials for a credential-process profile", async () => {
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "wired-profile",
+      ]);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        ...baseProfile,
+        credential_process:
+          "az2aws --profile wired-profile --credential-process",
+      });
+      vi.mocked(awsConfig.isProfileAboutToExpireAsync).mockResolvedValue(false);
+      vi.mocked(credentialCache.isCacheFreshAsync).mockResolvedValue(false);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(awsConfig.isProfileAboutToExpireAsync).not.toHaveBeenCalled();
+      expect(credentialCache.isCacheFreshAsync).toHaveBeenCalledWith(
+        "wired-profile",
+        expect.objectContaining({
+          credential_process:
+            "az2aws --profile wired-profile --credential-process",
+        }),
+      );
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("should retry login while legacy credentials still shadow the cache", async () => {
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([
+        "wired-profile",
+      ]);
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        ...baseProfile,
+        credential_process:
+          "az2aws --profile=wired-profile --credential-process",
+      });
+      vi.mocked(awsConfig.hasProfileCredentialsAsync).mockResolvedValue(true);
+      vi.mocked(credentialCache.isCacheFreshAsync).mockResolvedValue(true);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+
+      await login.loginAll(
+        "cli",
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      );
+
+      expect(credentialCache.isCacheFreshAsync).not.toHaveBeenCalled();
+      expect(loginAsyncSpy).toHaveBeenCalledTimes(1);
     });
   });
 

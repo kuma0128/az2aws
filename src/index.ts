@@ -27,7 +27,7 @@ program
   .option("-a, --all-profiles", "Run for all configured profiles")
   .option(
     "-f, --force-refresh",
-    "Force a credential refresh, even if they are still valid",
+    "Force a credential refresh, even if cached credentials are still valid",
   )
   .option("-c, --configure", "Configure the profile")
   .option(
@@ -130,6 +130,7 @@ async function runAsync(): Promise<void> {
         disableGpu,
         incognito,
         credentialProcess,
+        forceRefresh,
       );
     }
   } catch (err: unknown) {

@@ -11,11 +11,13 @@ vi.mock("./awsConfig", () => ({
   awsConfig: {
     getProfileConfigAsync: vi.fn(),
     setProfileConfigValuesAsync: vi.fn(),
+    removeProfileCredentialsAsync: vi.fn(),
   },
 }));
 
 import inquirer from "inquirer";
 import { awsConfig } from "./awsConfig";
+import { buildCredentialProcessCommand } from "./credentialProcess";
 
 describe("configureProfileAsync", () => {
   beforeEach(() => {
@@ -593,5 +595,363 @@ describe("configureProfileAsync", () => {
 
       expect(appIdUriQuestion.default).toBe("https://uri.example.com");
     });
+  });
+
+  describe("credential_process wiring", () => {
+    const baseAnswers = {
+      tenantId: "tenant",
+      appIdUri: "https://app.example.com",
+      username: "user@example.com",
+      rememberMe: "true",
+      defaultRoleArn: "",
+      defaultDurationHours: "1",
+      region: "us-east-1",
+    };
+
+    it("should wire credential_process when the answer is true", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+      vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
+        undefined,
+      );
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "true",
+      });
+
+      await configureProfileAsync("myprofile");
+
+      expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
+        "myprofile",
+        expect.objectContaining({
+          credential_process: buildCredentialProcessCommand("myprofile"),
+        }),
+      );
+      // Static credentials remain available until the initial login has
+      // durably populated the credential cache.
+      expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
+    it("should quote profile names containing whitespace", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+      vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
+        undefined,
+      );
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "true",
+      });
+
+      await configureProfileAsync("my profile");
+
+      expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
+        "my profile",
+        expect.objectContaining({
+          credential_process: buildCredentialProcessCommand("my profile"),
+        }),
+      );
+    });
+
+    it.each(["hash#prod", "semi;prod"])(
+      "should reject profile name %s before saving unsafe wiring",
+      async (profileName) => {
+        vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+        vi.mocked(inquirer.prompt).mockResolvedValue({
+          ...baseAnswers,
+          credentialProcess: "true",
+        });
+
+        await expect(configureProfileAsync(profileName)).rejects.toThrow(
+          "cannot be safely used with credential_process",
+        );
+        expect(awsConfig.setProfileConfigValuesAsync).not.toHaveBeenCalled();
+      },
+    );
+
+    it("should remove stale az2aws-managed wiring when the answer is false", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "https://app.example.com",
+        azure_default_username: "",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: true,
+        region: "",
+        credential_process: "az2aws --profile oldprofile --credential-process",
+      });
+      vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
+        undefined,
+      );
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "false",
+      });
+
+      await configureProfileAsync("myprofile");
+
+      const savedValues = vi.mocked(awsConfig.setProfileConfigValuesAsync).mock
+        .calls[0][1] as Record<string, unknown>;
+      expect("credential_process" in savedValues).toBe(true);
+      expect(savedValues.credential_process).toBeUndefined();
+    });
+
+    it("should repair stale az2aws-managed wiring when the answer is true", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "https://app.example.com",
+        azure_default_username: "",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: true,
+        region: "",
+        credential_process: "az2aws --profile oldprofile --credential-process",
+      });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "true",
+      });
+
+      await configureProfileAsync("myprofile");
+
+      expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
+        "myprofile",
+        expect.objectContaining({
+          credential_process: buildCredentialProcessCommand("myprofile"),
+        }),
+      );
+    });
+
+    it("should leave a foreign credential_process untouched when the answer is false", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "https://app.example.com",
+        azure_default_username: "",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: true,
+        region: "",
+        credential_process: "aws-vault export --format=json myprofile",
+      });
+      vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
+        undefined,
+      );
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "false",
+      });
+
+      await configureProfileAsync("myprofile");
+
+      const savedValues = vi.mocked(awsConfig.setProfileConfigValuesAsync).mock
+        .calls[0][1] as Record<string, unknown>;
+      expect("credential_process" in savedValues).toBe(false);
+    });
+
+    it("should default the wiring question to false when a foreign credential_process exists", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "https://app.example.com",
+        azure_default_username: "",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: true,
+        region: "",
+        credential_process: "aws-vault export --format=json myprofile",
+      });
+      vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
+        undefined,
+      );
+
+      let capturedQuestions: unknown[] = [];
+      vi.mocked(inquirer.prompt).mockImplementation((questions) => {
+        capturedQuestions = questions as unknown[];
+        return Promise.resolve({
+          ...baseAnswers,
+          credentialProcess: "false",
+        });
+      });
+
+      await configureProfileAsync("myprofile");
+
+      const credentialProcessQuestion = capturedQuestions.find(
+        (q: unknown) => (q as { name: string }).name === "credentialProcess",
+      ) as { default: string; validate: (input: string) => boolean | string };
+
+      expect(credentialProcessQuestion.default).toBe("false");
+      expect(credentialProcessQuestion.validate("true")).toBe(
+        "Existing credential_process is managed by another tool and cannot be overwritten.",
+      );
+      expect(credentialProcessQuestion.validate("false")).toBe(true);
+      expect(credentialProcessQuestion.validate("yes")).toBe(
+        "credential_process must be either true or false",
+      );
+    });
+
+    it("should reject replacing a foreign credential_process when prompt validation is bypassed", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "https://app.example.com",
+        azure_default_username: "",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: true,
+        region: "",
+        credential_process: "aws-vault export --format=json myprofile",
+      });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "true",
+      });
+
+      await expect(configureProfileAsync("myprofile")).rejects.toThrow(
+        "Existing credential_process is managed by another tool and cannot be overwritten.",
+      );
+      expect(awsConfig.setProfileConfigValuesAsync).not.toHaveBeenCalled();
+      expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
+    it("should treat similarly named executables as foreign", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "https://app.example.com",
+        azure_default_username: "",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: true,
+        region: "",
+        credential_process:
+          "my-az2aws-helper --profile myprofile --credential-process",
+      });
+
+      let capturedQuestions: unknown[] = [];
+      vi.mocked(inquirer.prompt).mockImplementation((questions) => {
+        capturedQuestions = questions as unknown[];
+        return Promise.resolve({
+          ...baseAnswers,
+          credentialProcess: "false",
+        });
+      });
+
+      await configureProfileAsync("myprofile");
+
+      const credentialProcessQuestion = capturedQuestions.find(
+        (q: unknown) => (q as { name: string }).name === "credentialProcess",
+      ) as { default: string };
+      expect(credentialProcessQuestion.default).toBe("false");
+      const savedValues = vi.mocked(awsConfig.setProfileConfigValuesAsync).mock
+        .calls[0][1] as Record<string, unknown>;
+      expect("credential_process" in savedValues).toBe(false);
+      expect(awsConfig.removeProfileCredentialsAsync).not.toHaveBeenCalled();
+    });
+
+    it("should default the wiring question to true for new profiles", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+      vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
+        undefined,
+      );
+
+      let capturedQuestions: unknown[] = [];
+      vi.mocked(inquirer.prompt).mockImplementation((questions) => {
+        capturedQuestions = questions as unknown[];
+        return Promise.resolve({
+          ...baseAnswers,
+          credentialProcess: "true",
+        });
+      });
+
+      await configureProfileAsync("newprofile");
+
+      const credentialProcessQuestion = capturedQuestions.find(
+        (q: unknown) => (q as { name: string }).name === "credentialProcess",
+      ) as { default: string };
+
+      expect(credentialProcessQuestion.default).toBe("true");
+    });
+
+    it("should print follow-up guidance after wiring credential_process", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+      vi.mocked(awsConfig.setProfileConfigValuesAsync).mockResolvedValue(
+        undefined,
+      );
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "true",
+      });
+
+      await configureProfileAsync("myprofile");
+
+      expect(console.log).toHaveBeenCalledWith(
+        "AWS CLI will refresh credentials automatically via credential_process.",
+      );
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining("Run 'az2aws --profile=myprofile' once"),
+      );
+    });
+
+    it("should name the default profile explicitly in follow-up guidance", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "true",
+      });
+
+      await configureProfileAsync("default");
+
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining("Run 'az2aws --profile=default' once"),
+      );
+    });
+
+    it("should quote whitespace in the follow-up login command", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "true",
+      });
+
+      await configureProfileAsync("my profile");
+
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining(`Run 'az2aws --profile="my profile"' once`),
+      );
+    });
+
+    it.each(["", "   "])(
+      "should repair an empty credential_process value %j",
+      async (credentialProcess) => {
+        vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+          azure_tenant_id: "tenant",
+          azure_app_id_uri: "https://app.example.com",
+          azure_default_username: "",
+          azure_default_role_arn: "",
+          azure_default_duration_hours: "1",
+          azure_default_remember_me: true,
+          region: "",
+          credential_process: credentialProcess,
+        });
+
+        let capturedQuestions: unknown[] = [];
+        vi.mocked(inquirer.prompt).mockImplementation((questions) => {
+          capturedQuestions = questions as unknown[];
+          return Promise.resolve({
+            ...baseAnswers,
+            credentialProcess: "true",
+          });
+        });
+
+        await configureProfileAsync("myprofile");
+
+        const credentialProcessQuestion = capturedQuestions.find(
+          (question: unknown) =>
+            (question as { name: string }).name === "credentialProcess",
+        ) as { default: string };
+        expect(credentialProcessQuestion.default).toBe("true");
+        expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
+          "myprofile",
+          expect.objectContaining({
+            credential_process: buildCredentialProcessCommand("myprofile"),
+          }),
+        );
+      },
+    );
   });
 });

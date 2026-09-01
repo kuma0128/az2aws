@@ -175,11 +175,30 @@ helps avoid reusing an existing browser session, and it overrides any saved
 
 #### AWS CLI credential_process
 
-Configure the profile first so it has the defaults needed for non-interactive
-login, then point AWS CLI at `az2aws`:
+`az2aws --configure` offers to wire the profile to AWS CLI
+[credential_process](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sourcing-external.html)
+automatically (default: yes). It writes this line for you:
 
     [profile myprofile]
-    credential_process = az2aws --profile myprofile --credential-process
+    credential_process = az2aws --profile=myprofile --credential-process
+
+After wiring, run `az2aws --profile=myprofile` once to sign in. From then on,
+every `aws` command refreshes credentials on its own — no more manual `az2aws`
+runs (az2aws must be on `PATH` for the AWS CLI to invoke it).
+
+**Credential caching.** The AWS CLI re-runs credential_process on every
+invocation, so az2aws caches issued credentials in
+`~/.aws/az2aws/cache/` (cache files use `0600` permissions on POSIX systems).
+Filenames combine the profile name and active AWS config path into a
+fixed-length hash, and each entry is also bound to the effective profile
+settings. az2aws serves a matching entry without launching a browser while it
+is valid for more than 11 more minutes.
+Use `--force-refresh` to bypass the cache. Profiles wired to
+credential_process intentionally do **not** get static keys written to
+`~/.aws/credentials`: static keys there would take precedence over
+credential_process and keep serving stale credentials after expiry. When
+wiring an existing profile, az2aws removes its old static credentials only
+after the initial login has durably populated the cache.
 
 `--credential-process` uses the same non-interactive defaults as `--no-prompt`,
 so make sure the profile already has the role and other required values set.

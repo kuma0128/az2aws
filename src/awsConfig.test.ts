@@ -4,6 +4,10 @@ import { chmod, mkdir, rename, rm } from "node:fs/promises";
 import os from "os";
 import path from "path";
 import { awsConfig } from "./awsConfig";
+import {
+  buildCredentialProcessCommand,
+  isAz2awsCredentialProcess,
+} from "./credentialProcess";
 import { paths } from "./paths";
 
 vi.mock("fs");
@@ -1087,6 +1091,191 @@ custom_field = should-be-preserved
       // Should preserve custom fields
       expect(writtenData).toContain("custom_field=should-be-preserved");
     });
+
+    it("should remove keys whose value is undefined", async () => {
+      let writtenData = "";
+      const existingConfig = `
+[profile existing]
+azure_tenant_id = old-tenant
+credential_process = az2aws --profile existing --credential-process
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => {
+          callback(null, existingConfig);
+        },
+      );
+
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.setProfileConfigValuesAsync("existing", {
+        azure_tenant_id: "updated-tenant",
+        credential_process: undefined,
+      });
+
+      expect(fs.writeFile).toHaveBeenCalled();
+      expect(writtenData).toContain("azure_tenant_id=updated-tenant");
+      expect(writtenData).not.toContain("credential_process");
+      expect(writtenData).not.toContain("undefined");
+    });
+
+    it("should keep keys that are simply omitted from the values", async () => {
+      let writtenData = "";
+      const existingConfig = `
+[profile existing]
+azure_tenant_id = old-tenant
+credential_process = aws-vault export --format=json existing
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => {
+          callback(null, existingConfig);
+        },
+      );
+
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.setProfileConfigValuesAsync("existing", {
+        azure_tenant_id: "updated-tenant",
+      });
+
+      expect(writtenData).toContain(
+        "credential_process=aws-vault export --format=json existing",
+      );
+    });
+
+    it("should write credential_process as an executable AWS command", async () => {
+      let writtenData = "";
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => callback(null, writtenData),
+      );
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+      const profileName = "team=.R&D$prod";
+      const command = buildCredentialProcessCommand(profileName);
+
+      await awsConfig.setProfileConfigValuesAsync(profileName, {
+        credential_process: command,
+      });
+
+      expect(writtenData).toContain("[profile team=.R&D$prod]");
+      expect(writtenData).not.toContain("[profile team=\\.R&D$prod]");
+      expect(writtenData).toContain(`credential_process=${command}`);
+      expect(writtenData).not.toContain('credential_process="az2aws');
+
+      const reloaded = await awsConfig.getProfileConfigAsync(profileName);
+      expect(reloaded?.credential_process).toBe(command);
+      expect(
+        isAz2awsCredentialProcess(reloaded?.credential_process, {
+          profileName,
+        }),
+      ).toBe(true);
+    });
+
+    it("should preserve existing dotted section paths", async () => {
+      let writtenData = "";
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) =>
+          callback(
+            null,
+            "[profile foo.bar]\nregion = us-east-1\n\n[sso-session corp.example]\nsso_region = us-east-1\n",
+          ),
+      );
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.setProfileConfigValuesAsync("other", {
+        region: "eu-west-1",
+      });
+
+      expect(writtenData).toContain("[profile foo.bar]");
+      expect(writtenData).toContain("[sso-session corp.example]");
+      expect(writtenData).not.toMatch(/^\[profile foo\]$/m);
+      expect(writtenData).not.toMatch(/^\[sso-session corp\]$/m);
+    });
+
+    it("should round-trip comment markers in section names", async () => {
+      let writtenData = "";
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => callback(null, writtenData),
+      );
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+      const profileName = String.raw`hash\path#semi;prod`;
+
+      await awsConfig.setProfileConfigValuesAsync(profileName, {
+        region: "us-east-1",
+      });
+
+      expect(writtenData).toContain(
+        String.raw`[profile hash\\path\#semi\;prod]`,
+      );
+      await expect(
+        awsConfig.getProfileConfigAsync(profileName),
+      ).resolves.toEqual({ region: "us-east-1" });
+    });
   });
 
   describe("setProfileCredentialsAsync", () => {
@@ -1133,6 +1322,37 @@ custom_field = should-be-preserved
       expect(writtenData).toContain(`aws_expiration=${expiration}`);
     });
 
+    it("should write dotted credential profile names without ini escapes", async () => {
+      let writtenData = "";
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => callback(null, ""),
+      );
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.setProfileCredentialsAsync("team.prod", {
+        aws_access_key_id: "KEY",
+        aws_secret_access_key: "secret",
+        aws_session_token: "token",
+        aws_expiration: "2024-12-31T23:59:59.000Z",
+      });
+
+      expect(writtenData).toContain("[team.prod]");
+      expect(writtenData).not.toContain("[team\\.prod]");
+    });
+
     it("should merge with existing credentials preserving other profiles", async () => {
       let writtenData = "";
       const existingCredentials = `
@@ -1176,6 +1396,83 @@ aws_secret_access_key = existingsecret
       // Should add new profile
       expect(writtenData).toContain("[newprofile]");
       expect(writtenData).toContain("aws_access_key_id=NEWKEY");
+    });
+  });
+
+  describe("removeProfileCredentialsAsync", () => {
+    it("should remove only the requested credentials section", async () => {
+      let writtenData = "";
+      const existingCredentials = `
+[target]
+aws_access_key_id = TARGETKEY
+aws_secret_access_key = target-secret
+
+[other]
+aws_access_key_id = OTHERKEY
+aws_secret_access_key = other-secret
+`;
+
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => callback(null, existingCredentials),
+      );
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.removeProfileCredentialsAsync("target");
+
+      expect(writtenData).not.toContain("[target]");
+      expect(writtenData).not.toContain("TARGETKEY");
+      expect(writtenData).toContain("[other]");
+      expect(writtenData).toContain("OTHERKEY");
+    });
+
+    it("should not rewrite the file when the profile is absent", async () => {
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => callback(null, "[other]\naws_access_key_id = OTHERKEY\n"),
+      );
+
+      await awsConfig.removeProfileCredentialsAsync("missing");
+
+      expect(fs.writeFile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("hasProfileCredentialsAsync", () => {
+    it("should report whether the requested credentials section exists", async () => {
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) =>
+          callback(
+            null,
+            "[present]\naws_access_key_id = KEY\naws_secret_access_key = SECRET\n",
+          ),
+      );
+
+      await expect(
+        awsConfig.hasProfileCredentialsAsync("present"),
+      ).resolves.toBe(true);
+      await expect(
+        awsConfig.hasProfileCredentialsAsync("missing"),
+      ).resolves.toBe(false);
     });
   });
 });

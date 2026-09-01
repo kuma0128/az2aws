@@ -54,6 +54,20 @@ describe("paths", () => {
     expect(paths.credentials).toBe("/custom/path/credentials");
   });
 
+  it("should use the default credential cache path when AZ2AWS_CACHE_DIR is not set", async () => {
+    delete process.env.AZ2AWS_CACHE_DIR;
+    const { paths } = await import("./paths");
+    expect(paths.az2awsCache).toBe(
+      path.join(os.homedir(), ".aws", "az2aws", "cache"),
+    );
+  });
+
+  it("should use AZ2AWS_CACHE_DIR when set", async () => {
+    process.env.AZ2AWS_CACHE_DIR = "/custom/path/az2aws-cache";
+    const { paths } = await import("./paths");
+    expect(paths.az2awsCache).toBe("/custom/path/az2aws-cache");
+  });
+
   it("should have chromium path set under awsDir", async () => {
     const { paths } = await import("./paths");
     const expectedChromiumPath = path.join(os.homedir(), ".aws", "chromium");
@@ -81,6 +95,7 @@ describe("paths", () => {
   it("should support Windows default paths and browser environment values", async () => {
     delete process.env.AWS_CONFIG_FILE;
     delete process.env.AWS_SHARED_CREDENTIALS_FILE;
+    delete process.env.AZ2AWS_CACHE_DIR;
     process.env.BROWSER_CHROME_BIN =
       "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
     process.env.BROWSER_USER_DATA_DIR =
@@ -107,6 +122,7 @@ describe("paths", () => {
     expect(paths.config).toBe("C:\\Users\\alice\\.aws\\config");
     expect(paths.credentials).toBe("C:\\Users\\alice\\.aws\\credentials");
     expect(paths.chromium).toBe("C:\\Users\\alice\\.aws\\chromium");
+    expect(paths.az2awsCache).toBe("C:\\Users\\alice\\.aws\\az2aws\\cache");
     expect(paths.chromeBin).toBe(
       "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     );
