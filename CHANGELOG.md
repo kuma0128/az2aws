@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.0.0](https://github.com/kuma0128/az2aws/compare/v1.9.3...v2.0.0) (2026-09-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* drive the installed system browser only, drop the bundled one ([#273](https://github.com/kuma0128/az2aws/issues/273))
+
+### Features
+
+* drive the installed system browser only, drop the bundled one ([#273](https://github.com/kuma0128/az2aws/issues/273)) ([6fe7e4d](https://github.com/kuma0128/az2aws/commit/6fe7e4dd99007a24f119929517980c44d9bb72a5))
+* publish standalone single-executable binaries ([#274](https://github.com/kuma0128/az2aws/issues/274)) ([90cc7ac](https://github.com/kuma0128/az2aws/commit/90cc7ac8426f1cb729576d05099b134e2ca8cfd5))
+* serve credential_process from a cache and auto-wire profiles ([#272](https://github.com/kuma0128/az2aws/issues/272)) ([49c16f7](https://github.com/kuma0128/az2aws/commit/49c16f74b2981753758c58d081ba170b0da35f56))
+
+
+### Bug Fixes
+
+* credential_process の実行時オプションを正しく認識する ([#275](https://github.com/kuma0128/az2aws/issues/275)) ([8761678](https://github.com/kuma0128/az2aws/commit/876167881ca9a0e66ba35f566ed8f1357c49b3f5))
+* **docs:** simplify Azure tenant and app ID URI instructions ([#261](https://github.com/kuma0128/az2aws/issues/261)) ([b27d8f7](https://github.com/kuma0128/az2aws/commit/b27d8f703594cc84a562bbadd72f347e98e446cf))
+* use triggering commit for release checkouts ([#276](https://github.com/kuma0128/az2aws/issues/276)) ([f0d3f2e](https://github.com/kuma0128/az2aws/commit/f0d3f2e4d7ded5e53477fc0b33eeb410a494e017))
+
 ## [1.9.3](https://github.com/kuma0128/az2aws/compare/v1.9.2...v1.9.3) (2026-07-04)
 
 
