@@ -720,6 +720,32 @@ describe("configureProfileAsync", () => {
       );
     });
 
+    it("should preserve supported runtime options on correctly wired entries", async () => {
+      const credentialProcess =
+        "/opt/az2aws --profile myprofile --credential-process --no-sandbox --mode=debug";
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "https://app.example.com",
+        azure_default_username: "",
+        azure_default_role_arn: "",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: true,
+        region: "",
+        credential_process: credentialProcess,
+      });
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "true",
+      });
+
+      await configureProfileAsync("myprofile");
+
+      expect(awsConfig.setProfileConfigValuesAsync).toHaveBeenCalledWith(
+        "myprofile",
+        expect.objectContaining({ credential_process: credentialProcess }),
+      );
+    });
+
     it("should leave a foreign credential_process untouched when the answer is false", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
         azure_tenant_id: "tenant",

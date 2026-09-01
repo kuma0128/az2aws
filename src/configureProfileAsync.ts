@@ -25,6 +25,10 @@ export async function configureProfileAsync(
   const hasAz2awsCredentialProcess = isAz2awsCredentialProcess(
     existingCredentialProcess,
   );
+  const hasAz2awsCredentialProcessForProfile = isAz2awsCredentialProcess(
+    existingCredentialProcess,
+    { profileName },
+  );
   const hasForeignCredentialProcess =
     typeof existingCredentialProcess === "string" &&
     existingCredentialProcess.trim().length > 0 &&
@@ -131,7 +135,14 @@ export async function configureProfileAsync(
   };
 
   if (wireCredentialProcess) {
-    values.credential_process = buildCredentialProcessCommand(profileName);
+    // Keep supported runtime flags (for example --no-sandbox) and custom
+    // executable paths on correctly wired entries. Stale entries targeting a
+    // different profile are still rebuilt with the current profile name.
+    values.credential_process =
+      hasAz2awsCredentialProcessForProfile &&
+      typeof existingCredentialProcess === "string"
+        ? existingCredentialProcess
+        : buildCredentialProcessCommand(profileName);
   } else if (hasAz2awsCredentialProcess) {
     // undefined removes the previously wired az2aws entry; a foreign entry is
     // left untouched by omitting the key entirely.

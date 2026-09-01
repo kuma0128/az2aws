@@ -218,6 +218,61 @@ describe("credentialProcess", () => {
     ).toBe(true);
   });
 
+  it("should recognize supported credential-process runtime options", () => {
+    expect(
+      isAz2awsCredentialProcess(
+        [
+          "az2aws",
+          "--profile=default",
+          "--credential-process",
+          "--no-sandbox",
+          "--no-prompt",
+          "--enable-chrome-network-service",
+          "--no-verify-ssl",
+          "--enable-chrome-seamless-sso",
+          "--no-disable-extensions",
+          "--disable-gpu",
+          "--incognito",
+          "--force-refresh",
+          "--mode=debug",
+        ].join(" "),
+        { profileName: "default" },
+      ),
+    ).toBe(true);
+    expect(
+      isAz2awsCredentialProcess(
+        "az2aws -p default -f -m gui --credential-process",
+        { profileName: "default" },
+      ),
+    ).toBe(true);
+    expect(
+      isAz2awsCredentialProcess(
+        "az2aws -fpdefault -mdebug --credential-process",
+        { profileName: "default" },
+      ),
+    ).toBe(true);
+    expect(
+      isAz2awsCredentialProcess(
+        "az2aws -p -prod --credential-process --no-sandbox",
+        { profileName: "-prod" },
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    "az2aws --profile=default --credential-process --all-profiles",
+    "az2aws --profile=default --credential-process --configure",
+    "az2aws --profile=default --credential-process --mode=invalid",
+    "az2aws --profile=default --credential-process --mode cli --mode gui",
+    "az2aws --profile=default --credential-process --no-sandbox --no-sandbox",
+    "az2aws -ff -pdefault --credential-process",
+    "az2aws -x -pdefault --credential-process",
+  ])("should reject conflicting runtime arguments in %s", (command) => {
+    expect(isAz2awsCredentialProcess(command, { profileName: "default" })).toBe(
+      false,
+    );
+  });
+
   it("should reject malformed quoted commands", () => {
     expect(
       isAz2awsCredentialProcess(
