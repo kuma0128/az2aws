@@ -1193,8 +1193,8 @@ credential_process = aws-vault export --format=json existing
         credential_process: command,
       });
 
-      expect(writtenData).toContain("[profile team=\\.R&D#prod]");
-      expect(writtenData).not.toContain('["profile team=');
+      expect(writtenData).toContain("[profile team=.R&D#prod]");
+      expect(writtenData).not.toContain("[profile team=\\.R&D#prod]");
       expect(writtenData).toContain(`credential_process=${command}`);
       expect(writtenData).not.toContain('credential_process="az2aws');
     });
@@ -1231,6 +1231,33 @@ credential_process = aws-vault export --format=json existing
       expect(writtenData).toContain("[sso-session corp.example]");
       expect(writtenData).not.toMatch(/^\[profile foo\]$/m);
       expect(writtenData).not.toMatch(/^\[sso-session corp\]$/m);
+    });
+
+    it("should preserve literal backslashes in restored section names", async () => {
+      let writtenData = "";
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => callback(null, ""),
+      );
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.setProfileConfigValuesAsync(String.raw`team=\.prod`, {
+        region: "us-east-1",
+      });
+
+      expect(writtenData).toContain(String.raw`[profile team=\.prod]`);
     });
   });
 
@@ -1276,6 +1303,37 @@ credential_process = aws-vault export --format=json existing
       );
       expect(writtenData).toContain("aws_session_token=token123");
       expect(writtenData).toContain(`aws_expiration=${expiration}`);
+    });
+
+    it("should write dotted credential profile names without ini escapes", async () => {
+      let writtenData = "";
+      vi.mocked(fs.readFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          _encoding: BufferEncoding | fs.ObjectEncodingOptions,
+          callback: (err: NodeJS.ErrnoException | null, data?: string) => void,
+        ) => callback(null, ""),
+      );
+      vi.mocked(fs.writeFile).mockImplementation(
+        (
+          _path: fs.PathOrFileDescriptor,
+          data: string | NodeJS.ArrayBufferView,
+          callback: fs.NoParamCallback,
+        ) => {
+          writtenData = data.toString();
+          callback(null);
+        },
+      );
+
+      await awsConfig.setProfileCredentialsAsync("team.prod", {
+        aws_access_key_id: "KEY",
+        aws_secret_access_key: "secret",
+        aws_session_token: "token",
+        aws_expiration: "2024-12-31T23:59:59.000Z",
+      });
+
+      expect(writtenData).toContain("[team.prod]");
+      expect(writtenData).not.toContain("[team\\.prod]");
     });
 
     it("should merge with existing credentials preserving other profiles", async () => {

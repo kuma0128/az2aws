@@ -135,11 +135,45 @@ interface SaveData {
   [key: string]: ProfileConfig | ProfileCredentials;
 }
 
+function encodeIniSectionNames(data: SaveData): {
+  encodedData: SaveData;
+  sectionNames: Map<string, string>;
+} {
+  const sectionNames = new Map<string, string>();
+  const placeholderPrefix = `az2awssection${crypto.randomBytes(12).toString("hex")}`;
+  let nextSectionId = 0;
+
+  const encodeRecord = (
+    record: Record<string, unknown>,
+  ): Record<string, unknown> => {
+    const encoded: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(record)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        const placeholder = `${placeholderPrefix}${nextSectionId}`;
+        nextSectionId += 1;
+        sectionNames.set(placeholder, key);
+        encoded[placeholder] = encodeRecord(value as Record<string, unknown>);
+      } else {
+        encoded[key] = value;
+      }
+    }
+    return encoded;
+  };
+
+  return {
+    encodedData: encodeRecord(data) as SaveData,
+    sectionNames,
+  };
+}
+
 function stringifyAwsIni(type: string, data: SaveData): string {
-  const text = ini.stringify(data);
-  if (type !== "config") {
-    return text;
-  }
+  // npm ini escapes literal dots in object keys and quotes section names
+  // containing '='. AWS shared-config parsers treat section names literally,
+  // so serialize opaque placeholders and restore the original path segments.
+  // Encoding every object-valued segment also preserves nested sections that
+  // ini.parse created from existing dotted paths.
+  const { encodedData, sectionNames } = encodeIniSectionNames(data);
+  const text = ini.stringify(encodedData);
 
   // ini.stringify quotes a whole value when it contains '=' and escapes '#'
   // and ';'. AWS treats credential_process as a command line, where those
@@ -149,25 +183,20 @@ function stringifyAwsIni(type: string, data: SaveData): string {
   return text
     .split(eol)
     .map((line) => {
-      if (line.startsWith('["') && line.endsWith('"]')) {
-        try {
-          const sectionName = JSON.parse(line.slice(1, -1)) as unknown;
-          if (
-            typeof sectionName === "string" &&
-            !/[\r\n\]]/.test(sectionName)
-          ) {
-            // ini quotes section names containing '=' as JSON strings. AWS
-            // does not recognize that form, but does accept ini's escaped
-            // literal dots. Leave ordinary dotted paths untouched and only
-            // unwrap the quoted form here.
-            return `[${sectionName}]`;
+      if (line.startsWith("[") && line.endsWith("]")) {
+        const encodedPath = line.slice(1, -1).split(".");
+        if (encodedPath.every((segment) => sectionNames.has(segment))) {
+          const sectionName = encodedPath
+            .map((segment) => sectionNames.get(segment))
+            .join(".");
+          if (/[\r\n\]]/.test(sectionName)) {
+            throw new Error("AWS section names cannot contain newlines or ']'");
           }
-        } catch {
-          return line;
+          return `[${sectionName}]`;
         }
       }
 
-      if (!line.startsWith("credential_process=")) {
+      if (type !== "config" || !line.startsWith("credential_process=")) {
         return line;
       }
 
