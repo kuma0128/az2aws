@@ -99,6 +99,11 @@ describe("credentialProcess", () => {
         "C:\\tools\\az2aws.exe --profile default --credential-process",
       ),
     ).toBe(true);
+    expect(
+      isAz2awsCredentialProcess(
+        "C:\\tools\\az2aws.cmd --profile default --credential-process",
+      ),
+    ).toBe(true);
   });
 
   it("should reject similarly named executables and flag substrings", () => {

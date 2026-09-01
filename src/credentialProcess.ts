@@ -132,7 +132,8 @@ export function isAz2awsCredentialProcess(value: unknown): boolean {
   const executableParts = tokens[0].split(/[\\/]/);
   const executableName = executableParts[executableParts.length - 1];
   return (
-    (executableName === "az2aws" || executableName === "az2aws.exe") &&
+    (executableName === "az2aws" ||
+      /^az2aws\.(?:exe|cmd)$/i.test(executableName)) &&
     tokens.includes("--credential-process")
   );
 }

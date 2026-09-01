@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { credentialCache as credentialCacheImplementation } from "./credentialCache";
@@ -54,16 +55,14 @@ const credentialCache = {
   },
 };
 
-async function findCacheFileAsync(profileName: string): Promise<string> {
-  const prefix = `${encodeURIComponent(profileName)}.`;
-  const entries = await readdir(paths.az2awsCache);
-  const entry = entries.find(
-    (candidate) => candidate.startsWith(prefix) && candidate.endsWith(".json"),
-  );
-  if (!entry) {
-    throw new Error(`Cache file for '${profileName}' was not found`);
-  }
-  return path.join(paths.az2awsCache, entry);
+function findCacheFileAsync(profileName: string): string {
+  const fileId = crypto
+    .createHash("sha256")
+    .update(path.resolve(paths.config))
+    .update("\0")
+    .update(profileName)
+    .digest("hex");
+  return path.join(paths.az2awsCache, `${fileId}.json`);
 }
 
 function credentialsExpiringIn(minutes: number): ProfileCredentials {
@@ -212,6 +211,24 @@ describe("credentialCache", () => {
     ).toEqual(otherCredentials);
   });
 
+  it("should keep case-distinct profile names in separate cache entries", async () => {
+    const upperCredentials = credentialsExpiringIn(60);
+    const lowerCredentials = {
+      ...credentialsExpiringIn(60),
+      aws_session_token: "lower-token",
+    };
+    await credentialCache.setCachedCredentialsAsync("Dev", upperCredentials);
+    await credentialCache.setCachedCredentialsAsync("dev", lowerCredentials);
+
+    expect(await credentialCache.getValidCachedCredentialsAsync("Dev")).toEqual(
+      upperCredentials,
+    );
+    expect(await credentialCache.getValidCachedCredentialsAsync("dev")).toEqual(
+      lowerCredentials,
+    );
+    expect(await readdir(paths.az2awsCache)).toHaveLength(2);
+  });
+
   it("should keep identical profile names separate across AWS config files", async () => {
     const configA = path.join(tempDir, "aws-config-a");
     const configB = path.join(tempDir, "aws-config-b");
@@ -280,7 +297,7 @@ describe("credentialCache", () => {
     ).toEqual(credentials);
   });
 
-  it("should encode profile names that are not filesystem-safe", async () => {
+  it("should hash profile names that are not filesystem-safe", async () => {
     const credentials = credentialsExpiringIn(60);
     await credentialCache.setCachedCredentialsAsync(
       "my/team profile",
@@ -288,16 +305,28 @@ describe("credentialCache", () => {
     );
 
     const entries = await readdir(paths.az2awsCache);
-    expect(
-      entries.some(
-        (entry) =>
-          entry.startsWith("my%2Fteam%20profile.") && entry.endsWith(".json"),
-      ),
-    ).toBe(true);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatch(/^[a-f0-9]{64}\.json$/);
+    expect(entries[0]).not.toContain("my");
     expect(
       await credentialCache.getValidCachedCredentialsAsync("my/team profile"),
     ).toEqual(credentials);
   });
+
+  it.each(["CON", "長".repeat(300)])(
+    "should use a portable fixed-length filename for profile %s",
+    async (profileName) => {
+      const credentials = credentialsExpiringIn(60);
+      await credentialCache.setCachedCredentialsAsync(profileName, credentials);
+
+      expect(path.basename(await findCacheFileAsync(profileName))).toMatch(
+        /^[a-f0-9]{64}\.json$/,
+      );
+      expect(
+        await credentialCache.getValidCachedCredentialsAsync(profileName),
+      ).toEqual(credentials);
+    },
+  );
 
   it.skipIf(isWindows)(
     "should restrict cache file and directory permissions",

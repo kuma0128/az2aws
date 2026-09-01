@@ -21,10 +21,12 @@ interface CacheFileContents {
   credentials: ProfileCredentials;
 }
 
-function activeConfigPathId(): string {
+function cacheFileId(profileName: string): string {
   return crypto
     .createHash("sha256")
     .update(path.resolve(paths.config))
+    .update("\0")
+    .update(profileName)
     .digest("hex");
 }
 
@@ -62,11 +64,7 @@ function profileConfigurationId(
 }
 
 function cacheFilePath(profileName: string): string {
-  const configPathId = activeConfigPathId();
-  return path.join(
-    paths.az2awsCache,
-    `${encodeURIComponent(profileName)}.${configPathId}.json`,
-  );
+  return path.join(paths.az2awsCache, `${cacheFileId(profileName)}.json`);
 }
 
 function isProfileCredentials(value: unknown): value is ProfileCredentials {
