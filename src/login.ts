@@ -260,6 +260,20 @@ export const login = {
         console.log = (...args: unknown[]) => console.error(...args);
       }
 
+      let headless, cliProxy;
+      if (mode === "cli") {
+        headless = true;
+        cliProxy = true;
+      } else if (mode === "gui") {
+        headless = false;
+        cliProxy = false;
+      } else if (mode === "debug") {
+        headless = false;
+        cliProxy = true;
+      } else {
+        throw new CLIError("Invalid mode");
+      }
+
       // Load environment overrides before consulting the cache so credentials
       // issued for an earlier tenant, application, role, or user cannot be
       // returned after the effective profile configuration changes.
@@ -274,20 +288,6 @@ export const login = {
           originalConsoleLog(credentialProcessPayload(cachedCredentials));
           return;
         }
-      }
-
-      let headless, cliProxy;
-      if (mode === "cli") {
-        headless = true;
-        cliProxy = true;
-      } else if (mode === "gui") {
-        headless = false;
-        cliProxy = false;
-      } else if (mode === "debug") {
-        headless = false;
-        cliProxy = true;
-      } else {
-        throw new CLIError("Invalid mode");
       }
 
       console.log(

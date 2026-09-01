@@ -174,6 +174,12 @@ export const credentialCache = {
         recursive: true,
         mode: cacheDirMode,
       });
+      if (process.platform !== "win32") {
+        // mkdir's mode is ignored for an existing directory. Reapply it so a
+        // legacy or user-supplied cache directory cannot remain accessible to
+        // other local users.
+        await fs.chmod(paths.az2awsCache, cacheDirMode);
+      }
       const contents: CacheFileContents = {
         version: 3,
         configurationId: profileConfigurationId(profileName, profile),

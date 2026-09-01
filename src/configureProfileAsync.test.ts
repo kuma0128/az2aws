@@ -845,6 +845,20 @@ describe("configureProfileAsync", () => {
       );
     });
 
+    it("should name the default profile explicitly in follow-up guidance", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
+      vi.mocked(inquirer.prompt).mockResolvedValue({
+        ...baseAnswers,
+        credentialProcess: "true",
+      });
+
+      await configureProfileAsync("default");
+
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining("Run 'az2aws --profile default' once"),
+      );
+    });
+
     it("should quote whitespace in the follow-up login command", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue(undefined);
       vi.mocked(inquirer.prompt).mockResolvedValue({

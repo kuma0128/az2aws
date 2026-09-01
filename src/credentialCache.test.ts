@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -365,6 +373,21 @@ describe("credentialCache", () => {
         (await stat(await findCacheFileAsync("default"))).mode & 0o777;
       expect(dirMode).toBe(0o700);
       expect(fileMode).toBe(0o600);
+    },
+  );
+
+  it.skipIf(isWindows)(
+    "should harden an existing cache directory",
+    async () => {
+      await mkdir(paths.az2awsCache, { recursive: true });
+      await chmod(paths.az2awsCache, 0o777);
+
+      await credentialCache.setCachedCredentialsAsync(
+        "default",
+        credentialsExpiringIn(60),
+      );
+
+      expect((await stat(paths.az2awsCache)).mode & 0o777).toBe(0o700);
     },
   );
 

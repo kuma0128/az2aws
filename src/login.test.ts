@@ -1302,6 +1302,32 @@ describe("login", () => {
       });
     });
 
+    it("should validate mode before consulting the credential cache", async () => {
+      vi.mocked(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).mockResolvedValue(credentials);
+
+      await expect(
+        login.loginAsync(
+          "default",
+          "invalid-mode",
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+        ),
+      ).rejects.toThrow("Invalid mode");
+
+      expect(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).not.toHaveBeenCalled();
+    });
+
     it("should bypass the cache when forceRefresh is set", async () => {
       vi.mocked(
         credentialCache.getValidCachedCredentialsAsync,

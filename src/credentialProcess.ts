@@ -114,12 +114,13 @@ export function buildCredentialProcessCommand(profileName: string): string {
 }
 
 export function buildLoginCommand(profileName: string): string {
-  return profileName === "default"
-    ? "az2aws"
-    : `az2aws --profile ${quoteCommandArgument(profileName)}`;
+  return `az2aws --profile ${quoteCommandArgument(profileName)}`;
 }
 
-export function isAz2awsCredentialProcess(value: unknown): boolean {
+export function isAz2awsCredentialProcess(
+  value: unknown,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
   if (typeof value !== "string") {
     return false;
   }
@@ -131,9 +132,12 @@ export function isAz2awsCredentialProcess(value: unknown): boolean {
 
   const executableParts = tokens[0].split(/[\\/]/);
   const executableName = executableParts[executableParts.length - 1];
+  const isBareAz2aws =
+    platform === "win32"
+      ? executableName.toLowerCase() === "az2aws"
+      : executableName === "az2aws";
   return (
-    (executableName === "az2aws" ||
-      /^az2aws\.(?:exe|cmd)$/i.test(executableName)) &&
+    (isBareAz2aws || /^az2aws\.(?:exe|cmd)$/i.test(executableName)) &&
     tokens.includes("--credential-process")
   );
 }

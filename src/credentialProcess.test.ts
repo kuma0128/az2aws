@@ -15,6 +15,7 @@ describe("credentialProcess", () => {
     expect(buildLoginCommand("my profile")).toBe(
       'az2aws --profile "my profile"',
     );
+    expect(buildLoginCommand("default")).toBe("az2aws --profile default");
   });
 
   it.each([
@@ -104,6 +105,18 @@ describe("credentialProcess", () => {
         "C:\\tools\\az2aws.cmd --profile default --credential-process",
       ),
     ).toBe(true);
+    expect(
+      isAz2awsCredentialProcess(
+        "AZ2AWS --profile default --credential-process",
+        "win32",
+      ),
+    ).toBe(true);
+    expect(
+      isAz2awsCredentialProcess(
+        "AZ2AWS --profile default --credential-process",
+        "linux",
+      ),
+    ).toBe(false);
   });
 
   it("should reject similarly named executables and flag substrings", () => {
