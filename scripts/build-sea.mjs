@@ -99,7 +99,7 @@ fs.mkdirSync(binDir, { recursive: true });
 
 // --- 1. Bundle the CLI into a single CommonJS file ---------------------------
 const bundlePath = path.join(seaDir, "az2aws.cjs");
-await esbuild.build({
+const bundleResult = await esbuild.build({
   entryPoints: [path.join(repoRoot, "src", "index.ts")],
   bundle: true,
   platform: "node",
@@ -111,10 +111,20 @@ await esbuild.build({
   // TargetCloseError); keep original class/function names under minification.
   keepNames: true,
   logLevel: "warning",
+  inject: [path.join(repoRoot, "scripts", "sea-proxy-agent-shim.mjs")],
+  metafile: true,
   // Optional native accelerators probed by ws inside try/catch; leaving them
   // external keeps the probe a harmless runtime miss instead of a build error.
   external: ["bufferutil", "utf-8-validate"],
 });
+
+if (
+  !Object.keys(bundleResult.metafile.inputs).some((input) =>
+    /node_modules[\\/]https-proxy-agent[\\/]/.test(input),
+  )
+) {
+  throw new Error("SEA bundle is missing the https-proxy-agent dependency.");
+}
 
 // SEA evaluates the main script directly; drop the CLI shebang line.
 const bundleSource = fs.readFileSync(bundlePath, "utf8");
