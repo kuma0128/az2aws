@@ -89,7 +89,7 @@
     "postject": "1.0.0-alpha.6",
     "prettier": "^3.8.1",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^6.0.2",
+    "typescript": "^7.0.2",
     "vite": "^8.0.7",
     "vitest": "^4.1.0"
   }
