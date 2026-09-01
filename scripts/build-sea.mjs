@@ -53,6 +53,29 @@ async function downloadAsync(url) {
   return Buffer.from(await res.arrayBuffer());
 }
 
+function verifyNodeDownload(data, shasums, assetName) {
+  let expectedDigest;
+  for (const line of shasums.split(/\r?\n/)) {
+    const match = line.trim().match(/^([a-f0-9]{64})\s+\*?(.+)$/i);
+    if (match?.[2] === assetName) {
+      expectedDigest = match[1].toLowerCase();
+      break;
+    }
+  }
+
+  if (!expectedDigest) {
+    throw new Error(`No checksum found for '${assetName}' in SHASUMS256.txt.`);
+  }
+
+  const actualDigest = crypto.createHash("sha256").update(data).digest("hex");
+  if (actualDigest !== expectedDigest) {
+    throw new Error(
+      `Checksum mismatch for '${assetName}': expected ${expectedDigest}, received ${actualDigest}.`,
+    );
+  }
+  console.log(`Verified ${assetName} (sha256 ${actualDigest})`);
+}
+
 const hostTarget = `${process.platform === "win32" ? "win" : process.platform}-${process.arch}`;
 const target = argValue("--target") ?? hostTarget;
 if (!SUPPORTED_TARGETS.includes(target)) {
@@ -116,25 +139,31 @@ execFileSync(process.execPath, ["--experimental-sea-config", seaConfigPath], {
 
 // --- 3. Fetch the official Node.js binary for the target ---------------------
 const nodeVersion = process.version;
+const nodeDistributionUrl = `https://nodejs.org/dist/${nodeVersion}`;
+const nodeShasums = (
+  await downloadAsync(`${nodeDistributionUrl}/SHASUMS256.txt`)
+).toString("utf8");
 const outPath = path.join(
   binDir,
   `az2aws-${target}${isWindowsTarget ? ".exe" : ""}`,
 );
 
 if (isWindowsTarget) {
-  fs.writeFileSync(
-    outPath,
-    await downloadAsync(
-      `https://nodejs.org/dist/${nodeVersion}/win-x64/node.exe`,
-    ),
+  const assetName = "win-x64/node.exe";
+  const nodeBinary = await downloadAsync(
+    `${nodeDistributionUrl}/${assetName}`,
   );
+  verifyNodeDownload(nodeBinary, nodeShasums, assetName);
+  fs.writeFileSync(outPath, nodeBinary);
 } else {
   const tarName = `node-${nodeVersion}-${target}`;
+  const assetName = `${tarName}.tar.gz`;
   const tarPath = path.join(seaDir, `${tarName}.tar.gz`);
-  fs.writeFileSync(
-    tarPath,
-    await downloadAsync(`https://nodejs.org/dist/${nodeVersion}/${tarName}.tar.gz`),
+  const nodeArchive = await downloadAsync(
+    `${nodeDistributionUrl}/${assetName}`,
   );
+  verifyNodeDownload(nodeArchive, nodeShasums, assetName);
+  fs.writeFileSync(tarPath, nodeArchive);
   const nodeBinary = execFileSync(
     "tar",
     ["-xzf", tarPath, "-O", `${tarName}/bin/node`],

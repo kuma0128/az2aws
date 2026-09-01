@@ -4,10 +4,12 @@ import https from "https";
 import os from "os";
 import path from "path";
 import { EventEmitter } from "events";
+import { isSea } from "node:sea";
 import { checkForUpdate } from "./updateNotifier";
 
 vi.mock("fs");
 vi.mock("https");
+vi.mock("node:sea", () => ({ isSea: vi.fn(() => false) }));
 
 function createMockResponse(body: string, statusCode = 200) {
   const res = new EventEmitter() as EventEmitter & {
@@ -38,6 +40,7 @@ describe("checkForUpdate", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(isSea).mockReturnValue(false);
     consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     vi.mocked(fs.readFileSync).mockImplementation(() => {
       throw new Error("ENOENT");
@@ -214,7 +217,10 @@ describe("checkForUpdate", () => {
       return req as never;
     });
 
-    const message = await checkForUpdate("1.5.0", { installMethod: "binary" });
+    vi.mocked(isSea).mockReturnValue(true);
+    const message = await checkForUpdate("1.5.0", {
+      executablePath: path.join(os.tmpdir(), "az2aws"),
+    });
 
     expect(message).toContain(
       "Download: https://github.com/kuma0128/az2aws/releases/latest",
@@ -230,8 +236,15 @@ describe("checkForUpdate", () => {
       return req as never;
     });
 
+    vi.mocked(isSea).mockReturnValue(true);
     const message = await checkForUpdate("1.5.0", {
-      installMethod: "mise-ubi",
+      executablePath: path.join(
+        os.tmpdir(),
+        "mise",
+        "installs",
+        "ubi-kuma0128-az2aws",
+        "az2aws",
+      ),
     });
 
     expect(message).toContain("Run: mise use -g ubi:kuma0128/az2aws");
