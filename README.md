@@ -126,6 +126,10 @@ v1 installations, but az2aws v2 and later are not published there. v2 drives
 an installed Chromium-based browser, which is not accessible from the current
 strictly confined Snap. Use npm or Docker for current releases.
 
+The v1 update notifier may report a newer npm release; `snap refresh` cannot
+install v2. Migrate with `npm install -g az2aws`, verify the npm installation,
+then remove the old package with `sudo snap remove az2aws`.
+
 ## Command Options
 
 | Option                            | Description                                              |
@@ -268,12 +272,14 @@ To avoid storing passwords in bash history, use a leading space:
 
 #### Browser Selection
 
-az2aws automatically detects and uses your installed Google Chrome, Microsoft
-Edge, or Chromium; it does not bundle a browser. Using a real browser also
-keeps Microsoft Entra ID happy — Entra may treat automation-only builds (such
-as Chrome for Testing) as untrusted, for example refusing to reuse "Stay
-logged in" sessions. Firefox is not supported. If no browser is found, az2aws
-exits with instructions instead of downloading one.
+az2aws automatically detects Google Chrome and Microsoft Edge on Windows and
+macOS, and Google Chrome, Microsoft Edge, or Chromium on Linux; it does not
+bundle a browser. On Windows or macOS, point `BROWSER_CHROME_BIN` at any other
+Chromium-based browser. Using a real browser also keeps Microsoft Entra ID
+happy — Entra may treat automation-only builds (such as Chrome for Testing) as
+untrusted, for example refusing to reuse "Stay logged in" sessions. Firefox is
+not supported. If no browser is found, az2aws exits with instructions instead
+of downloading one.
 
 - `BROWSER_CHROME_BIN` - Explicit path to a Chromium-based browser (overrides auto-detection)
 - `BROWSER_USE_SYSTEM_CHROME=0` - Disable auto-detection (requires `BROWSER_CHROME_BIN`)
