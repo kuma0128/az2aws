@@ -7,6 +7,15 @@
 
 Log in to AWS CLI using [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/) SSO. Supports MFA and places temporary credentials in the proper location for AWS CLI and SDKs.
 
+az2aws drives a browser that is already installed on your machine (Google
+Chrome, Microsoft Edge, or Chromium) and does **not** download or bundle one:
+
+- **Windows**: works out of the box (Edge ships with Windows).
+- **macOS**: install Google Chrome or Microsoft Edge.
+- **Linux**: install `google-chrome`, `chromium`, or `microsoft-edge`.
+
+Firefox and Safari are not supported.
+
 > **💡 Tip:** Let's be honest — typing `az2aws` correctly on the first try is harder than the AWS certification exam. Save your sanity:
 >
 > ```sh
@@ -69,7 +78,8 @@ Install [Node.js](https://nodejs.org/) v24 or higher, then install az2aws:
 
 #### Linux Notes
 
-You must install [puppeteer dependencies](https://github.com/puppeteer/puppeteer/blob/main/docs/troubleshooting.md) first.
+Install a Chromium-based browser first (for example `sudo apt install
+chromium` or Google Chrome), then install az2aws:
 
 **Install for all users:**
 
@@ -86,13 +96,8 @@ You must install [puppeteer dependencies](https://github.com/puppeteer/puppeteer
 
 #### Windows Notes
 
-If you get a missing Chrome/Chromium error, reinstall the Puppeteer browser from the installed `az2aws` package directory:
-
-    node <npm_global_node_modules>\az2aws\node_modules\puppeteer\install.mjs
-
-For an npm global install, replace `<npm_global_node_modules>` with the output of `npm root -g`.
-If you installed az2aws with pnpm or another package manager, locate `puppeteer/install.mjs`
-under the installed `az2aws` package directory and run it with `node`.
+No extra steps: az2aws uses your installed Chrome or the Microsoft Edge that
+ships with Windows.
 
 ### Docker
 
@@ -260,16 +265,15 @@ To avoid storing passwords in bash history, use a leading space:
 
 #### Browser Selection
 
-az2aws automatically uses your system Google Chrome (or Microsoft Edge) when
-one is installed, and falls back to the Chrome for Testing browser bundled
-with Puppeteer when no system browser is found or it fails to launch. Using
-a real browser matters because Microsoft Entra ID may treat the bundled
-automation browser as untrusted — for example refusing to reuse "Stay logged
-in" sessions. Firefox is not supported. Auto-detection is skipped in CI
-environments.
+az2aws automatically detects and uses your installed Google Chrome, Microsoft
+Edge, or Chromium; it does not bundle a browser. Using a real browser also
+keeps Microsoft Entra ID happy — Entra may treat automation-only builds (such
+as Chrome for Testing) as untrusted, for example refusing to reuse "Stay
+logged in" sessions. Firefox is not supported. If no browser is found, az2aws
+exits with instructions instead of downloading one.
 
-- `BROWSER_USE_SYSTEM_CHROME=0` - Always use the bundled browser
 - `BROWSER_CHROME_BIN` - Explicit path to a Chromium-based browser (overrides auto-detection)
+- `BROWSER_USE_SYSTEM_CHROME=0` - Disable auto-detection (requires `BROWSER_CHROME_BIN`)
 - `BROWSER_USER_DATA_DIR` - Chrome user data directory
 - `BROWSER_PROFILE_DIR` - Chrome profile name (e.g., "Default")
 
@@ -310,27 +314,22 @@ the login steps, use `--mode debug`.
 #### Troubleshooting
 
 If you see `TargetCloseError: Protocol error (Target.setAutoAttach): Target closed`,
-the browser profile may be incompatible with the bundled Chromium version
-(e.g., after upgrading or downgrading az2aws). When using the default
-managed profile (`~/.aws/chromium`) with "Stay logged in" enabled, az2aws
-will automatically reset the profile and retry. If you have set
-`BROWSER_USER_DATA_DIR` to point to an existing Chrome profile, az2aws
+the saved browser profile may be incompatible with your current browser
+version (e.g., after the browser upgraded or you switched browsers). When
+using the default managed profile (`~/.aws/chromium`) with "Stay logged in"
+enabled, az2aws will automatically reset the profile and retry. If you have
+set `BROWSER_USER_DATA_DIR` to point to an existing Chrome profile, az2aws
 will **not** modify that directory — you will need to resolve the
-incompatibility manually (e.g., update az2aws, or use a different
-`BROWSER_USER_DATA_DIR`).
+incompatibility manually (e.g., use a different `BROWSER_USER_DATA_DIR`).
 
 If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
 Try:
-`--mode gui` and use your system Chrome via `BROWSER_CHROME_BIN`.
+`--mode gui` and point `BROWSER_CHROME_BIN` at the browser your MDM manages.
 
 If you are prompted for your password on every login even though "Stay logged
-in" (`azure_default_remember_me`) is enabled, Microsoft Entra ID may be
-refusing to reuse sign-in sessions created by the Chrome for Testing browser
-bundled with Puppeteer, even though the session cookies are saved and sent
-correctly. az2aws avoids this by automatically preferring your system Chrome
-or Edge when one is installed (see "Browser Selection"). If no system browser
-was detected, or you opted out with `BROWSER_USE_SYSTEM_CHROME=0`, install
-Google Chrome or point `BROWSER_CHROME_BIN` at a Chromium-based browser.
+in" (`azure_default_remember_me`) is enabled, make sure az2aws is driving a
+real browser install (see "Browser Selection") — Microsoft Entra ID may
+refuse to reuse sign-in sessions created by automation-only browser builds.
 After switching browsers, the first login asks for your credentials once;
 subsequent logins reuse the Entra session until it expires.
 
@@ -396,7 +395,13 @@ If you need to confirm the tenant ID from myapps.microsoft.com:
 
 ## How It Works
 
-az2aws uses [Puppeteer](https://github.com/puppeteer/puppeteer) to automate a Chromium browser for Microsoft Entra ID login. It parses the SAML response and calls [AWS STS AssumeRoleWithSAML](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html) to get temporary credentials.
+az2aws drives your installed Chromium-based browser over the [Chrome DevTools
+Protocol](https://chromedevtools.github.io/devtools-protocol/) (via
+[puppeteer-core](https://pptr.dev/guides/what-is-puppeteer), which does not
+download a browser) to complete the Microsoft Entra ID login. The SAML
+response is intercepted at the network layer inside the browser, before it
+leaves your machine, and exchanged for temporary credentials with [AWS STS
+AssumeRoleWithSAML](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html).
 
 ## Troubleshooting
 

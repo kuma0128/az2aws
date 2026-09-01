@@ -81,7 +81,7 @@ vi.mock("https-proxy-agent", () => ({
   HttpsProxyAgent: mockHttpsProxyAgent,
 }));
 
-vi.mock("puppeteer", () => ({
+vi.mock("puppeteer-core", () => ({
   default: {
     launch: mockPuppeteerLaunch,
   },
@@ -337,6 +337,78 @@ describe("login", () => {
       const roles = login._parseRolesFromSamlResponse(samlAssertion);
 
       expect(roles).toHaveLength(0);
+    });
+
+    it("should parse namespace-prefixed Attribute elements", () => {
+      const samlAssertion = Buffer.from(
+        `
+        <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
+          <saml2:Assertion xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">
+            <saml2:AttributeStatement>
+              <saml2:Attribute Name="https://aws.amazon.com/SAML/Attributes/Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified">
+                <saml2:AttributeValue xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="xs:string">arn:aws:iam::123456789012:role/TestRole,arn:aws:iam::123456789012:saml-provider/TestProvider</saml2:AttributeValue>
+              </saml2:Attribute>
+            </saml2:AttributeStatement>
+          </saml2:Assertion>
+        </samlp:Response>
+      `,
+      ).toString("base64");
+
+      const roles = login._parseRolesFromSamlResponse(samlAssertion);
+
+      expect(roles).toHaveLength(1);
+      expect(roles[0].roleArn).toBe("arn:aws:iam::123456789012:role/TestRole");
+      expect(roles[0].principalArn).toBe(
+        "arn:aws:iam::123456789012:saml-provider/TestProvider",
+      );
+    });
+
+    it("should ignore other attributes and accept single-quoted Name values", () => {
+      const samlAssertion = Buffer.from(
+        `
+        <Response>
+          <Assertion>
+            <AttributeStatement>
+              <Attribute Name="https://aws.amazon.com/SAML/Attributes/SessionDuration">
+                <AttributeValue>3600</AttributeValue>
+              </Attribute>
+              <Attribute NameFormat="urn:x" Name='https://aws.amazon.com/SAML/Attributes/Role'>
+                <AttributeValue>arn:aws:iam::123456789012:role/TestRole,arn:aws:iam::123456789012:saml-provider/TestProvider</AttributeValue>
+              </Attribute>
+            </AttributeStatement>
+          </Assertion>
+        </Response>
+      `,
+      ).toString("base64");
+
+      const roles = login._parseRolesFromSamlResponse(samlAssertion);
+
+      expect(roles).toHaveLength(1);
+      expect(roles[0].roleArn).toBe("arn:aws:iam::123456789012:role/TestRole");
+    });
+
+    it("should decode XML entities in attribute values", () => {
+      const samlAssertion = Buffer.from(
+        `
+        <Response>
+          <Assertion>
+            <AttributeStatement>
+              <Attribute Name="https://aws.amazon.com/SAML/Attributes/Role">
+                <AttributeValue>arn:aws:iam::123456789012:role/Test&amp;Role,arn:aws:iam::123456789012:saml-provider/Test&#x26;Provider</AttributeValue>
+              </Attribute>
+            </AttributeStatement>
+          </Assertion>
+        </Response>
+      `,
+      ).toString("base64");
+
+      const roles = login._parseRolesFromSamlResponse(samlAssertion);
+
+      expect(roles).toHaveLength(1);
+      expect(roles[0].roleArn).toBe("arn:aws:iam::123456789012:role/Test&Role");
+      expect(roles[0].principalArn).toBe(
+        "arn:aws:iam::123456789012:saml-provider/Test&Provider",
+      );
     });
   });
 
@@ -2562,6 +2634,9 @@ describe("login", () => {
         (paths as any)[key] = (originalPaths as any)[key];
       });
 
+      // Without a bundled browser, launching requires a resolved executable.
+      mockDetectSystemChrome.mockResolvedValue("/fake/system-chrome");
+
       // Mock puppeteer.launch to capture args and throw immediately
       mockPuppeteerLaunch.mockImplementation((args: unknown) => {
         capturedLaunchArgs = args;
@@ -2689,20 +2764,6 @@ describe("login", () => {
       mockDetectSystemChrome.mockResolvedValueOnce(
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
       );
-      const consoleWarnSpy = vi
-        .spyOn(console, "warn")
-        .mockImplementation(() => {});
-
-      // The shared launch mock throws, which triggers the bundled-browser
-      // fallback and strips executablePath from the (shared) launch params
-      // object, so snapshot the value passed to each launch call instead.
-      const executablePathPerLaunch: (string | undefined)[] = [];
-      mockPuppeteerLaunch.mockImplementation(
-        (params: { executablePath?: string }) => {
-          executablePathPerLaunch.push(params.executablePath);
-          throw new Error("Mock launch error for testing");
-        },
-      );
 
       try {
         await login._performLoginAsync(
@@ -2723,11 +2784,12 @@ describe("login", () => {
         // Expected to throw
       }
 
-      expect(executablePathPerLaunch[0]).toBe(
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-      );
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Falling back to the bundled browser"),
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(1);
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          executablePath:
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        }),
       );
     });
 
@@ -2760,13 +2822,13 @@ describe("login", () => {
       );
     });
 
-    it("should skip auto-detection when it is disabled", async () => {
+    it("should throw a CLIError when auto-detection is disabled and no BROWSER_CHROME_BIN is set", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (paths as any).chromeBin = undefined;
       mockIsSystemChromeDetectionDisabled.mockReturnValueOnce(true);
 
-      try {
-        await login._performLoginAsync(
+      const error = await login
+        ._performLoginAsync(
           "https://login.example.com",
           false,
           false,
@@ -2779,35 +2841,24 @@ describe("login", () => {
           false,
           false,
           false,
-        );
-      } catch {
-        // Expected to throw
-      }
+        )
+        .catch((e: unknown) => e);
 
       expect(mockDetectSystemChrome).not.toHaveBeenCalled();
-      expect(capturedLaunchArgs).not.toEqual(
-        expect.objectContaining({ executablePath: expect.anything() }),
+      expect(mockPuppeteerLaunch).not.toHaveBeenCalled();
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toContain(
+        "No Chromium-based browser found",
       );
     });
 
-    it("should fall back to the bundled browser when the system browser fails to launch", async () => {
+    it("should throw a CLIError when no browser can be found", async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (paths as any).chromeBin = undefined;
-      mockDetectSystemChrome.mockResolvedValueOnce("/detected/system/chrome");
-      const consoleWarnSpy = vi
-        .spyOn(console, "warn")
-        .mockImplementation(() => {});
+      mockDetectSystemChrome.mockResolvedValueOnce(undefined);
 
-      const executablePathPerLaunch: (string | undefined)[] = [];
-      mockPuppeteerLaunch.mockImplementation(
-        (params: { executablePath?: string }) => {
-          executablePathPerLaunch.push(params.executablePath);
-          throw new Error("Mock launch error for testing");
-        },
-      );
-
-      try {
-        await login._performLoginAsync(
+      const error = await login
+        ._performLoginAsync(
           "https://login.example.com",
           false,
           false,
@@ -2820,18 +2871,40 @@ describe("login", () => {
           false,
           false,
           false,
-        );
-      } catch {
-        // Expected to throw after the bundled-browser retry also fails
-      }
+        )
+        .catch((e: unknown) => e);
 
-      expect(executablePathPerLaunch).toEqual([
-        "/detected/system/chrome",
-        undefined,
-      ]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Falling back to the bundled browser"),
+      expect(mockPuppeteerLaunch).not.toHaveBeenCalled();
+      expect(error).toBeInstanceOf(CLIError);
+      expect((error as CLIError).message).toContain(
+        "No Chromium-based browser found",
       );
+    });
+
+    it("should propagate a system browser launch failure without retrying", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (paths as any).chromeBin = undefined;
+      mockDetectSystemChrome.mockResolvedValueOnce("/detected/system/chrome");
+
+      const error = await login
+        ._performLoginAsync(
+          "https://login.example.com",
+          false,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        )
+        .catch((e: unknown) => e);
+
+      expect(mockPuppeteerLaunch).toHaveBeenCalledTimes(1);
+      expect((error as Error).message).toBe("Mock launch error for testing");
     });
 
     it("should create a temporary profile with certificate auto-select in headless mode", async () => {
@@ -3322,6 +3395,7 @@ describe("login", () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
+      mockDetectSystemChrome.mockResolvedValue("/fake/system-chrome");
       vi.spyOn(console, "log").mockImplementation(() => {});
     });
 
@@ -3481,6 +3555,7 @@ describe("login", () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
+      mockDetectSystemChrome.mockResolvedValue("/fake/system-chrome");
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "warn").mockImplementation(() => {});
       mockFsRm.mockResolvedValue(undefined);
@@ -3855,6 +3930,7 @@ describe("login", () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
+      mockDetectSystemChrome.mockResolvedValue("/fake/system-chrome");
       vi.spyOn(console, "log").mockImplementation(() => {});
       Object.keys(paths).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -4141,6 +4217,7 @@ describe("login", () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
+      mockDetectSystemChrome.mockResolvedValue("/fake/system-chrome");
       Object.keys(paths).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (paths as any)[key] = (originalPaths as any)[key];
@@ -4426,6 +4503,7 @@ describe("login", () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
+      mockDetectSystemChrome.mockResolvedValue("/fake/system-chrome");
       vi.spyOn(console, "log").mockImplementation(() => {});
       Object.keys(paths).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

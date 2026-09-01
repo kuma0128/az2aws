@@ -118,10 +118,12 @@ describe("isSystemChromeDetectionDisabled", () => {
     ).toBe(false);
   });
 
-  it("should be disabled in CI environments", () => {
-    expect(isSystemChromeDetectionDisabled({ CI: "true" })).toBe(true);
+  it("should stay enabled in CI environments", () => {
+    // There is no bundled browser to fall back to anymore, so CI runs rely on
+    // auto-detection (or an explicit BROWSER_CHROME_BIN) like everywhere else.
+    expect(isSystemChromeDetectionDisabled({ CI: "true" })).toBe(false);
     expect(isSystemChromeDetectionDisabled({ GITHUB_ACTIONS: "true" })).toBe(
-      true,
+      false,
     );
   });
 });

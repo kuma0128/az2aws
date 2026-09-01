@@ -5,10 +5,10 @@ import _debug from "debug";
 
 const debug = _debug("az2aws");
 
-// Entra ID can treat the bundled Chrome for Testing browser as untrusted
-// (e.g., refusing to reuse sign-in sessions), so prefer a real system
-// browser when one is installed. Chrome is preferred over Edge; both are
-// Chromium-based and work with the same launch options.
+// az2aws drives an installed Chromium-based browser; it does not bundle one.
+// Chrome is preferred over Edge; both work with the same launch options.
+// (Entra ID also treats real browsers as more trustworthy than automation
+// builds such as Chrome for Testing, e.g. for reusing sign-in sessions.)
 const DARWIN_CANDIDATES = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
@@ -47,14 +47,10 @@ function windowsCandidates(env: NodeJS.ProcessEnv): string[] {
 export function isSystemChromeDetectionDisabled(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
+  // Opting out of auto-detection means the browser must be provided
+  // explicitly through BROWSER_CHROME_BIN.
   const optOut = (env.BROWSER_USE_SYSTEM_CHROME || "").toLowerCase();
-  if (optOut === "0" || optOut === "false") {
-    return true;
-  }
-
-  // CI environments should keep using the pinned bundled browser for
-  // reproducibility.
-  return !!env.CI || !!env.GITHUB_ACTIONS;
+  return optOut === "0" || optOut === "false";
 }
 
 export async function detectSystemChromeAsync(
@@ -80,6 +76,6 @@ export async function detectSystemChromeAsync(
     }
   }
 
-  debug("No system browser detected; using the bundled browser");
+  debug("No system browser detected");
   return undefined;
 }

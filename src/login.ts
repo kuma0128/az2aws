@@ -3,9 +3,13 @@ import crypto from "node:crypto";
 import inquirer, { type DistinctQuestion } from "inquirer";
 import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
-import { load } from "cheerio";
-import puppeteer from "puppeteer";
-import type { Browser, BrowserContext, HTTPRequest, Page } from "puppeteer";
+import puppeteer from "puppeteer-core";
+import type {
+  Browser,
+  BrowserContext,
+  HTTPRequest,
+  Page,
+} from "puppeteer-core";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
@@ -48,6 +52,61 @@ const AWS_SAML_ENDPOINT = "https://signin.aws.amazon.com/saml";
 const AWS_CN_SAML_ENDPOINT = "https://signin.amazonaws.cn/saml";
 const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
 const REDACTED = "[redacted]";
+
+const ROLE_ATTRIBUTE_NAME = "https://aws.amazon.com/SAML/Attributes/Role";
+// SAML assertions may prefix elements with a namespace (saml:, saml2:, ...).
+const ATTRIBUTE_ELEMENT_RE =
+  /<(?:[\w.-]+:)?Attribute(\s[^>]*)?>([\s\S]*?)<\/(?:[\w.-]+:)?Attribute\s*>/g;
+const ATTRIBUTE_VALUE_RE =
+  /<(?:[\w.-]+:)?AttributeValue(?:\s[^>]*)?>([\s\S]*?)<\/(?:[\w.-]+:)?AttributeValue\s*>/g;
+const NAME_ATTRIBUTE_RE = /\sName\s*=\s*(?:"([^"]*)"|'([^']*)')/;
+
+const XML_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+};
+
+function decodeXmlEntities(text: string): string {
+  return text.replace(
+    /&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g,
+    (match, entity: string) => {
+      if (entity.startsWith("#x") || entity.startsWith("#X")) {
+        const code = Number.parseInt(entity.slice(2), 16);
+        return Number.isNaN(code) ? match : String.fromCodePoint(code);
+      }
+      if (entity.startsWith("#")) {
+        const code = Number.parseInt(entity.slice(1), 10);
+        return Number.isNaN(code) ? match : String.fromCodePoint(code);
+      }
+      return XML_ENTITIES[entity] ?? match;
+    },
+  );
+}
+
+/**
+ * Extract the text of every AttributeValue inside Role attributes of a SAML
+ * assertion. az2aws only ever needs this one lookup, so a scoped scanner
+ * replaces a full XML/DOM dependency.
+ */
+export function extractRoleAttributeValues(samlText: string): string[] {
+  const values: string[] = [];
+  for (const attributeMatch of samlText.matchAll(ATTRIBUTE_ELEMENT_RE)) {
+    const attributes = attributeMatch[1] ?? "";
+    const nameMatch = attributes.match(NAME_ATTRIBUTE_RE);
+    const name = nameMatch && decodeXmlEntities(nameMatch[1] ?? nameMatch[2]);
+    if (name !== ROLE_ATTRIBUTE_NAME) {
+      continue;
+    }
+
+    for (const valueMatch of attributeMatch[2].matchAll(ATTRIBUTE_VALUE_RE)) {
+      values.push(decodeXmlEntities(valueMatch[1]));
+    }
+  }
+  return values;
+}
 
 // Keep the runtime import as native `import()` so CommonJS output can load
 // the ESM-only https-proxy-agent package.
@@ -583,6 +642,32 @@ export const login = {
   },
 
   /**
+   * Resolve the Chromium-based browser to drive. az2aws no longer bundles a
+   * browser: `BROWSER_CHROME_BIN` wins, then an installed Chrome/Edge/Chromium
+   * is auto-detected. Failing both is a configuration error.
+   */
+  async _resolveBrowserExecutableAsync(): Promise<string> {
+    if (paths.chromeBin) {
+      return paths.chromeBin;
+    }
+
+    if (!isSystemChromeDetectionDisabled()) {
+      const systemChrome = await detectSystemChromeAsync();
+      if (systemChrome) {
+        debug(`Using system browser: ${systemChrome}`);
+        return systemChrome;
+      }
+    }
+
+    throw new CLIError(
+      "No Chromium-based browser found. az2aws drives an installed browser " +
+        "and no longer bundles one. Install Google Chrome, Microsoft Edge, " +
+        "or Chromium, or point BROWSER_CHROME_BIN at a Chromium-based " +
+        "browser executable.",
+    );
+  },
+
+  /**
    * True when the profile delegates credential retrieval to az2aws through
    * the AWS CLI `credential_process` setting. Entries pointing at other tools
    * are ignored so az2aws never interferes with them.
@@ -778,24 +863,13 @@ export const login = {
         headless: boolean;
         args: string[];
         ignoreDefaultArgs: string[];
-        executablePath?: string;
+        executablePath: string;
       } = {
         headless,
         args,
         ignoreDefaultArgs,
+        executablePath: await this._resolveBrowserExecutableAsync(),
       };
-
-      let usingAutoDetectedBrowser = false;
-      if (paths.chromeBin) {
-        launchParams.executablePath = paths.chromeBin;
-      } else if (!isSystemChromeDetectionDisabled()) {
-        const systemChrome = await detectSystemChromeAsync();
-        if (systemChrome) {
-          debug(`Using system browser: ${systemChrome}`);
-          launchParams.executablePath = systemChrome;
-          usingAutoDetectedBrowser = true;
-        }
-      }
 
       try {
         browser = await puppeteer.launch(launchParams);
@@ -819,15 +893,6 @@ export const login = {
             retryDelay: 100,
           });
           await fs.mkdir(paths.chromium, { recursive: true });
-          browser = await puppeteer.launch(launchParams);
-        } else if (usingAutoDetectedBrowser) {
-          debug(
-            `System browser launch failed: ${formatDebugErrorMessage(e)}. Falling back to the bundled browser.`,
-          );
-          console.warn(
-            "The system browser failed to launch. Falling back to the bundled browser...",
-          );
-          delete launchParams.executablePath;
           browser = await puppeteer.launch(launchParams);
         } else {
           throw e;
@@ -1064,16 +1129,9 @@ export const login = {
       xmlLength: samlText.length,
     });
 
-    debug("Parsing SAML XML");
-    const saml = load(samlText, { xmlMode: true });
-
     debug("Looking for role SAML attribute");
-    const roleSelection = saml(
-      "Attribute[Name='https://aws.amazon.com/SAML/Attributes/Role']>AttributeValue",
-    );
-    const roleNodes = roleSelection.toArray();
-    const roles = roleNodes.map((roleNode) => {
-      const roleAndPrincipal = saml(roleNode).text();
+    const roleValues = extractRoleAttributeValues(samlText);
+    const roles = roleValues.map((roleAndPrincipal) => {
       const parts = roleAndPrincipal.split(",");
 
       // Role / Principal claims may be in either order

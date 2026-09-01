@@ -1,6 +1,6 @@
 import { setTimeout } from "node:timers/promises";
 import inquirer from "inquirer";
-import type { ElementHandle, Page } from "puppeteer";
+import type { ElementHandle, Page } from "puppeteer-core";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
 
