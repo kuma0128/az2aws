@@ -143,9 +143,9 @@ async function startFakeIdpAsync(): Promise<{
 
       res.writeHead(404);
       res.end("not found");
-    })().catch((error: unknown) => {
-      res.writeHead(500);
-      res.end(String(error));
+    })().catch(() => {
+      res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+      res.end("internal server error");
     });
   });
 
