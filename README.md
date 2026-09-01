@@ -103,7 +103,6 @@ chromium` or Google Chrome), then install az2aws:
 **Install for all users:**
 
     sudo npm install -g az2aws
-    sudo chmod -R go+rx $(npm root -g)
 
 **Install for current user only:**
 
@@ -253,7 +252,7 @@ az2aws can reuse AWS CLI profiles created by the `azaws` OSS tool, such as
 
     [profile azaws-prod]
     azure_tenant_id = 00000000-0000-0000-0000-000000000000
-    azure_app_id = `https://signin.aws.amazon.com/saml#example-prod`
+    azure_app_id = https://signin.aws.amazon.com/saml\#example-prod
     azure_duration_hours = 12
     region = ap-northeast-1
 
@@ -268,7 +267,7 @@ make non-interactive runs deterministic:
 
     [profile azaws-prod]
     azure_tenant_id = 00000000-0000-0000-0000-000000000000
-    azure_app_id = https://signin.aws.amazon.com/saml#example-prod
+    azure_app_id = https://signin.aws.amazon.com/saml\#example-prod
     azure_default_role_arn = arn:aws:iam::123456789012:role/Az2awsSourceRole
     azure_duration_hours = 12
 
@@ -347,8 +346,10 @@ version (e.g., after the browser upgraded or you switched browsers). When
 using the default managed profile (`~/.aws/chromium`) with "Stay logged in"
 enabled, az2aws will automatically reset the profile and retry. If you have
 set `BROWSER_USER_DATA_DIR` to point to an existing Chrome profile, az2aws
-will **not** modify that directory — you will need to resolve the
-incompatibility manually (e.g., use a different `BROWSER_USER_DATA_DIR`).
+will **not** reset or delete that directory, but it may update the selected
+profile's `Preferences` file to configure automatic client-certificate
+selection. You will need to resolve browser-profile incompatibility manually
+(e.g., use a different `BROWSER_USER_DATA_DIR`).
 
 If you see device compliance errors (e.g., "Device UnSecured Or Non-Compliant"),
 Try:
