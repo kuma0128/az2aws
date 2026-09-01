@@ -54,12 +54,6 @@ const AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml";
 const REDACTED = "[redacted]";
 
 const ROLE_ATTRIBUTE_NAME = "https://aws.amazon.com/SAML/Attributes/Role";
-// SAML assertions may prefix elements with a namespace (saml:, saml2:, ...).
-const ATTRIBUTE_ELEMENT_RE =
-  /<(?:[\w.-]+:)?Attribute(\s[^>]*)?>([\s\S]*?)<\/(?:[\w.-]+:)?Attribute\s*>/g;
-const ATTRIBUTE_VALUE_RE =
-  /<(?:[\w.-]+:)?AttributeValue(?:\s[^>]*)?>([\s\S]*?)<\/(?:[\w.-]+:)?AttributeValue\s*>/g;
-const NAME_ATTRIBUTE_RE = /\sName\s*=\s*(?:"([^"]*)"|'([^']*)')/;
 
 const XML_ENTITIES: Record<string, string> = {
   amp: "&",
@@ -69,59 +63,235 @@ const XML_ENTITIES: Record<string, string> = {
   apos: "'",
 };
 
+function isValidXmlCodePoint(code: number): boolean {
+  return (
+    code === 0x9 ||
+    code === 0xa ||
+    code === 0xd ||
+    (code >= 0x20 && code <= 0xd7ff) ||
+    (code >= 0xe000 && code <= 0xfffd) ||
+    (code >= 0x10000 && code <= 0x10ffff)
+  );
+}
+
 function decodeXmlEntities(text: string): string {
   return text.replace(
     /&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g,
     (match, entity: string) => {
       if (entity.startsWith("#x") || entity.startsWith("#X")) {
         const code = Number.parseInt(entity.slice(2), 16);
-        return Number.isNaN(code) ? match : String.fromCodePoint(code);
+        return isValidXmlCodePoint(code) ? String.fromCodePoint(code) : match;
       }
       if (entity.startsWith("#")) {
         const code = Number.parseInt(entity.slice(1), 10);
-        return Number.isNaN(code) ? match : String.fromCodePoint(code);
+        return isValidXmlCodePoint(code) ? String.fromCodePoint(code) : match;
       }
       return XML_ENTITIES[entity] ?? match;
     },
   );
 }
 
-function extractXmlText(innerXml: string): string {
-  let text = "";
-  let lastIndex = 0;
-  const markup = /<!\[CDATA\[([\s\S]*?)\]\]>|<!--[\s\S]*?-->|<[^>]*>/g;
-
-  for (const match of innerXml.matchAll(markup)) {
-    text += decodeXmlEntities(innerXml.slice(lastIndex, match.index));
-    if (match[1] !== undefined) {
-      text += match[1];
+function findXmlTagEnd(xml: string, startIndex: number): number | undefined {
+  let quote: '"' | "'" | undefined;
+  for (let index = startIndex + 1; index < xml.length; index += 1) {
+    const character = xml[index];
+    if (quote) {
+      if (character === quote) {
+        quote = undefined;
+      }
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === ">") {
+      return index;
     }
-    lastIndex = (match.index ?? 0) + match[0].length;
+  }
+  return undefined;
+}
+
+interface XmlStartTag {
+  attributes: Map<string, string>;
+  localName: string;
+  qualifiedName: string;
+  selfClosing: boolean;
+}
+
+function parseXmlStartTag(rawTag: string): XmlStartTag | undefined {
+  let content = rawTag.trim();
+  const selfClosing = content.endsWith("/");
+  if (selfClosing) {
+    content = content.slice(0, -1).trimEnd();
   }
 
-  return text + decodeXmlEntities(innerXml.slice(lastIndex));
+  let index = 0;
+  while (index < content.length && !/\s/.test(content[index])) {
+    index += 1;
+  }
+  const qualifiedName = content.slice(0, index);
+  if (!qualifiedName || /[<>=]/.test(qualifiedName)) {
+    return undefined;
+  }
+
+  const attributes = new Map<string, string>();
+  while (index < content.length) {
+    while (index < content.length && /\s/.test(content[index])) {
+      index += 1;
+    }
+    if (index >= content.length) {
+      break;
+    }
+
+    const nameStart = index;
+    while (index < content.length && !/[\s=]/.test(content[index])) {
+      index += 1;
+    }
+    const name = content.slice(nameStart, index);
+    while (index < content.length && /\s/.test(content[index])) {
+      index += 1;
+    }
+    if (!name || content[index] !== "=") {
+      return undefined;
+    }
+    index += 1;
+    while (index < content.length && /\s/.test(content[index])) {
+      index += 1;
+    }
+
+    const quote = content[index];
+    if (quote !== '"' && quote !== "'") {
+      return undefined;
+    }
+    index += 1;
+    const valueStart = index;
+    while (index < content.length && content[index] !== quote) {
+      index += 1;
+    }
+    if (index >= content.length || attributes.has(name)) {
+      return undefined;
+    }
+    attributes.set(name, decodeXmlEntities(content.slice(valueStart, index)));
+    index += 1;
+  }
+
+  const qualifiedNameParts = qualifiedName.split(":");
+  return {
+    attributes,
+    localName: qualifiedNameParts[qualifiedNameParts.length - 1],
+    qualifiedName,
+    selfClosing,
+  };
 }
 
 /**
  * Extract the text of every AttributeValue inside Role attributes of a SAML
- * assertion. az2aws only ever needs this one lookup, so a scoped scanner
- * replaces a full XML/DOM dependency.
+ * assertion. The scanner tracks quotes while locating tag boundaries and
+ * parses complete attribute assignments, avoiding false tags or Name fields
+ * embedded inside other quoted attribute values.
  */
 export function extractRoleAttributeValues(samlText: string): string[] {
+  interface ElementFrame {
+    capturedText?: string;
+    isRoleAttribute: boolean;
+    localName: string;
+    qualifiedName: string;
+  }
+
   const values: string[] = [];
-  for (const attributeMatch of samlText.matchAll(ATTRIBUTE_ELEMENT_RE)) {
-    const attributes = attributeMatch[1] ?? "";
-    const nameMatch = attributes.match(NAME_ATTRIBUTE_RE);
-    const name = nameMatch && decodeXmlEntities(nameMatch[1] ?? nameMatch[2]);
-    if (name !== ROLE_ATTRIBUTE_NAME) {
+  const stack: ElementFrame[] = [];
+
+  const appendCapturedText = (text: string, decodeEntities: boolean): void => {
+    for (let index = stack.length - 1; index >= 0; index -= 1) {
+      if (stack[index].capturedText !== undefined) {
+        stack[index].capturedText += decodeEntities
+          ? decodeXmlEntities(text)
+          : text;
+        return;
+      }
+    }
+  };
+
+  let index = 0;
+  while (index < samlText.length) {
+    const tagStart = samlText.indexOf("<", index);
+    if (tagStart === -1) {
+      appendCapturedText(samlText.slice(index), true);
+      break;
+    }
+    appendCapturedText(samlText.slice(index, tagStart), true);
+
+    if (samlText.startsWith("<!--", tagStart)) {
+      const end = samlText.indexOf("-->", tagStart + 4);
+      if (end === -1) return [];
+      index = end + 3;
+      continue;
+    }
+    if (samlText.startsWith("<![CDATA[", tagStart)) {
+      const end = samlText.indexOf("]]>", tagStart + 9);
+      if (end === -1) return [];
+      appendCapturedText(samlText.slice(tagStart + 9, end), false);
+      index = end + 3;
+      continue;
+    }
+    if (samlText.startsWith("<?", tagStart)) {
+      const end = samlText.indexOf("?>", tagStart + 2);
+      if (end === -1) return [];
+      index = end + 2;
+      continue;
+    }
+    if (samlText.startsWith("<!", tagStart)) {
+      // SAML assertions do not require document type declarations. Reject
+      // other declarations instead of interpreting embedded fake elements.
+      return [];
+    }
+
+    const tagEnd = findXmlTagEnd(samlText, tagStart);
+    if (tagEnd === undefined) return [];
+    const rawTag = samlText.slice(tagStart + 1, tagEnd).trim();
+
+    if (rawTag.startsWith("/")) {
+      const qualifiedName = rawTag.slice(1).trim();
+      const frame = stack.pop();
+      if (!frame || frame.qualifiedName !== qualifiedName) {
+        return [];
+      }
+      if (frame.capturedText !== undefined) {
+        values.push(frame.capturedText);
+      }
+      index = tagEnd + 1;
       continue;
     }
 
-    for (const valueMatch of attributeMatch[2].matchAll(ATTRIBUTE_VALUE_RE)) {
-      values.push(extractXmlText(valueMatch[1]));
+    const tag = parseXmlStartTag(rawTag);
+    if (!tag) return [];
+    let enclosingAttribute: ElementFrame | undefined;
+    for (let frameIndex = stack.length - 1; frameIndex >= 0; frameIndex -= 1) {
+      if (stack[frameIndex].localName === "Attribute") {
+        enclosingAttribute = stack[frameIndex];
+        break;
+      }
     }
+    const frame: ElementFrame = {
+      isRoleAttribute:
+        tag.localName === "Attribute" &&
+        tag.attributes.get("Name") === ROLE_ATTRIBUTE_NAME,
+      localName: tag.localName,
+      qualifiedName: tag.qualifiedName,
+      ...(tag.localName === "AttributeValue" &&
+      enclosingAttribute?.isRoleAttribute
+        ? { capturedText: "" }
+        : {}),
+    };
+
+    if (tag.selfClosing) {
+      if (frame.capturedText !== undefined) {
+        values.push(frame.capturedText);
+      }
+    } else {
+      stack.push(frame);
+    }
+    index = tagEnd + 1;
   }
-  return values;
+
+  return stack.length === 0 ? values : [];
 }
 
 // Keep the runtime import as native `import()` so CommonJS output can load
@@ -667,12 +837,18 @@ export const login = {
       return paths.chromeBin;
     }
 
-    if (!isSystemChromeDetectionDisabled()) {
-      const systemChrome = await detectSystemChromeAsync();
-      if (systemChrome) {
-        debug(`Using system browser: ${systemChrome}`);
-        return systemChrome;
-      }
+    if (isSystemChromeDetectionDisabled()) {
+      throw new CLIError(
+        "Browser auto-detection is disabled by BROWSER_USE_SYSTEM_CHROME. " +
+          "Set BROWSER_CHROME_BIN to a Chromium-based browser executable, " +
+          "or unset BROWSER_USE_SYSTEM_CHROME to enable auto-detection.",
+      );
+    }
+
+    const systemChrome = await detectSystemChromeAsync();
+    if (systemChrome) {
+      debug(`Using system browser: ${systemChrome}`);
+      return systemChrome;
     }
 
     throw new CLIError(

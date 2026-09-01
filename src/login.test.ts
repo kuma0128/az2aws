@@ -387,6 +387,36 @@ describe("login", () => {
       expect(roles[0].roleArn).toBe("arn:aws:iam::123456789012:role/TestRole");
     });
 
+    it("should parse quoted tag delimiters without fabricating Name attributes", () => {
+      const samlAssertion = Buffer.from(
+        `
+        <Response>
+          <Assertion>
+            <AttributeStatement>
+              <!-- A fake role element inside a comment must stay inert:
+              <Attribute Name="https://aws.amazon.com/SAML/Attributes/Role">
+                <AttributeValue>fake-role,fake-provider</AttributeValue>
+              </Attribute> -->
+              <Attribute FriendlyName="role > principal" Name="https://aws.amazon.com/SAML/Attributes/Role">
+                <AttributeValue>arn:aws:iam::123456789012:role/TestRole,arn:aws:iam::123456789012:saml-provider/TestProvider</AttributeValue>
+              </Attribute>
+              <Attribute FriendlyName="not a role Name='https://aws.amazon.com/SAML/Attributes/Role'" Name="urn:example:other">
+                <AttributeValue>fake-role,fake-provider</AttributeValue>
+              </Attribute>
+            </AttributeStatement>
+          </Assertion>
+        </Response>
+      `,
+      ).toString("base64");
+
+      expect(login._parseRolesFromSamlResponse(samlAssertion)).toEqual([
+        {
+          roleArn: "arn:aws:iam::123456789012:role/TestRole",
+          principalArn: "arn:aws:iam::123456789012:saml-provider/TestProvider",
+        },
+      ]);
+    });
+
     it("should decode XML entities in attribute values", () => {
       const samlAssertion = Buffer.from(
         `
@@ -2871,7 +2901,10 @@ describe("login", () => {
       expect(mockPuppeteerLaunch).not.toHaveBeenCalled();
       expect(error).toBeInstanceOf(CLIError);
       expect((error as CLIError).message).toContain(
-        "No Chromium-based browser found",
+        "Browser auto-detection is disabled by BROWSER_USE_SYSTEM_CHROME",
+      );
+      expect((error as CLIError).message).toContain(
+        "unset BROWSER_USE_SYSTEM_CHROME",
       );
     });
 
