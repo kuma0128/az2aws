@@ -206,6 +206,38 @@ describe("checkForUpdate", () => {
     expect(consoleSpy).not.toHaveBeenCalled();
   });
 
+  it("should point standalone binaries at GitHub Releases", async () => {
+    const req = createMockRequest();
+    vi.mocked(https.get).mockImplementation((_url, _opts, cb) => {
+      const callback = cb as (res: EventEmitter) => void;
+      callback(createMockResponse(JSON.stringify({ version: "2.0.0" })));
+      return req as never;
+    });
+
+    const message = await checkForUpdate("1.5.0", { installMethod: "binary" });
+
+    expect(message).toContain(
+      "Download: https://github.com/kuma0128/az2aws/releases/latest",
+    );
+    expect(message).not.toContain("npm install -g az2aws");
+  });
+
+  it("should tailor the update command for mise ubi binary installs", async () => {
+    const req = createMockRequest();
+    vi.mocked(https.get).mockImplementation((_url, _opts, cb) => {
+      const callback = cb as (res: EventEmitter) => void;
+      callback(createMockResponse(JSON.stringify({ version: "2.0.0" })));
+      return req as never;
+    });
+
+    const message = await checkForUpdate("1.5.0", {
+      installMethod: "mise-ubi",
+    });
+
+    expect(message).toContain("Run: mise use -g ubi:kuma0128/az2aws");
+    expect(message).not.toContain("npm:az2aws");
+  });
+
   it("should allow forcing the latest version through an environment variable", async () => {
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
