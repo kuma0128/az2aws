@@ -28,32 +28,29 @@ describe("credentialProcess", () => {
     expect(buildLoginCommand("-prod")).toBe("az2aws --profile=-prod");
   });
 
-  it.each([
-    ["R&D", '"R&D"'],
-    [
-      "prod$HOME",
-      process.platform === "win32" ? '"prod$HOME"' : '"prod\\$HOME"',
-    ],
-    [
-      "$(echo injected)",
-      process.platform === "win32"
-        ? '"$(echo injected)"'
-        : '"\\$(echo injected)"',
-    ],
-    [
-      "`echo injected`",
-      process.platform === "win32"
-        ? '"`echo injected`"'
-        : '"\\`echo injected\\`"',
-    ],
-  ])("should quote shell metacharacters in profile %s", (profile, quoted) => {
-    const command = buildCredentialProcessCommand(profile);
-
-    expect(command).toBe(
-      `${credentialProcessExecutable} --profile=${quoted} --credential-process`,
+  it("should quote shell operators that round-trip through AWS CLI", () => {
+    expect(buildCredentialProcessCommand("R&D")).toBe(
+      `${credentialProcessExecutable} --profile="R&D" --credential-process`,
     );
-    expect(isAz2awsCredentialProcess(command, { profileName: profile })).toBe(
-      true,
+  });
+
+  it.each(["prod$ops", "`ops`"])(
+    "should reject incompatible POSIX credential_process profile %s",
+    (profile) => {
+      expect(() => buildCredentialProcessCommand(profile, "linux")).toThrow(
+        "cannot be safely used with credential_process",
+      );
+    },
+  );
+
+  it("should use the standalone executable on Windows", () => {
+    expect(
+      buildCredentialProcessCommand("default", "win32", {
+        standalone: true,
+        executablePath: String.raw`C:\Program Files\az2aws.exe`,
+      }),
+    ).toBe(
+      String.raw`"C:\Program Files\az2aws.exe" --profile=default --credential-process`,
     );
   });
 
@@ -62,10 +59,9 @@ describe("credentialProcess", () => {
     () => {
       const profile =
         'R&D prod$HOME $(printf injected) `printf injected` "quoted" \\slash';
-      const command = buildCredentialProcessCommand(profile);
-      const prefix = `${credentialProcessExecutable} --profile=`;
-      const suffix = " --credential-process";
-      const quotedArgument = command.slice(prefix.length, -suffix.length);
+      const command = buildLoginCommand(profile);
+      const prefix = "az2aws --profile=";
+      const quotedArgument = command.slice(prefix.length);
 
       const actual = execFileSync(
         "/bin/sh",

@@ -46,6 +46,9 @@ jobs:
           fail_ci_if_error: false
           verbose: false
       - run: pnpm build
+      - name: Smoke-test standalone credential_process
+        if: matrix.os != 'ubuntu-slim'
+        run: pnpm build:sea
 
   e2e:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
@@ -110,4 +113,8 @@ jobs:
           fi
           echo "BROWSER_CHROME_BIN=$browser_bin" >> "$GITHUB_ENV"
           "$browser_bin" --version
+      - name: Verify compatibility with the installed AWS CLI
+        env:
+          AZ2AWS_REQUIRE_AWS_CLI_TESTS: "true"
+        run: pnpm exec vitest run src/awsCompatibility.test.ts
       - run: pnpm test:e2e:local

@@ -1,3 +1,4 @@
+import { isSea } from "node:sea";
 import { CLIError } from "./CLIError";
 
 function parseCommandTokens(
@@ -147,8 +148,31 @@ export function quoteCommandArgument(
 export function buildCredentialProcessCommand(
   profileName: string,
   platform: NodeJS.Platform = process.platform,
+  runtime: { standalone?: boolean; executablePath?: string } = {},
 ): string {
-  const executable = platform === "win32" ? "az2aws.cmd" : "az2aws";
+  // AWS CLI parses argv directly; some SDKs execute through a shell. Escaping
+  // $/backticks for a shell changes the literal argv received from AWS CLI.
+  if (platform !== "win32" && /[$`]/.test(profileName)) {
+    throw new CLIError(
+      "Profile names containing $ or backticks cannot be safely used with credential_process on POSIX systems.",
+    );
+  }
+  const executablePath = runtime.executablePath ?? process.execPath;
+  if (
+    (runtime.standalone ?? isSea()) &&
+    platform !== "win32" &&
+    /[$`]/.test(executablePath)
+  ) {
+    throw new CLIError(
+      "Executable paths containing $ or backticks cannot be safely used with credential_process on POSIX systems.",
+    );
+  }
+  const executable =
+    (runtime.standalone ?? isSea())
+      ? quoteCommandArgument(executablePath, platform)
+      : platform === "win32"
+        ? "az2aws.cmd"
+        : "az2aws";
   return `${executable} --profile=${quoteCommandArgument(profileName, platform)} --credential-process`;
 }
 
@@ -193,7 +217,16 @@ export function isAz2awsCredentialProcess(
     platform === "win32"
       ? executableName.toLowerCase() === "az2aws"
       : executableName === "az2aws";
-  if (!isBareAz2aws && !/^az2aws\.(?:exe|cmd)$/i.test(executableName)) {
+  const isCurrentBinary =
+    isSea() &&
+    (platform === "win32"
+      ? tokens[0].toLowerCase() === process.execPath.toLowerCase()
+      : tokens[0] === process.execPath);
+  if (
+    !isBareAz2aws &&
+    !isCurrentBinary &&
+    !/^az2aws\.(?:exe|cmd)$/i.test(executableName)
+  ) {
     return false;
   }
 

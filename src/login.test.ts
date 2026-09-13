@@ -6,6 +6,14 @@ import {
   configureAutomaticCertificateSelectionAsync,
 } from "./login";
 import { CLIError } from "./CLIError";
+import { withFileLock } from "./fileLock";
+
+vi.mock("./fileLock", () => ({
+  withFileLock: vi.fn(
+    (_path: string, operation: (path: string) => Promise<unknown>) =>
+      operation(_path),
+  ),
+}));
 
 vi.mock("inquirer", () => ({
   default: {
@@ -713,22 +721,20 @@ describe("login", () => {
       expect(inquirer.prompt).not.toHaveBeenCalled();
     });
 
-    it("should select the only role even if default role is not present", async () => {
-      const roles = [
-        {
-          roleArn: "arn:aws:iam::123456789012:role/Role1",
-          principalArn: "arn:aws:iam::123456789012:saml-provider/Provider1",
-        },
-      ];
-
-      const result = await login._askUserForRoleAndDurationAsync(
-        roles,
-        true,
-        "arn:aws:iam::123456789012:role/MissingRole",
-        "1",
-      );
-
-      expect(result.role.roleArn).toBe("arn:aws:iam::123456789012:role/Role1");
+    it("should reject the only role when it differs from the configured role in non-interactive mode", async () => {
+      await expect(
+        login._askUserForRoleAndDurationAsync(
+          [
+            {
+              roleArn: "arn:aws:iam::222222222222:role/Other",
+              principalArn: "arn:aws:iam::222222222222:saml-provider/Provider",
+            },
+          ],
+          true,
+          "arn:aws:iam::111111111111:role/Expected",
+          "1",
+        ),
+      ).rejects.toThrow("Configured default role ARN was not found");
       expect(inquirer.prompt).not.toHaveBeenCalled();
     });
 
@@ -979,6 +985,22 @@ describe("login", () => {
 
       expect(result.azure_tenant_id).toBe("env-tenant");
       expect(result.azure_default_username).toBe("env-user@example.com");
+    });
+
+    it("should let environment aliases override canonical file settings", async () => {
+      clearAzureEnv();
+      process.env.AZURE_APP_ID = "environment-app";
+      process.env.AZURE_DURATION_HOURS = "10";
+      const profile = login._applyProfileEnvironment({
+        azure_app_id_uri: "file-app",
+        azure_default_duration_hours: "1",
+      } as never);
+      expect(profile.azure_app_id_uri).toBe("environment-app");
+      expect(profile.azure_default_duration_hours).toBe("10");
+      process.env.AZURE_APP_ID_URI = "canonical-environment-app";
+      expect(login._applyProfileEnvironment(profile).azure_app_id_uri).toBe(
+        "canonical-environment-app",
+      );
     });
 
     it("should normalize canonical quoted profile settings", async () => {
@@ -1426,6 +1448,46 @@ describe("login", () => {
         SessionToken: credentials.aws_session_token,
         Expiration: credentials.aws_expiration,
       });
+    });
+
+    it("should read a cache populated by another process only after taking the browser lock", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        ...profile,
+        azure_default_remember_me: true,
+      });
+      vi.mocked(
+        credentialCache.getValidCachedCredentialsAsync,
+      ).mockResolvedValue(undefined);
+      const browser = vi.spyOn(login, "_performLoginAsync");
+      vi.mocked(withFileLock).mockImplementationOnce(
+        async (_path, operation) => {
+          expect(
+            credentialCache.getValidCachedCredentialsAsync,
+          ).not.toHaveBeenCalled();
+          vi.mocked(
+            credentialCache.getValidCachedCredentialsAsync,
+          ).mockResolvedValue(credentials);
+          return operation(_path);
+        },
+      );
+      await login.loginAsync(
+        "default",
+        "cli",
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+      );
+      expect(browser).not.toHaveBeenCalled();
+      expect(
+        JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string)
+          .AccessKeyId,
+      ).toBe(credentials.aws_access_key_id);
     });
 
     it("should validate mode before consulting the credential cache", async () => {
@@ -4147,6 +4209,55 @@ describe("login", () => {
       expect(result).toBe("validBase64EncodedSaml");
       // Browser is closed by SAML request handler when response is received
       expect(mockBrowser.close).toHaveBeenCalled();
+    });
+
+    it("should wait for browser shutdown before completing the login", async () => {
+      const mockPage = createMockPage();
+      const mockBrowser = createMockBrowser(mockPage);
+      let finishClose!: () => void;
+      let startedClose!: () => void;
+      const closing = new Promise<void>((resolve) => {
+        startedClose = resolve;
+      });
+      mockBrowser.close.mockImplementation(() => {
+        startedClose();
+        return new Promise<void>((resolve) => {
+          finishClose = resolve;
+        });
+      });
+      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+      let completed = false;
+      const result = login
+        ._performLoginAsync(
+          "https://login.example.com",
+          true,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        )
+        .then((value) => {
+          completed = true;
+          return value;
+        });
+      await mockPage.waitForRequestInterception();
+      mockPage.getRequestHandler()!({
+        url: () => "https://signin.aws.amazon.com/saml",
+        postData: () => "SAMLResponse=dummy",
+        respond: vi.fn().mockResolvedValue(undefined),
+      });
+      await closing;
+      await Promise.resolve();
+      expect(completed).toBe(false);
+      finishClose();
+      await expect(result).resolves.toBe("dummy");
+      expect(mockBrowser.close).toHaveBeenCalledTimes(1);
     });
 
     it("should tolerate rejected respond promise when SAML response is received", async () => {

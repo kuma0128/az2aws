@@ -10,6 +10,12 @@ import {
 } from "./credentialProcess";
 import { paths } from "./paths";
 
+vi.mock("./fileLock", () => ({
+  withFileLock: (
+    _path: string,
+    operation: (path: string) => Promise<unknown>,
+  ) => operation(_path),
+}));
 vi.mock("fs");
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn().mockResolvedValue(undefined),
@@ -685,6 +691,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           callback(null);
@@ -737,6 +744,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           callback(null);
@@ -786,6 +794,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           callback(null);
@@ -827,6 +836,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           callback(null);
@@ -861,6 +871,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           callback(null);
@@ -898,6 +909,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           callback(null);
@@ -927,6 +939,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           _data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           callback(null);
@@ -968,6 +981,7 @@ aws_session_token = FwoGZXIvYXdzEBYaDH+token/with+special==chars
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
@@ -1017,6 +1031,7 @@ region = us-east-1
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
@@ -1065,6 +1080,7 @@ custom_field = should-be-preserved
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
@@ -1089,7 +1105,7 @@ custom_field = should-be-preserved
         "azure_app_id_uri=https://updated-app.example.com",
       );
       // Should preserve custom fields
-      expect(writtenData).toContain("custom_field=should-be-preserved");
+      expect(writtenData).toContain("custom_field = should-be-preserved");
     });
 
     it("should remove keys whose value is undefined", async () => {
@@ -1114,6 +1130,7 @@ credential_process = az2aws --profile existing --credential-process
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
@@ -1154,6 +1171,7 @@ credential_process = aws-vault export --format=json existing
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
@@ -1166,7 +1184,7 @@ credential_process = aws-vault export --format=json existing
       });
 
       expect(writtenData).toContain(
-        "credential_process=aws-vault export --format=json existing",
+        "credential_process = aws-vault export --format=json existing",
       );
     });
 
@@ -1183,21 +1201,22 @@ credential_process = aws-vault export --format=json existing
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
           callback(null);
         },
       );
-      const profileName = "team=.R&D$prod";
+      const profileName = "team=.R&Dprod";
       const command = buildCredentialProcessCommand(profileName);
 
       await awsConfig.setProfileConfigValuesAsync(profileName, {
         credential_process: command,
       });
 
-      expect(writtenData).toContain("[profile team=.R&D$prod]");
-      expect(writtenData).not.toContain("[profile team=\\.R&D$prod]");
+      expect(writtenData).toContain("[profile team=.R&Dprod]");
+      expect(writtenData).not.toContain("[profile team=\\.R&Dprod]");
       expect(writtenData).toContain(`credential_process=${command}`);
       expect(writtenData).not.toContain('credential_process="az2aws');
 
@@ -1227,6 +1246,7 @@ credential_process = aws-vault export --format=json existing
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
@@ -1257,6 +1277,7 @@ credential_process = aws-vault export --format=json existing
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
@@ -1270,7 +1291,7 @@ credential_process = aws-vault export --format=json existing
       });
 
       expect(writtenData).toContain(
-        String.raw`[profile hash\\path\#semi\;prod]`,
+        String.raw`[profile "hash\\path#semi;prod"]`,
       );
       await expect(
         awsConfig.getProfileConfigAsync(profileName),
@@ -1297,6 +1318,7 @@ credential_process = aws-vault export --format=json existing
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
@@ -1335,6 +1357,7 @@ credential_process = aws-vault export --format=json existing
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
@@ -1375,6 +1398,7 @@ aws_secret_access_key = existingsecret
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();
@@ -1392,7 +1416,7 @@ aws_secret_access_key = existingsecret
       expect(fs.writeFile).toHaveBeenCalled();
       // Should preserve existing profile
       expect(writtenData).toContain("[existing]");
-      expect(writtenData).toContain("aws_access_key_id=EXISTINGKEY");
+      expect(writtenData).toContain("aws_access_key_id = EXISTINGKEY");
       // Should add new profile
       expect(writtenData).toContain("[newprofile]");
       expect(writtenData).toContain("aws_access_key_id=NEWKEY");
@@ -1423,6 +1447,7 @@ aws_secret_access_key = other-secret
         (
           _path: fs.PathOrFileDescriptor,
           data: string | NodeJS.ArrayBufferView,
+          _options: fs.WriteFileOptions,
           callback: fs.NoParamCallback,
         ) => {
           writtenData = data.toString();

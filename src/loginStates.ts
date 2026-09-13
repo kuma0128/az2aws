@@ -14,6 +14,7 @@ export type StateHandler = (
   defaultPassword: string | undefined,
   rememberMe: boolean,
   allowSensitiveOutput: boolean,
+  strictNonInteractive?: boolean,
 ) => Promise<void>;
 
 export interface State {
@@ -36,6 +37,14 @@ async function readTextContent<T extends Node>(
   }
 
   return page.evaluate((node) => node.textContent ?? "", element);
+}
+
+function requireInteractiveLogin(strictNonInteractive: boolean): void {
+  if (strictNonInteractive) {
+    throw new CLIError(
+      "Authentication requires user input. Run az2aws --profile=<name> interactively to sign in, then retry the AWS command.",
+    );
+  }
 }
 
 const PASSWORD_SELECTOR =
@@ -78,9 +87,11 @@ export const states: State[] = [
       _defaultPassword: string | undefined,
       _rememberMe: boolean,
       allowSensitiveOutput: boolean,
+      strictNonInteractive = false,
     ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
+        requireInteractiveLogin(strictNonInteractive);
         debug("Found error message. Displaying");
         const errorMessage = await readTextContent(page, error);
         printPageMessage(errorMessage, allowSensitiveOutput);
@@ -92,6 +103,7 @@ export const states: State[] = [
         debug("Not prompting user for username");
         username = defaultUsername;
       } else {
+        requireInteractiveLogin(strictNonInteractive);
         debug("Prompting user for username");
         ({ username } = await inquirer.prompt<{ username: string }>([
           {
@@ -227,7 +239,9 @@ export const states: State[] = [
       _defaultPassword: string | undefined,
       _rememberMe: boolean,
       allowSensitiveOutput: boolean,
+      strictNonInteractive = false,
     ) {
+      requireInteractiveLogin(strictNonInteractive);
       debug("Sending notification");
       await page.click("input[value='Send notification']");
       debug("Waiting for auth code");
@@ -263,6 +277,7 @@ export const states: State[] = [
       defaultPassword: string | undefined,
       _rememberMe: boolean,
       allowSensitiveOutput: boolean,
+      strictNonInteractive = false,
     ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
@@ -278,6 +293,7 @@ export const states: State[] = [
         debug("Not prompting user for password");
         password = defaultPassword;
       } else {
+        requireInteractiveLogin(strictNonInteractive);
         debug("Prompting user for password");
         ({ password } = await inquirer.prompt<{ password: string }>([
           {
@@ -318,7 +334,9 @@ export const states: State[] = [
       _defaultPassword: string | undefined,
       _rememberMe: boolean,
       allowSensitiveOutput: boolean,
+      strictNonInteractive = false,
     ): Promise<void> {
+      requireInteractiveLogin(strictNonInteractive);
       const descriptionMessage = await readTextContent(page, selected);
       printPageMessage(descriptionMessage, allowSensitiveOutput);
 
@@ -385,7 +403,9 @@ export const states: State[] = [
       _defaultPassword: string | undefined,
       _rememberMe: boolean,
       allowSensitiveOutput: boolean,
+      strictNonInteractive = false,
     ): Promise<void> {
+      requireInteractiveLogin(strictNonInteractive);
       const error = await page.$(".alert-error");
       if (error) {
         debug("Found error message. Displaying");

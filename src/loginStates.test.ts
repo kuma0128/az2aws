@@ -977,3 +977,31 @@ describe("loginStates", () => {
     });
   });
 });
+
+describe("credential_process interactive challenges", () => {
+  it.each([
+    "username input",
+    "password input",
+    "TFA code input",
+    "TFA instructions",
+    "passwordless",
+  ])("rejects %s without opening a terminal prompt", async (name) => {
+    vi.clearAllMocks();
+    const page = { $: vi.fn().mockResolvedValue(null) };
+    await expect(
+      states
+        .find((state) => state.name === name)!
+        .handler(
+          page as never,
+          {} as never,
+          true,
+          "",
+          undefined,
+          false,
+          false,
+          true,
+        ),
+    ).rejects.toThrow("Authentication requires user input");
+    expect(inquirer.prompt).not.toHaveBeenCalled();
+  });
+});

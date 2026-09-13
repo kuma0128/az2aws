@@ -129,7 +129,10 @@ if (
 // SEA evaluates the main script directly; drop the CLI shebang line.
 const bundleSource = fs.readFileSync(bundlePath, "utf8");
 if (bundleSource.startsWith("#!")) {
-  fs.writeFileSync(bundlePath, bundleSource.slice(bundleSource.indexOf("\n") + 1));
+  fs.writeFileSync(
+    bundlePath,
+    bundleSource.slice(bundleSource.indexOf("\n") + 1),
+  );
 }
 
 // --- 2. Generate the (platform-independent) SEA blob -------------------------
@@ -160,9 +163,7 @@ const outPath = path.join(
 
 if (isWindowsTarget) {
   const assetName = "win-x64/node.exe";
-  const nodeBinary = await downloadAsync(
-    `${nodeDistributionUrl}/${assetName}`,
-  );
+  const nodeBinary = await downloadAsync(`${nodeDistributionUrl}/${assetName}`);
   verifyNodeDownload(nodeBinary, nodeShasums, assetName);
   fs.writeFileSync(outPath, nodeBinary);
 } else {
@@ -214,6 +215,79 @@ if (target === hostTarget) {
     );
   }
   console.log(`Smoke test passed: --version -> ${reportedVersion}`);
+
+  // Exercise bundled config parsing, command generation, process locking and
+  // cached credential_process output, using only synthetic credentials. A
+  // missing browser path makes an accidental cache miss fail without sign-in.
+  const smokeDir = path.join(seaDir, "smoke");
+  fs.mkdirSync(smokeDir, { recursive: true, mode: 0o700 });
+  const smokeEnv = {
+    ...process.env,
+    AWS_CONFIG_FILE: path.join(smokeDir, "config"),
+    AWS_SHARED_CREDENTIALS_FILE: path.join(smokeDir, "credentials"),
+    AZ2AWS_CACHE_DIR: path.join(smokeDir, "cache"),
+    BROWSER_USER_DATA_DIR: path.join(smokeDir, "browser"),
+    BROWSER_CHROME_BIN: path.join(smokeDir, "missing-browser"),
+    AZ2AWS_FAKE_LATEST_VERSION: expectedVersion,
+  };
+  for (const key of Object.keys(smokeEnv)) {
+    if (/^azure_/i.test(key)) delete smokeEnv[key];
+  }
+  const seedPath = path.join(seaDir, "seed-smoke.cjs");
+  await esbuild.build({
+    stdin: {
+      contents: `
+        import { awsConfig } from './src/awsConfig';
+        import { credentialCache } from './src/credentialCache';
+        import { buildCredentialProcessCommand } from './src/credentialProcess';
+        (async () => {
+          const profileName = 'binary smoke';
+          const profile = {
+            azure_tenant_id: 'dummy', azure_app_id_uri: 'https://example.invalid',
+            azure_default_username: 'dummy', azure_default_role_arn: 'dummy',
+            azure_default_duration_hours: '1', azure_default_remember_me: true,
+            region: 'us-east-1',
+            credential_process: buildCredentialProcessCommand(profileName, process.platform, {
+              standalone: true, executablePath: process.argv[2],
+            }),
+          };
+          await awsConfig.setProfileConfigValuesAsync(profileName, profile);
+          const saved = await credentialCache.setCachedCredentialsAsync(profileName, {
+            aws_access_key_id: 'DUMMY_BINARY_SMOKE', aws_secret_access_key: 'dummy',
+            aws_session_token: 'dummy==', aws_expiration: new Date(Date.now() + 3600000).toISOString(),
+          }, profile);
+          if (!saved) throw new Error('Failed to seed smoke cache');
+        })().catch(error => { console.error(error.message); process.exitCode = 1; });
+      `,
+      resolveDir: repoRoot,
+    },
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    outfile: seedPath,
+  });
+  execFileSync(process.execPath, [seedPath, outPath], {
+    env: smokeEnv,
+    stdio: "inherit",
+  });
+  const credentialOutput = JSON.parse(
+    execFileSync(outPath, ["--profile=binary smoke", "--credential-process"], {
+      env: smokeEnv,
+      encoding: "utf8",
+      timeout: 20000,
+      stdio: ["ignore", "pipe", "pipe"],
+    }),
+  );
+  if (
+    credentialOutput.Version !== 1 ||
+    credentialOutput.AccessKeyId !== "DUMMY_BINARY_SMOKE" ||
+    credentialOutput.SessionToken !== "dummy=="
+  ) {
+    throw new Error("Smoke test failed: unexpected credential_process payload");
+  }
+  console.log(
+    "Smoke test passed: standalone credential_process cache and lock",
+  );
 } else {
   console.log(`Skipping smoke test (host is ${hostTarget}, target ${target})`);
 }

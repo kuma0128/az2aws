@@ -1,10 +1,12 @@
 import inquirer from "inquirer";
+import { isSea } from "node:sea";
 import { CLIError } from "./CLIError";
 import { awsConfig } from "./awsConfig";
 import {
   buildCredentialProcessCommand,
   buildLoginCommand,
   isAz2awsCredentialProcess,
+  quoteCommandArgument,
 } from "./credentialProcess";
 import {
   parseSessionDurationHours,
@@ -135,14 +137,20 @@ export async function configureProfileAsync(
   };
 
   if (wireCredentialProcess) {
+    // Validate even when preserving an existing command.
+    const generatedCommand = buildCredentialProcessCommand(profileName);
     // Keep supported runtime flags (for example --no-sandbox) and custom
     // executable paths on correctly wired entries. Stale entries targeting a
     // different profile are still rebuilt with the current profile name.
     values.credential_process =
       hasAz2awsCredentialProcessForProfile &&
       typeof existingCredentialProcess === "string"
-        ? existingCredentialProcess
-        : buildCredentialProcessCommand(profileName);
+        ? isSea() && process.platform === "win32"
+          ? existingCredentialProcess.replace(/^az2aws\.cmd(?=\s)/i, () =>
+              quoteCommandArgument(process.execPath),
+            )
+          : existingCredentialProcess
+        : generatedCommand;
   } else if (hasAz2awsCredentialProcess) {
     // undefined removes the previously wired az2aws entry; a foreign entry is
     // left untouched by omitting the key entirely.

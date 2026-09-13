@@ -223,15 +223,31 @@ Filenames combine the profile name and active AWS config path into a
 fixed-length hash, and each entry is also bound to the effective profile
 settings. az2aws serves a matching entry without launching a browser while it
 is valid for more than 11 more minutes.
-Use `--force-refresh` to bypass the cache. Profiles wired to
+Use `--force-refresh` to bypass the cache. Concurrent refreshes sharing a saved
+browser profile wait for one another and recheck the cache after acquiring the
+lock. Config and credentials updates also use process locks, preserve unrelated
+settings and comments, and create temporary credential files with `0600`
+permissions. Locks are kept beside the protected resource and are recovered
+after a crashed process stops refreshing them. Profiles wired to
 credential_process intentionally do **not** get static keys written to
 `~/.aws/credentials`: static keys there would take precedence over
 credential_process and keep serving stale credentials after expiry. When
 wiring an existing profile, az2aws removes its old static credentials only
 after the initial login has durably populated the cache.
 
-`--credential-process` uses the same non-interactive defaults as `--no-prompt`,
-so make sure the profile already has the role and other required values set.
+`--credential-process` never opens terminal prompts. If sign-in needs a
+username, password, or MFA interaction that cannot be completed automatically,
+it exits with an instruction to run `az2aws --profile=myprofile` interactively
+before retrying the AWS command. This also applies with `--mode gui` or
+`--mode debug`: the browser may be visible, but credential_process still drives
+the flow without prompting. Configure the role and other required defaults first.
+
+On Windows, npm installations use `az2aws.cmd`; standalone installations use
+the absolute path to the running executable. On POSIX systems, profile names
+containing `$` or backticks cannot be wired to credential_process because AWS
+CLI and shell-based SDK consumers interpret them differently. Existing manual
+profiles can still use those names.
+
 Standard output is reserved for the AWS CLI JSON payload, while human-readable
 status messages are written to stderr.
 
@@ -279,9 +295,14 @@ You can set defaults via environment variables (use with `--no-prompt`):
 - `AZURE_DEFAULT_USERNAME` / `AZURE_DEFAULT_PASSWORD` - Credentials
 - `AZURE_DEFAULT_ROLE_ARN` / `AZURE_DEFAULT_DURATION_HOURS` (`AZURE_DURATION_HOURS` alias) - AWS role settings
 
+Environment aliases override values in the config file, including canonical
+keys. When both names are provided in the environment, the canonical name wins.
+
 When using `--no-prompt` with multiple available roles, you must set
 `AZURE_DEFAULT_ROLE_ARN` (or configure `azure_default_role_arn`) so the CLI can
-select a role without prompting.
+select a role without prompting. Whenever a default role ARN is set,
+non-interactive runs require it to match the SAML response even if only one role
+is returned; az2aws will not silently switch to a different account or role.
 
 To avoid storing passwords in bash history, use a leading space:
 

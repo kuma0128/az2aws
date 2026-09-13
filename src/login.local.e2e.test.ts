@@ -1,4 +1,8 @@
 import http from "node:http";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { paths } from "./paths";
 import { URL } from "node:url";
 import zlib from "node:zlib";
 import { describe, expect, it } from "vitest";
@@ -219,4 +223,49 @@ describe.skipIf(!systemBrowser)("login local e2e (fake IdP)", () => {
     },
     120 * 1000,
   );
+  it("serializes real browsers sharing a remembered profile and waits for shutdown", async () => {
+    const fakeIdp = await startFakeIdpAsync();
+    const directory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "az2aws-browser-lock-e2e-"),
+    );
+    const originalPaths = { ...paths };
+    paths.chromium = path.join(directory, "chromium");
+    paths.userDataDir = undefined;
+    paths.profileDir = undefined;
+    try {
+      const loginUrl = (
+        await login._createLoginUrlAsync(
+          APP_ID_URI,
+          TENANT_ID,
+          "https://signin.aws.amazon.com/saml",
+        )
+      ).replace("https://login.microsoftonline.com", fakeIdp.origin);
+      const run = () =>
+        login._performLoginAsync(
+          loginUrl,
+          true,
+          true,
+          true,
+          true,
+          false,
+          USERNAME,
+          PASSWORD,
+          false,
+          true,
+          false,
+          false,
+        );
+      const results = await Promise.all([run(), run()]);
+      for (const assertion of results)
+        expect(login._parseRolesFromSamlResponse(assertion)).toEqual([
+          { roleArn: ROLE_ARN, principalArn: PRINCIPAL_ARN },
+        ]);
+      // Closing before returning must release Chromium's profile, including on Windows.
+      await fs.rm(paths.chromium, { recursive: true });
+    } finally {
+      Object.assign(paths, originalPaths);
+      await fakeIdp.closeAsync();
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  }, 120_000);
 });

@@ -17,6 +17,7 @@ import { awsConfig, ProfileConfig, ProfileCredentials } from "./awsConfig";
 import { credentialCache } from "./credentialCache";
 import { isAz2awsCredentialProcess } from "./credentialProcess";
 import { paths } from "./paths";
+import { withFileLock } from "./fileLock";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
@@ -532,129 +533,142 @@ export const login = {
       // issued for an earlier tenant, application, role, or user cannot be
       // returned after the effective profile configuration changes.
       const profile = await this._loadProfileAsync(profileName);
-      const wiredToCredentialProcess = this._isManagedByCredentialProcess(
-        profile,
-        profileName,
-      );
-      if (credentialProcess && !forceRefresh) {
-        const cachedCredentials =
-          await credentialCache.getValidCachedCredentialsAsync(
+      const run = async (browserLockHeld: boolean): Promise<void> => {
+        const wiredToCredentialProcess = this._isManagedByCredentialProcess(
+          profile,
+          profileName,
+        );
+        if (credentialProcess && !forceRefresh) {
+          const cachedCredentials =
+            await credentialCache.getValidCachedCredentialsAsync(
+              profileName,
+              profile,
+            );
+          if (cachedCredentials) {
+            originalConsoleLog(credentialProcessPayload(cachedCredentials));
+            return;
+          }
+        }
+
+        console.log(
+          `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`,
+        );
+        if (profile.region && profile.region.startsWith("us-gov")) {
+          console.warn(
+            "GovCloud region detected in profile. Note: Other AWS CLI operations " +
+              "will use your AWS CLI default region. If needed, set it to match " +
+              "this GovCloud region (us-gov-west-1 or us-gov-east-1).",
+          );
+        }
+        let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
+        if (profile.region && profile.region.startsWith("us-gov")) {
+          assertionConsumerServiceURL = AWS_GOV_SAML_ENDPOINT;
+        }
+        if (profile.region && profile.region.startsWith("cn-")) {
+          assertionConsumerServiceURL = AWS_CN_SAML_ENDPOINT;
+        }
+
+        console.log("Using AWS SAML endpoint", assertionConsumerServiceURL);
+
+        const loginUrl = await this._createLoginUrlAsync(
+          profile.azure_app_id_uri,
+          profile.azure_tenant_id,
+          assertionConsumerServiceURL,
+        );
+        const allowSensitiveOutput = shouldAllowSensitiveOutput();
+        const samlResponse = await this._performLoginAsync(
+          loginUrl,
+          headless,
+          disableSandbox,
+          cliProxy || credentialProcess,
+          effectiveNoPrompt,
+          enableChromeNetworkService,
+          profile.azure_default_username,
+          profile.azure_default_password,
+          enableChromeSeamlessSso,
+          profile.azure_default_remember_me,
+          noDisableExtensions,
+          disableGpu,
+          incognito,
+          allowSensitiveOutput,
+          { browserLockHeld, strictNonInteractive: credentialProcess },
+        );
+        const roles = this._parseRolesFromSamlResponse(samlResponse);
+        const useConfiguredRole = effectiveNoPrompt || wiredToCredentialProcess;
+        const configuredRoleModeLabel =
+          credentialProcess || wiredToCredentialProcess
+            ? "--credential-process"
+            : "--no-prompt";
+        const { role, durationHours } =
+          await this._askUserForRoleAndDurationAsync(
+            roles,
+            useConfiguredRole,
+            profile.azure_default_role_arn,
+            profile.azure_default_duration_hours,
+            configuredRoleModeLabel,
+          );
+
+        // Profiles wired to credential_process must not receive static keys in
+        // the shared credentials file: those keys take precedence over
+        // credential_process in the AWS credential resolver, so they would
+        // shadow the wiring and keep serving stale keys after expiry. Cache the
+        // credentials for later credential_process runs instead.
+        const credentials = await this._assumeRoleAsync(
+          profileName,
+          samlResponse,
+          role,
+          durationHours,
+          awsNoVerifySsl,
+          profile.region,
+          !credentialProcess && !wiredToCredentialProcess,
+        );
+
+        if (credentialProcess) {
+          if (!credentials) {
+            throw new CLIError("Unable to retrieve credentials.");
+          }
+
+          await credentialCache.setCachedCredentialsAsync(
             profileName,
+            credentials,
             profile,
           );
-        if (cachedCredentials) {
-          originalConsoleLog(credentialProcessPayload(cachedCredentials));
-          return;
-        }
-      }
+          originalConsoleLog(credentialProcessPayload(credentials));
+        } else if (wiredToCredentialProcess) {
+          if (!credentials) {
+            throw new CLIError("Unable to retrieve credentials.");
+          }
 
-      console.log(
-        `Using AWS region ${profile.region || "(from AWS SDK defaults)"}`,
-      );
-      if (profile.region && profile.region.startsWith("us-gov")) {
-        console.warn(
-          "GovCloud region detected in profile. Note: Other AWS CLI operations " +
-            "will use your AWS CLI default region. If needed, set it to match " +
-            "this GovCloud region (us-gov-west-1 or us-gov-east-1).",
-        );
-      }
-      let assertionConsumerServiceURL = AWS_SAML_ENDPOINT;
-      if (profile.region && profile.region.startsWith("us-gov")) {
-        assertionConsumerServiceURL = AWS_GOV_SAML_ENDPOINT;
-      }
-      if (profile.region && profile.region.startsWith("cn-")) {
-        assertionConsumerServiceURL = AWS_CN_SAML_ENDPOINT;
-      }
-
-      console.log("Using AWS SAML endpoint", assertionConsumerServiceURL);
-
-      const loginUrl = await this._createLoginUrlAsync(
-        profile.azure_app_id_uri,
-        profile.azure_tenant_id,
-        assertionConsumerServiceURL,
-      );
-      const allowSensitiveOutput = shouldAllowSensitiveOutput();
-      const samlResponse = await this._performLoginAsync(
-        loginUrl,
-        headless,
-        disableSandbox,
-        cliProxy,
-        effectiveNoPrompt,
-        enableChromeNetworkService,
-        profile.azure_default_username,
-        profile.azure_default_password,
-        enableChromeSeamlessSso,
-        profile.azure_default_remember_me,
-        noDisableExtensions,
-        disableGpu,
-        incognito,
-        allowSensitiveOutput,
-      );
-      const roles = this._parseRolesFromSamlResponse(samlResponse);
-      const useConfiguredRole = effectiveNoPrompt || wiredToCredentialProcess;
-      const configuredRoleModeLabel =
-        credentialProcess || wiredToCredentialProcess
-          ? "--credential-process"
-          : "--no-prompt";
-      const { role, durationHours } =
-        await this._askUserForRoleAndDurationAsync(
-          roles,
-          useConfiguredRole,
-          profile.azure_default_role_arn,
-          profile.azure_default_duration_hours,
-          configuredRoleModeLabel,
-        );
-
-      // Profiles wired to credential_process must not receive static keys in
-      // the shared credentials file: those keys take precedence over
-      // credential_process in the AWS credential resolver, so they would
-      // shadow the wiring and keep serving stale keys after expiry. Cache the
-      // credentials for later credential_process runs instead.
-      const credentials = await this._assumeRoleAsync(
-        profileName,
-        samlResponse,
-        role,
-        durationHours,
-        awsNoVerifySsl,
-        profile.region,
-        !credentialProcess && !wiredToCredentialProcess,
-      );
-
-      if (credentialProcess) {
-        if (!credentials) {
-          throw new CLIError("Unable to retrieve credentials.");
-        }
-
-        await credentialCache.setCachedCredentialsAsync(
-          profileName,
-          credentials,
-          profile,
-        );
-        originalConsoleLog(credentialProcessPayload(credentials));
-      } else if (wiredToCredentialProcess) {
-        if (!credentials) {
-          throw new CLIError("Unable to retrieve credentials.");
-        }
-
-        const cachePersisted = await credentialCache.setCachedCredentialsAsync(
-          profileName,
-          credentials,
-          profile,
-        );
-        if (!cachePersisted) {
-          throw new CLIError(
-            "Unable to persist the credential cache; existing shared credentials were left unchanged.",
+          const cachePersisted =
+            await credentialCache.setCachedCredentialsAsync(
+              profileName,
+              credentials,
+              profile,
+            );
+          if (!cachePersisted) {
+            throw new CLIError(
+              "Unable to persist the credential cache; existing shared credentials were left unchanged.",
+            );
+          }
+          // Profiles wired before credential caching was introduced may still
+          // have static credentials. AWS resolves those before
+          // credential_process, so remove the legacy section only after the
+          // replacement credentials have been written successfully.
+          await awsConfig.removeProfileCredentialsAsync(profileName);
+          console.log(
+            "Cached credentials for AWS CLI credential_process refresh.",
           );
+          printCredentialsReadyMessage(profileName, credentials);
         }
-        // Profiles wired before credential caching was introduced may still
-        // have static credentials. AWS resolves those before
-        // credential_process, so remove the legacy section only after the
-        // replacement credentials have been written successfully.
-        await awsConfig.removeProfileCredentialsAsync(profileName);
-        console.log(
-          "Cached credentials for AWS CLI credential_process refresh.",
+      };
+      if (profile.azure_default_remember_me && !incognito) {
+        await withFileLock(
+          paths.userDataDir || paths.chromium,
+          () => run(true),
+          10 * 60_000,
         );
-        printCredentialsReadyMessage(profileName, credentials);
+      } else {
+        await run(false);
       }
     } finally {
       console.log = originalConsoleLog;
@@ -827,7 +841,9 @@ export const login = {
 
   _applyProfileEnvironment(profile: ProfileConfig): ProfileConfig {
     const effectiveProfile = this._normalizeProfileAliases(profile);
-    const env = this._loadProfileFromEnv();
+    const env = this._normalizeProfileAliases(
+      this._loadProfileFromEnv() as ProfileConfig,
+    );
     for (const prop in env) {
       if (env[prop]) {
         effectiveProfile[prop] = env[prop];
@@ -980,12 +996,37 @@ export const login = {
     disableGpu: boolean,
     incognito = false,
     allowSensitiveStateOutput = true,
+    context: { browserLockHeld?: boolean; strictNonInteractive?: boolean } = {},
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
     let browser: Browser | undefined;
     let temporaryUserDataDir: string | undefined;
     const useRememberMe = rememberMe && !incognito;
+    if (useRememberMe && !context.browserLockHeld) {
+      return withFileLock(
+        paths.userDataDir || paths.chromium,
+        () =>
+          this._performLoginAsync(
+            url,
+            headless,
+            disableSandbox,
+            cliProxy,
+            noPrompt,
+            enableChromeNetworkService,
+            defaultUsername,
+            defaultPassword,
+            enableChromeSeamlessSso,
+            rememberMe,
+            noDisableExtensions,
+            disableGpu,
+            incognito,
+            allowSensitiveStateOutput,
+            { ...context, browserLockHeld: true },
+          ),
+        10 * 60_000,
+      );
+    }
 
     try {
       const args = headless
@@ -1151,14 +1192,8 @@ export const login = {
               }),
               `Failed to respond to intercepted request ${redactedURL}`,
             );
-            if (browser) {
-              handleBackgroundPromise(
-                browser.close(),
-                "Failed to close browser after receiving SAML response",
-              );
-            }
-            browser = undefined;
-            debug(`Received SAML response, browser closed`);
+            // Keep ownership until finally has awaited browser.close().
+            debug("Received SAML response");
           } else {
             handleBackgroundPromise(
               req.continue(),
@@ -1240,6 +1275,7 @@ export const login = {
                   defaultPassword,
                   useRememberMe,
                   allowSensitiveStateOutput,
+                  context.strictNonInteractive,
                 ),
               ]);
 
@@ -1297,21 +1333,22 @@ export const login = {
 
       return samlResponse;
     } finally {
-      if (browser) {
-        await browser.close();
-      }
-      if (temporaryUserDataDir) {
-        try {
-          await fs.rm(temporaryUserDataDir, {
-            recursive: true,
-            force: true,
-            maxRetries: 5,
-            retryDelay: 100,
-          });
-        } catch (error) {
-          debug(
-            `Failed to remove temporary browser profile: ${formatDebugErrorMessage(error)}`,
-          );
+      try {
+        if (browser) await browser.close();
+      } finally {
+        if (temporaryUserDataDir) {
+          try {
+            await fs.rm(temporaryUserDataDir, {
+              recursive: true,
+              force: true,
+              maxRetries: 5,
+              retryDelay: 100,
+            });
+          } catch (error) {
+            debug(
+              `Failed to remove temporary browser profile: ${formatDebugErrorMessage(error)}`,
+            );
+          }
         }
       }
     }
@@ -1379,6 +1416,14 @@ export const login = {
     const questions: DistinctQuestion<RoleDurationAnswers>[] = [];
     if (roles.length === 0) {
       throw new CLIError("No roles found in SAML response.");
+    } else if (
+      noPrompt &&
+      defaultRoleArn &&
+      !roles.some((candidate) => candidate.roleArn === defaultRoleArn)
+    ) {
+      throw new CLIError(
+        "Configured default role ARN was not found in the SAML response.",
+      );
     } else if (roles.length === 1) {
       debug("Choosing the only role in response");
       role = roles[0];

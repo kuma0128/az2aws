@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import {
   mkdir,
   mkdtemp,
@@ -178,4 +179,28 @@ describe("login integration: standard mode persists credentials to disk", () => 
       expect(stats.mode & 0o777).toBe(0o600);
     }
   });
+  it.skipIf(process.platform === "win32")(
+    "creates credential temporary files with private permissions before chmod",
+    async () => {
+      const realWriteFile = fs.writeFile;
+      let initialMode: number | undefined;
+      vi.spyOn(fs, "writeFile").mockImplementation(
+        (file, data, options, callback) => {
+          realWriteFile(file, data, options, (error) => {
+            if (!error && String(file).endsWith(".tmp"))
+              initialMode = fs.statSync(file as string).mode & 0o777;
+            callback(error);
+          });
+        },
+      );
+      const { awsConfig } = await import("./awsConfig");
+      await awsConfig.setProfileCredentialsAsync("permissions", {
+        aws_access_key_id: "DUMMY",
+        aws_secret_access_key: "dummy",
+        aws_session_token: "dummy==",
+        aws_expiration: "2030-01-01T00:00:00Z",
+      });
+      expect(initialMode).toBe(0o600);
+    },
+  );
 });
