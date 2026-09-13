@@ -84,7 +84,7 @@
     "@types/proper-lockfile": "^4.1.4",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
-    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "esbuild": "^0.28.1",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
@@ -93,6 +93,6 @@
     "ts-node-dev": "^2.0.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.7",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.11"
   }
 }
