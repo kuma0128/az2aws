@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/kuma0128/az2aws/compare/v2.0.0...v2.0.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* preserve AWS configuration and serialize credential refreshes ([#283](https://github.com/kuma0128/az2aws/issues/283)) ([3a7340a](https://github.com/kuma0128/az2aws/commit/3a7340af67b9a6ab27324fd1626aedb903eb7199))
+
 ## [2.0.0](https://github.com/kuma0128/az2aws/compare/v1.9.3...v2.0.0) (2026-09-01)
 
 
