@@ -15,6 +15,8 @@ if (process.env.AZ2AWS_REQUIRE_AWS_CLI_TESTS && !awsAvailable) {
 
 describe.skipIf(!awsAvailable)(
   "real AWS CLI configuration compatibility",
+  // Real CLI startup can exceed the default 5s on ubuntu-slim with coverage.
+  { timeout: 30_000 },
   () => {
     const originalPaths = { ...paths };
     let directory: string;

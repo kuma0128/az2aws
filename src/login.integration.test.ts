@@ -75,6 +75,7 @@ describe("login integration: standard mode persists credentials to disk", () => 
     await rm(tempDir, { recursive: true, force: true });
   });
 
+  // The cold login import is instrumented by coverage and can exceed 5s on CI.
   it("writes AccessKeyId/SecretAccessKey/SessionToken/Expiration under the expected profile when credentialProcess is false", async () => {
     const profileName = "integration";
     const roleArn = "arn:aws:iam::123456789012:role/TestRole";
@@ -178,7 +179,7 @@ describe("login integration: standard mode persists credentials to disk", () => 
       const stats = await stat(credentialsPath);
       expect(stats.mode & 0o777).toBe(0o600);
     }
-  });
+  }, 30_000);
   it.skipIf(process.platform === "win32")(
     "creates credential temporary files with private permissions before chmod",
     async () => {
