@@ -311,8 +311,8 @@ To avoid storing passwords in bash history, use a leading space:
 
 #### Browser Selection
 
-az2aws automatically detects Google Chrome and Microsoft Edge on Windows and
-macOS, and Google Chrome, Microsoft Edge, or Chromium on Linux; it does not
+az2aws automatically detects Google Chrome and Microsoft Edge on Windows, and
+Google Chrome, Microsoft Edge, or Chromium on macOS and Linux; it does not
 bundle a browser. On Windows or macOS, point `BROWSER_CHROME_BIN` at any other
 Chromium-based browser. Using a real browser also keeps Microsoft Entra ID
 happy — Entra may treat automation-only builds (such as Chrome for Testing) as

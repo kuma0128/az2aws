@@ -12,6 +12,7 @@ const debug = _debug("az2aws");
 const DARWIN_CANDIDATES = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
 ];
 
 const LINUX_CANDIDATES = [

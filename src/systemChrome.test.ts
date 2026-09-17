@@ -17,6 +17,7 @@ const CHROME_MAC =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const EDGE_MAC =
   "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge";
+const CHROMIUM_MAC = "/Applications/Chromium.app/Contents/MacOS/Chromium";
 
 describe("detectSystemChromeAsync", () => {
   beforeEach(() => {
@@ -50,6 +51,18 @@ describe("detectSystemChromeAsync", () => {
 
     await expect(detectSystemChromeAsync("darwin", {})).resolves.toBe(
       CHROME_MAC,
+    );
+  });
+
+  it("should fall back to Chromium on macOS when Chrome and Edge are missing", async () => {
+    mockFsAccess.mockImplementation((candidate: string) =>
+      candidate === CHROMIUM_MAC
+        ? Promise.resolve()
+        : Promise.reject(new Error("ENOENT")),
+    );
+
+    await expect(detectSystemChromeAsync("darwin", {})).resolves.toBe(
+      CHROMIUM_MAC,
     );
   });
 
