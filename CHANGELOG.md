@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/kuma0128/az2aws/compare/v2.0.1...v2.1.0) (2026-09-17)
+
+
+### Features
+
+* add support for system Chromium.app on macOS ([#286](https://github.com/kuma0128/az2aws/issues/286)) ([1ef6cf1](https://github.com/kuma0128/az2aws/commit/1ef6cf1bfd30cf8c8f530df0ec4a1ef134ce809f))
+
 ## [2.0.1](https://github.com/kuma0128/az2aws/compare/v2.0.0...v2.0.1) (2026-09-15)
 
 
