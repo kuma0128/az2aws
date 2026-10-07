@@ -75,24 +75,31 @@ Keep TypeScript on 6.x until `typescript-eslint` supports the newer compiler API
 Dependabot excludes TypeScript major updates in `.github/dependabot.yml`; remove
 that exclusion when the lint toolchain is compatible and CI passes.
 
-3. Start development mode:
+3. Build and run the CLI:
 
 ```sh
 pnpm start
 ```
 
-Or build and run production mode:
+`pnpm start` compiles the TypeScript sources and runs the CLI once. Pass CLI
+arguments directly, for example `pnpm start --profile dev`.
+
+For incremental compilation while editing, run this in a separate terminal:
 
 ```sh
-pnpm build && node ./lib/index.js
+pnpm watch
 ```
+
+After compilation completes, run `node ./lib/index.js` with the desired arguments.
+The watcher recompiles changes; it does not restart the CLI automatically.
 
 ### Available Scripts
 
 | Script | Description |
 |--------|-------------|
-| `pnpm start` | Start development mode with hot reload |
+| `pnpm start` | Build and run the CLI once |
 | `pnpm build` | Build for production |
+| `pnpm watch` | Recompile TypeScript sources when files change |
 | `pnpm test` | Run unit tests |
 | `pnpm test:coverage` | Run unit tests with coverage |
 | `pnpm test:e2e` | Run the live Azure→AWS browser smoke test |
