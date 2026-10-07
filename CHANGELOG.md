@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.2.0](https://github.com/kuma0128/az2aws/compare/v2.1.0...v2.2.0) (2026-10-07)
+
+
+### Features
+
+* report the AWS role after no-prompt login ([#304](https://github.com/kuma0128/az2aws/issues/304)) ([d9ae37b](https://github.com/kuma0128/az2aws/commit/d9ae37bf0e1ca17ca5a86e5b901b3063688aa9ef))
+
+
+### Bug Fixes
+
+* **ci:** actions.lockでワークフローの依存関係を固定 ([#296](https://github.com/kuma0128/az2aws/issues/296)) ([2d297a5](https://github.com/kuma0128/az2aws/commit/2d297a5783b5f00be64ea8fb7f0c411f67bd4a1e))
+* keep proxy credentials out of browser arguments ([#302](https://github.com/kuma0128/az2aws/issues/302)) ([c488374](https://github.com/kuma0128/az2aws/commit/c488374dba68e42d4f4429ae17139284b8756924))
+* omit the profile from SSO success output ([#305](https://github.com/kuma0128/az2aws/issues/305)) ([9c75816](https://github.com/kuma0128/az2aws/commit/9c758166234e31a17d846b157b31bd73895e1f1e))
+* use pipes for browser control ([#300](https://github.com/kuma0128/az2aws/issues/300)) ([db7a540](https://github.com/kuma0128/az2aws/commit/db7a54065eb154b38d15c87c85570fe7263fdab1))
+
 ## [2.1.0](https://github.com/kuma0128/az2aws/compare/v2.0.1...v2.1.0) (2026-09-17)
 
 
