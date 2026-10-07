@@ -183,11 +183,6 @@ the work account is selected automatically. For multiple AWS roles, configure
 AWS role. Profiles wired to `credential_process` still require a deterministic
 role regardless of `--prompt`.
 
-After a successful SSO login with `--no-prompt` (including the default behavior),
-az2aws prints the assumed role ARN and profile name. In `--credential-process`
-mode, this message goes to stderr so stdout remains valid credentials JSON.
-Serving cached credentials does not perform SSO or print a new login message.
-
 ### Configuration
 
 To configure the az2aws client run:
