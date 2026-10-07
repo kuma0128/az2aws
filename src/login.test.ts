@@ -3299,6 +3299,35 @@ describe("login", () => {
       );
     });
 
+    it("should start GUI proxy login on a blank page without credentials in arguments", async () => {
+      process.env.https_proxy = "http://user:secret@proxy.example.com:8080";
+      await expect(
+        login._performLoginAsync(
+          "https://login.example.com",
+          false,
+          false,
+          false,
+          false,
+          false,
+          "",
+          undefined,
+          false,
+          false,
+          false,
+          false,
+        ),
+      ).rejects.toThrow("Mock launch error for testing");
+      expect(capturedLaunchArgs).toEqual(
+        expect.objectContaining({
+          args: expect.arrayContaining([
+            "--app=about:blank",
+            "--proxy-server=http://proxy.example.com:8080",
+          ]),
+        }),
+      );
+      expect(JSON.stringify(capturedLaunchArgs)).not.toContain("secret");
+    });
+
     it("should include --no-sandbox when disableSandbox=true", async () => {
       try {
         await login._performLoginAsync(

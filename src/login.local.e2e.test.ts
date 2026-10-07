@@ -51,6 +51,7 @@ interface FakeIdpState {
   receivedUsername: string;
   receivedPassword: string;
   receivedKmsiChoice: string;
+  receivedOriginAuthorization: string[];
 }
 
 function htmlPage(body: string): string {
@@ -66,7 +67,7 @@ function readBodyAsync(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-async function startFakeIdpAsync(): Promise<{
+async function startFakeIdpAsync(probeOriginAuth = false): Promise<{
   origin: string;
   state: FakeIdpState;
   closeAsync: () => Promise<void>;
@@ -76,11 +77,19 @@ async function startFakeIdpAsync(): Promise<{
     receivedUsername: "",
     receivedPassword: "",
     receivedKmsiChoice: "",
+    receivedOriginAuthorization: [],
   };
 
   const server = http.createServer((req, res) => {
     void (async () => {
       const url = new URL(req.url ?? "/", "http://127.0.0.1");
+
+      if (url.pathname === "/origin-auth") {
+        state.receivedOriginAuthorization.push(req.headers.authorization ?? "");
+        res.writeHead(401, { "www-authenticate": 'Basic realm="origin"' });
+        res.end("unauthorized");
+        return;
+      }
 
       if (req.method === "GET" && url.pathname === `/${TENANT_ID}/saml2`) {
         const samlRequest = url.searchParams.get("SAMLRequest") ?? "";
@@ -90,10 +99,11 @@ async function startFakeIdpAsync(): Promise<{
         res.writeHead(200, { "content-type": "text/html" });
         res.end(
           htmlPage(`
-            <form method="POST" action="/password">
+            <form method="POST" action="/password" ${probeOriginAuth ? "hidden" : ""}>
               <input type="email" name="loginfmt" value="">
               <input type="submit" value="Next">
             </form>
+            ${probeOriginAuth ? '<script>fetch("/origin-auth", {signal: AbortSignal.timeout(500)}).catch(() => {}).finally(() => document.forms[0].hidden = false);</script>' : ""}
           `),
         );
         return;
@@ -170,11 +180,79 @@ async function startFakeIdpAsync(): Promise<{
   };
 }
 
+async function startAuthenticatedProxyAsync(target: string) {
+  const username = "proxy-user";
+  const password = "p@ss:word";
+  const expectedAuthorization = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+  let authenticatedRequests = 0;
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://idp.example.test");
+    if (url.hostname !== "idp.example.test") {
+      res.writeHead(502).end();
+      return;
+    }
+    if (req.headers["proxy-authorization"] !== expectedAuthorization) {
+      res.writeHead(407, { "proxy-authenticate": 'Basic realm="proxy"' });
+      res.end();
+      return;
+    }
+    authenticatedRequests++;
+    const headers = { ...req.headers };
+    delete headers["proxy-authorization"];
+    const upstream = http.request(
+      new URL(url.pathname + url.search, target),
+      {
+        method: req.method,
+        headers,
+      },
+      (response) => {
+        res.writeHead(response.statusCode ?? 502, response.headers);
+        response.pipe(res);
+      },
+    );
+    upstream.on("error", () => res.destroy());
+    req.pipe(upstream);
+  });
+  server.on("connect", (_req, socket) =>
+    socket.end("HTTP/1.1 502 Bad Gateway\r\n\r\n"),
+  );
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string")
+    throw new Error("Unexpected proxy address");
+  return {
+    url: `http://${username}:${encodeURIComponent(password)}@127.0.0.1:${address.port}`,
+    server: `http://127.0.0.1:${address.port}`,
+    authenticatedRequests: () => authenticatedRequests,
+    closeAsync: async () => {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
 describe.skipIf(!systemBrowser)("login local e2e (fake IdP)", () => {
-  it(
-    "captures the SAML response in a real browser without exposing a CDP port",
-    async () => {
-      const fakeIdp = await startFakeIdpAsync();
+  it.each([
+    { proxy: false, incognito: false },
+    { proxy: true, incognito: false },
+    { proxy: true, incognito: true },
+  ])(
+    "captures SAML without exposing CDP or proxy credentials (proxy=$proxy, incognito=$incognito)",
+    async ({ proxy: useProxy, incognito }) => {
+      const fakeIdp = await startFakeIdpAsync(useProxy);
+      const proxy = useProxy
+        ? await startAuthenticatedProxyAsync(fakeIdp.origin)
+        : undefined;
+      const originalEnv = process.env;
+      process.env = { ...originalEnv };
+      for (const key of [
+        "https_proxy",
+        "HTTPS_PROXY",
+        "http_proxy",
+        "HTTP_PROXY",
+      ])
+        delete process.env[key];
+      if (proxy) process.env.https_proxy = proxy.url;
       const launch = puppeteer.launch.bind(puppeteer);
       let launchedBrowser: Browser | undefined;
       const launchSpy = vi
@@ -192,7 +270,7 @@ describe.skipIf(!systemBrowser)("login local e2e (fake IdP)", () => {
         );
         const loginUrl = realLoginUrl.replace(
           "https://login.microsoftonline.com",
-          fakeIdp.origin,
+          proxy ? "http://idp.example.test" : fakeIdp.origin,
         );
 
         const samlResponse = await login._performLoginAsync(
@@ -208,6 +286,7 @@ describe.skipIf(!systemBrowser)("login local e2e (fake IdP)", () => {
           false, // rememberMe: no persistent profile in tests
           false, // noDisableExtensions
           false, // disableGpu
+          incognito,
         );
 
         // The SAMLRequest reaching the IdP was a valid deflated AuthnRequest.
@@ -234,8 +313,25 @@ describe.skipIf(!systemBrowser)("login local e2e (fake IdP)", () => {
         expect(
           browserArgs.some((arg) => arg.startsWith("--remote-debugging-port")),
         ).toBe(false);
+        if (proxy) {
+          expect(browserArgs).toContain(`--proxy-server=${proxy.server}`);
+          expect(browserArgs.join(" ")).not.toContain("proxy-user");
+          expect(browserArgs.join(" ")).not.toContain("p@ss:word");
+          expect(browserArgs.join(" ")).not.toContain("p%40ss%3Aword");
+          expect(proxy.authenticatedRequests()).toBeGreaterThan(0);
+          expect(
+            fakeIdp.state.receivedOriginAuthorization.length,
+          ).toBeGreaterThan(0);
+          expect(
+            fakeIdp.state.receivedOriginAuthorization.every(
+              (value) => value === "",
+            ),
+          ).toBe(true);
+        }
       } finally {
+        process.env = originalEnv;
         launchSpy.mockRestore();
+        await proxy?.closeAsync();
         await fakeIdp.closeAsync();
       }
     },
