@@ -317,6 +317,16 @@ upgrade the generator deliberately and verify the resulting lockfile.
 
 This project uses [release-please](https://github.com/googleapis/release-please) for automated releases.
 
+### npm package contents
+
+The `files` allowlist in `package.json` includes only the compiled `lib/*.js`
+files and `CHANGELOG.md`. npm also includes `package.json`, `README.md`, and
+`LICENSE` automatically. Keep runtime assets in this allowlist; local screenshots,
+credentials, package-manager caches, and development files must not be published.
+
+After building, inspect the package contents with `npm pack --dry-run --ignore-scripts`.
+The packaging regression test checks the allowlist against synthetic local artifacts.
+
 ### How It Works
 
 1. When PRs are merged to `main`, release-please analyzes commit messages
