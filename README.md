@@ -359,6 +359,14 @@ the login steps, use `--mode debug`.
 - Use `--mode gui --disable-gpu` on VMs or if rendering fails
 - Set `https_proxy` or `http_proxy` env var for corporate proxy
 
+Proxy settings also accept uppercase `HTTPS_PROXY` and `HTTP_PROXY`.
+Use a single proxy URL, such as `http://proxy.example.com:8080`.
+For HTTP/HTTPS proxy authentication, use `http://username:password@host:port`
+(percent-encode special characters in the username and password). az2aws keeps
+these credentials out of Chrome's command-line arguments and supplies them only
+in response to authentication challenges from the configured proxy. SOCKS4 and
+SOCKS5 proxies are supported without credentials.
+
 #### Troubleshooting
 
 If you see `TargetCloseError: Protocol error (Target.setAutoAttach): Target closed`,

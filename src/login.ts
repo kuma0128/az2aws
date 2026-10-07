@@ -13,6 +13,10 @@ import type {
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
+import {
+  authenticateBrowserProxyAsync,
+  parseBrowserProxy,
+} from "./browserProxy";
 import { awsConfig, ProfileConfig, ProfileCredentials } from "./awsConfig";
 import { credentialCache } from "./credentialCache";
 import { isAz2awsCredentialProcess } from "./credentialProcess";
@@ -1029,11 +1033,16 @@ export const login = {
     }
 
     try {
+      const proxyUrl = getProxyUrl();
+      const browserProxy = proxyUrl ? parseBrowserProxy(proxyUrl) : undefined;
       const args = headless
         ? []
         : incognito
           ? [`--window-size=${WIDTH},${HEIGHT}`]
-          : [`--app=${url}`, `--window-size=${WIDTH},${HEIGHT}`];
+          : [
+              `--app=${browserProxy?.credentials ? "about:blank" : url}`,
+              `--window-size=${WIDTH},${HEIGHT}`,
+            ];
       if (disableSandbox) args.push("--no-sandbox");
       if (enableChromeNetworkService)
         args.push("--enable-features=NetworkService");
@@ -1088,9 +1097,8 @@ export const login = {
         );
       }
 
-      const proxyUrl = getProxyUrl();
-      if (proxyUrl) {
-        args.push(`--proxy-server=${proxyUrl}`);
+      if (browserProxy) {
+        args.push(`--proxy-server=${browserProxy.server}`);
       }
 
       const ignoreDefaultArgs = noDisableExtensions
@@ -1208,9 +1216,12 @@ export const login = {
 
       debug("Enabling request interception");
       await page.setRequestInterception(true);
+      if (browserProxy?.credentials) {
+        await authenticateBrowserProxyAsync(page, browserProxy);
+      }
 
       try {
-        if (incognito || headless || cliProxy) {
+        if (incognito || headless || cliProxy || browserProxy?.credentials) {
           debug("Going to login page");
           await page.goto(url, { waitUntil: "domcontentloaded" });
         } else {
