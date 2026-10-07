@@ -448,7 +448,8 @@ If you need to confirm the tenant ID from myapps.microsoft.com:
 az2aws drives your installed Chromium-based browser over the [Chrome DevTools
 Protocol](https://chromedevtools.github.io/devtools-protocol/) (via
 [puppeteer-core](https://pptr.dev/guides/what-is-puppeteer), which does not
-download a browser) to complete the Microsoft Entra ID login. The SAML
+download a browser) to complete the Microsoft Entra ID login. Browser control
+uses inherited pipes and does not open a localhost debugging port. The SAML
 response is intercepted at the network layer inside the browser, before it
 leaves your machine, and exchanged for temporary credentials with [AWS STS
 AssumeRoleWithSAML](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html).
