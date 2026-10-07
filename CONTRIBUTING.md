@@ -70,6 +70,10 @@ cd az2aws
 pnpm install
 ```
 
+Keep TypeScript on 6.x until `typescript-eslint` supports the newer compiler API.
+Dependabot excludes TypeScript major updates in `.github/dependabot.yml`; remove
+that exclusion when the lint toolchain is compatible and CI passes.
+
 3. Start development mode:
 
 ```sh
