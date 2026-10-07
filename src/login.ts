@@ -628,9 +628,7 @@ export const login = {
         );
 
         if (effectiveNoPrompt && credentials) {
-          console.log(
-            `Signed in to AWS role ${role.roleArn} (profile "${profileName}").`,
-          );
+          console.log(`Signed in to AWS role ${role.roleArn}.`);
         }
 
         if (credentialProcess) {

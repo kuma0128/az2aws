@@ -200,11 +200,11 @@ New profiles enable "Stay logged in" by default during configuration. This lets
     az2aws --profile foo --no-prompt
 
 After a successful SSO login with `--no-prompt`, az2aws prints the assumed role
-ARN and profile name. For example, the command above adds this line when profile
+ARN. For example, the command above adds this line when profile
 `foo` assumes the `ReadOnly` role in account `123456789012`:
 
 ```text
-Signed in to AWS role arn:aws:iam::123456789012:role/ReadOnly (profile "foo").
+Signed in to AWS role arn:aws:iam::123456789012:role/ReadOnly.
 ```
 
 In `--credential-process` mode, this message goes to stderr so stdout remains
