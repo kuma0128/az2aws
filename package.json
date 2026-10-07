@@ -50,6 +50,10 @@
   "bin": {
     "az2aws": "lib/index.js"
   },
+  "files": [
+    "lib/*.js",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "start": "pnpm build && node lib/index.js",
     "build": "tsc",
