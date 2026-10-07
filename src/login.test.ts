@@ -1359,7 +1359,7 @@ describe("login", () => {
         "https://signin.aws.amazon.com/saml",
       );
       expect(console.error).toHaveBeenCalledWith(
-        `Signed in to AWS role ${role.roleArn} (profile "default").`,
+        `Signed in to AWS role ${role.roleArn}.`,
       );
       expect(console.log).toHaveBeenCalledTimes(1);
       expect(
@@ -1410,7 +1410,7 @@ describe("login", () => {
           await expect(result).rejects.toThrow("STS rejected login");
         else await result;
 
-        const message = `Signed in to AWS role ${role.roleArn} (profile "default").`;
+        const message = `Signed in to AWS role ${role.roleArn}.`;
         if (showRole) expect(console.log).toHaveBeenCalledWith(message);
         else expect(console.log).not.toHaveBeenCalledWith(message);
         expect(console.error).not.toHaveBeenCalledWith(message);
@@ -1487,7 +1487,7 @@ describe("login", () => {
       expect(credentialCache.setCachedCredentialsAsync).not.toHaveBeenCalled();
       expect(console.log).toHaveBeenCalledTimes(1);
       expect(console.error).not.toHaveBeenCalledWith(
-        `Signed in to AWS role ${role.roleArn} (profile "default").`,
+        `Signed in to AWS role ${role.roleArn}.`,
       );
       expect(
         JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string),
