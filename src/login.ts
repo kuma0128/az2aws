@@ -1103,11 +1103,14 @@ export const login = {
 
       const launchParams: {
         headless: boolean;
+        pipe: boolean;
         args: string[];
         ignoreDefaultArgs: string[];
         executablePath: string;
       } = {
         headless,
+        // Keep browser control on inherited pipes, without a localhost CDP port.
+        pipe: true,
         args,
         ignoreDefaultArgs,
         executablePath: await this._resolveBrowserExecutableAsync(),

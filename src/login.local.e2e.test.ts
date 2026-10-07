@@ -5,7 +5,8 @@ import path from "node:path";
 import { paths } from "./paths";
 import { URL } from "node:url";
 import zlib from "node:zlib";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import puppeteer, { type Browser } from "puppeteer-core";
 import { login } from "./login";
 import { detectSystemChromeAsync } from "./systemChrome";
 
@@ -171,9 +172,17 @@ async function startFakeIdpAsync(): Promise<{
 
 describe.skipIf(!systemBrowser)("login local e2e (fake IdP)", () => {
   it(
-    "drives the login state machine in a real browser and captures the SAML response",
+    "captures the SAML response in a real browser without exposing a CDP port",
     async () => {
       const fakeIdp = await startFakeIdpAsync();
+      const launch = puppeteer.launch.bind(puppeteer);
+      let launchedBrowser: Browser | undefined;
+      const launchSpy = vi
+        .spyOn(puppeteer, "launch")
+        .mockImplementation(async (options) => {
+          launchedBrowser = await launch(options);
+          return launchedBrowser;
+        });
 
       try {
         const realLoginUrl = await login._createLoginUrlAsync(
@@ -217,7 +226,16 @@ describe.skipIf(!systemBrowser)("login local e2e (fake IdP)", () => {
         expect(roles).toEqual([
           { roleArn: ROLE_ARN, principalArn: PRINCIPAL_ARN },
         ]);
+
+        // Inspect the actual browser transport, not just the launch options.
+        expect(launchedBrowser?.wsEndpoint()).toBe("");
+        const browserArgs = launchedBrowser?.process()?.spawnargs ?? [];
+        expect(browserArgs).toContain("--remote-debugging-pipe");
+        expect(
+          browserArgs.some((arg) => arg.startsWith("--remote-debugging-port")),
+        ).toBe(false);
       } finally {
+        launchSpy.mockRestore();
         await fakeIdp.closeAsync();
       }
     },
