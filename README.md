@@ -158,7 +158,8 @@ then remove the old package with `sudo snap remove az2aws`.
 | `--configure (-c)`                | Configure the profile                                    |
 | `--mode (-m) <mode>`              | `cli` (default), `gui`, or `debug`                       |
 | `--no-sandbox`                    | Disable Puppeteer sandbox (needed on Linux)              |
-| `--no-prompt`                     | Skip prompts, use defaults                               |
+| `--no-prompt`                     | Use configured login defaults (default behavior)         |
+| `--prompt`                        | Prompt for login choices instead of using defaults       |
 | `--enable-chrome-network-service` | Enable Network Service (for 3XX redirects)               |
 | `--no-verify-ssl`                 | Disable AWS SSL verification                             |
 | `--enable-chrome-seamless-sso`    | Enable Microsoft Entra Seamless SSO                      |
@@ -169,6 +170,23 @@ then remove the old package with `sudo snap remove az2aws`.
 | `--version (-v)`                  | Show version number                                      |
 
 ## Usage
+
+Login uses configured defaults automatically, as if `--no-prompt` were passed.
+Use `az2aws --prompt` to restore interactive login choices. `--no-prompt` remains
+accepted for existing scripts; if both flags are supplied, the last one wins.
+Profile configuration (`--configure`) remains interactive.
+
+This is not a fully non-interactive mode: missing usernames/passwords and MFA
+can still require input. If Microsoft offers both personal and work accounts,
+the work account is selected automatically. For multiple AWS roles, configure
+`azure_default_role_arn` or run with `--prompt`; az2aws never picks an arbitrary
+AWS role. Profiles wired to `credential_process` still require a deterministic
+role regardless of `--prompt`.
+
+After a successful SSO login with `--no-prompt` (including the default behavior),
+az2aws prints the assumed role ARN and profile name. In `--credential-process`
+mode, this message goes to stderr so stdout remains valid credentials JSON.
+Serving cached credentials does not perform SSO or print a new login message.
 
 ### Configuration
 
@@ -194,10 +212,11 @@ standard partition.
 #### Stay Logged In
 
 New profiles enable "Stay logged in" by default during configuration. This lets
-`az2aws` refresh AWS credentials with `--no-prompt` without storing passwords:
+`az2aws` refresh AWS credentials using the saved login defaults without storing
+passwords:
 
-    az2aws --no-prompt
-    az2aws --profile foo --no-prompt
+    az2aws
+    az2aws --profile foo
 
 `--incognito` starts the login flow in a fresh incognito browser context. This
 helps avoid reusing an existing browser session, and it overrides any saved
@@ -289,7 +308,7 @@ make non-interactive runs deterministic:
 
 #### Environment Variables
 
-You can set defaults via environment variables (use with `--no-prompt`):
+You can set login defaults via environment variables:
 
 - `AZURE_TENANT_ID` / `AZURE_APP_ID_URI` (`AZURE_APP_ID` alias) - Microsoft Entra ID settings
 - `AZURE_DEFAULT_USERNAME` / `AZURE_DEFAULT_PASSWORD` - Credentials
@@ -298,7 +317,7 @@ You can set defaults via environment variables (use with `--no-prompt`):
 Environment aliases override values in the config file, including canonical
 keys. When both names are provided in the environment, the canonical name wins.
 
-When using `--no-prompt` with multiple available roles, you must set
+With the default `--no-prompt` behavior and multiple available roles, you must set
 `AZURE_DEFAULT_ROLE_ARN` (or configure `azure_default_role_arn`) so the CLI can
 select a role without prompting. Whenever a default role ARN is set,
 non-interactive runs require it to match the SAML response even if only one role
@@ -400,8 +419,8 @@ changed. Try:
 
 Renew all profiles at once:
 
-    az2aws --all-profiles
-    az2aws --all-profiles --no-prompt    # With "Stay logged in" enabled
+    az2aws --all-profiles           # Use saved defaults and "Stay logged in"
+    az2aws --all-profiles --prompt  # Prompt for login choices
 
 Credentials are only refreshed if expiring within 11 minutes - safe to run as a cron job.
 

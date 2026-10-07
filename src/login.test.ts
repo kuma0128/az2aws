@@ -1358,6 +1358,9 @@ describe("login", () => {
         "Using AWS SAML endpoint",
         "https://signin.aws.amazon.com/saml",
       );
+      expect(console.error).toHaveBeenCalledWith(
+        `Signed in to AWS role ${role.roleArn} (profile "default").`,
+      );
       expect(console.log).toHaveBeenCalledTimes(1);
       expect(
         JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string),
@@ -1369,6 +1372,50 @@ describe("login", () => {
         Expiration: credentials.aws_expiration,
       });
     });
+
+    it.each([
+      { noPrompt: true, outcome: "success", showRole: true },
+      { noPrompt: false, outcome: "success", showRole: false },
+      { noPrompt: true, outcome: "missing", showRole: false },
+      { noPrompt: true, outcome: "failure", showRole: false },
+    ])(
+      "reports the role only after successful no-prompt SSO: $outcome, noPrompt=$noPrompt",
+      async ({ noPrompt, outcome, showRole }) => {
+        vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
+        vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([role]);
+        vi.spyOn(login, "_askUserForRoleAndDurationAsync").mockResolvedValue({
+          role,
+          durationHours: 1,
+        });
+        const assumeRole = vi.spyOn(login, "_assumeRoleAsync");
+        if (outcome === "failure")
+          assumeRole.mockRejectedValue(new Error("STS rejected login"));
+        else
+          assumeRole.mockResolvedValue(
+            outcome === "success" ? credentials : undefined,
+          );
+
+        const result = login.loginAsync(
+          "default",
+          "cli",
+          true,
+          noPrompt,
+          false,
+          false,
+          false,
+          false,
+          false,
+        );
+        if (outcome === "failure")
+          await expect(result).rejects.toThrow("STS rejected login");
+        else await result;
+
+        const message = `Signed in to AWS role ${role.roleArn} (profile "default").`;
+        if (showRole) expect(console.log).toHaveBeenCalledWith(message);
+        else expect(console.log).not.toHaveBeenCalledWith(message);
+        expect(console.error).not.toHaveBeenCalledWith(message);
+      },
+    );
 
     it("should mention credential-process when a default role ARN is required", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
@@ -1439,6 +1486,9 @@ describe("login", () => {
       ).toHaveBeenCalledWith("default", profile);
       expect(credentialCache.setCachedCredentialsAsync).not.toHaveBeenCalled();
       expect(console.log).toHaveBeenCalledTimes(1);
+      expect(console.error).not.toHaveBeenCalledWith(
+        `Signed in to AWS role ${role.roleArn} (profile "default").`,
+      );
       expect(
         JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string),
       ).toEqual({

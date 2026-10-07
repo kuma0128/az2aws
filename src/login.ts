@@ -623,6 +623,12 @@ export const login = {
           !credentialProcess && !wiredToCredentialProcess,
         );
 
+        if (effectiveNoPrompt && credentials) {
+          console.log(
+            `Signed in to AWS role ${role.roleArn} (profile "${profileName}").`,
+          );
+        }
+
         if (credentialProcess) {
           if (!credentials) {
             throw new CLIError("Unable to retrieve credentials.");

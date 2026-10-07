@@ -39,8 +39,13 @@ program
     "Disable the browser sandbox (usually necessary on Linux/Docker)",
   )
   .option(
+    "--prompt",
+    "Prompt for login choices instead of automatically using configured defaults",
+    false,
+  )
+  .option(
     "--no-prompt",
-    "Do not prompt for input and accept the default choice",
+    "Use configured defaults for login choices (default); ask for missing credentials or MFA",
   )
   .option(
     "--enable-chrome-network-service",
