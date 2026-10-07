@@ -11,6 +11,7 @@ Thank you for your interest in contributing to az2aws! This document provides gu
 - [Coding Standards](#coding-standards)
 - [Commit Message Guidelines](#commit-message-guidelines)
 - [Release Process](#release-process)
+- [GitHub Actions dependencies](#github-actions-dependencies)
 - [Reporting Issues](#reporting-issues)
 
 ## Code of Conduct
@@ -280,6 +281,30 @@ chore: update dependencies
 - **PR titles matter**: When a PR is squash-merged, the PR title becomes the commit message. Ensure your PR title follows this format.
 - **Use `feat(docs):`** if you want documentation changes to appear in the changelog and trigger a release.
 - Commit messages can be generated using an LLM model, but ensure they follow the Conventional Commits format.
+
+## GitHub Actions dependencies
+
+All three workflows use `.github/workflows/actions.lock` to pin direct and
+transitive action dependencies. Workflow `uses:` entries contain release tags;
+the generated lockfile records their commit SHAs and repository identities.
+
+Use the official [github/gh-actions-lock](https://github.com/github/gh-actions-lock)
+tool (this lockfile was generated with v0.1.6). When available as a GitHub CLI
+extension, regenerate and verify with:
+
+```sh
+gh actions-lock
+gh actions-lock --verify
+```
+
+If managed by mise, invoke the installed release binary with the same flags.
+
+Regenerate the lockfile whenever workflows or their `uses:` references change,
+and commit the workflow edits and lockfile together. Review both direct and
+transitive dependency changes, including Dependabot PRs. Use `--relock` only
+when intentionally updating a moving branch or partial-version reference.
+Do not edit the generated lockfile manually. The tool and format are in preview;
+upgrade the generator deliberately and verify the resulting lockfile.
 
 ## Release Process
 
