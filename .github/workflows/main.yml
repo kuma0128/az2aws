@@ -1,3 +1,5 @@
+# This workflow is managed by gh actions-lock.
+
 name: Main
 
 on:
@@ -23,10 +25,10 @@ jobs:
           - macos-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24
       - run: corepack enable pnpm
@@ -39,7 +41,7 @@ jobs:
         run: pnpm test
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-slim'
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        uses: codecov/codecov-action@v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
@@ -65,10 +67,10 @@ jobs:
       AZ2AWS_E2E_AWS_REGION: ${{ vars.AZ2AWS_E2E_AWS_REGION }}
       AZ2AWS_E2E_DURATION_HOURS: ${{ vars.AZ2AWS_E2E_DURATION_HOURS }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24
       - run: corepack enable pnpm
@@ -94,10 +96,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: 24
       - run: corepack enable pnpm
