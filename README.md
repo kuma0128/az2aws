@@ -199,6 +199,18 @@ New profiles enable "Stay logged in" by default during configuration. This lets
     az2aws --no-prompt
     az2aws --profile foo --no-prompt
 
+After a successful SSO login with `--no-prompt`, az2aws prints the assumed role
+ARN and profile name. For example, the command above adds this line when profile
+`foo` assumes the `ReadOnly` role in account `123456789012`:
+
+```text
+Signed in to AWS role arn:aws:iam::123456789012:role/ReadOnly (profile "foo").
+```
+
+In `--credential-process` mode, this message goes to stderr so stdout remains
+valid credentials JSON. Serving cached credentials does not perform SSO or
+print a new login message. Failed logins do not print the success message.
+
 `--incognito` starts the login flow in a fresh incognito browser context. This
 helps avoid reusing an existing browser session, and it overrides any saved
 "Stay logged in" browser state for that run.
