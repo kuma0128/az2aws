@@ -1374,18 +1374,114 @@ describe("login", () => {
     });
 
     it.each([
-      { noPrompt: true, outcome: "success", showRole: true },
-      { noPrompt: false, outcome: "success", showRole: false },
-      { noPrompt: true, outcome: "missing", showRole: false },
-      { noPrompt: true, outcome: "failure", showRole: false },
+      {
+        noPrompt: true,
+        roleCount: 1,
+        wired: false,
+        outcome: "success",
+        showRole: true,
+      },
+      {
+        noPrompt: true,
+        roleCount: 2,
+        wired: false,
+        outcome: "success",
+        showRole: true,
+      },
+      {
+        noPrompt: false,
+        roleCount: 1,
+        wired: false,
+        outcome: "success",
+        showRole: true,
+      },
+      {
+        noPrompt: false,
+        roleCount: 2,
+        wired: false,
+        outcome: "success",
+        showRole: false,
+      },
+      {
+        noPrompt: false,
+        roleCount: 2,
+        wired: true,
+        outcome: "success",
+        showRole: true,
+      },
+      {
+        noPrompt: true,
+        roleCount: 1,
+        wired: false,
+        outcome: "missing",
+        showRole: false,
+      },
+      {
+        noPrompt: true,
+        roleCount: 1,
+        wired: false,
+        outcome: "failure",
+        showRole: false,
+      },
+      {
+        noPrompt: false,
+        roleCount: 1,
+        wired: false,
+        outcome: "missing",
+        showRole: false,
+      },
+      {
+        noPrompt: false,
+        roleCount: 1,
+        wired: false,
+        outcome: "failure",
+        showRole: false,
+      },
+      {
+        noPrompt: false,
+        roleCount: 2,
+        wired: true,
+        outcome: "missing",
+        showRole: false,
+      },
+      {
+        noPrompt: false,
+        roleCount: 2,
+        wired: true,
+        outcome: "failure",
+        showRole: false,
+      },
     ])(
-      "reports the role only after successful no-prompt SSO: $outcome, noPrompt=$noPrompt",
-      async ({ noPrompt, outcome, showRole }) => {
+      "reports an automatically selected role after SSO: $outcome, noPrompt=$noPrompt, roles=$roleCount, wired=$wired",
+      async ({ noPrompt, roleCount, wired, outcome, showRole }) => {
+        vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+          ...profile,
+          azure_default_role_arn: role.roleArn,
+          ...(wired
+            ? {
+                credential_process:
+                  "az2aws --profile default --credential-process",
+              }
+            : {}),
+        });
+        vi.mocked(credentialCache.setCachedCredentialsAsync).mockResolvedValue(
+          true,
+        );
         vi.spyOn(login, "_performLoginAsync").mockResolvedValue("saml");
-        vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue([role]);
-        vi.spyOn(login, "_askUserForRoleAndDurationAsync").mockResolvedValue({
-          role,
-          durationHours: 1,
+        vi.spyOn(login, "_parseRolesFromSamlResponse").mockReturnValue(
+          roleCount === 1
+            ? [role]
+            : [
+                {
+                  ...role,
+                  roleArn: "arn:aws:iam::123456789012:role/OtherRole",
+                },
+                role,
+              ],
+        );
+        vi.mocked(inquirer.prompt).mockResolvedValue({
+          role: role.roleArn,
+          durationHours: "1",
         });
         const assumeRole = vi.spyOn(login, "_assumeRoleAsync");
         if (outcome === "failure")
@@ -1408,7 +1504,24 @@ describe("login", () => {
         );
         if (outcome === "failure")
           await expect(result).rejects.toThrow("STS rejected login");
+        else if (outcome === "missing" && wired)
+          await expect(result).rejects.toThrow(
+            "Unable to retrieve credentials.",
+          );
         else await result;
+
+        if (noPrompt || wired) {
+          expect(inquirer.prompt).not.toHaveBeenCalled();
+        } else {
+          expect(inquirer.prompt).toHaveBeenCalledWith(
+            roleCount === 1
+              ? [expect.objectContaining({ name: "durationHours" })]
+              : [
+                  expect.objectContaining({ name: "role" }),
+                  expect.objectContaining({ name: "durationHours" }),
+                ],
+          );
+        }
 
         const message = `Signed in to AWS role ${role.roleArn}.`;
         if (showRole) expect(console.log).toHaveBeenCalledWith(message);

@@ -627,7 +627,7 @@ export const login = {
           !credentialProcess && !wiredToCredentialProcess,
         );
 
-        if (effectiveNoPrompt && credentials) {
+        if ((useConfiguredRole || roles.length === 1) && credentials) {
           console.log(`Signed in to AWS role ${role.roleArn}.`);
         }
 
@@ -1182,6 +1182,10 @@ export const login = {
       // Prevent redirection to AWS
       let samlResponseData;
       let hasDetectedCertificateAuth = false;
+      const proxyAuthSessions = new WeakMap<
+        HTTPRequest["client"],
+        Promise<unknown>
+      >();
       const samlResponsePromise = new Promise((resolve) => {
         page.on("request", (req: HTTPRequest) => {
           const reqURL = req.url();
@@ -1210,8 +1214,28 @@ export const login = {
             // Keep ownership until finally has awaited browser.close().
             debug("Received SAML response");
           } else {
+            let ready = Promise.resolve<unknown>(undefined);
+            if (browserProxy?.credentials) {
+              // Puppeteer enables its own auth handler for request interception.
+              // Let our separate session handle auth exclusively; otherwise Chrome
+              // can deliver the proxy challenge to Puppeteer, which has no credentials.
+              // Configure each session before continuing its first request.
+              const client = req.client;
+              const configured = proxyAuthSessions.get(client);
+              if (configured) {
+                ready = configured;
+              } else {
+                ready = client.send("Fetch.enable", {
+                  handleAuthRequests: false,
+                  patterns: [{ urlPattern: "*" }],
+                });
+                proxyAuthSessions.set(client, ready);
+              }
+            }
             handleBackgroundPromise(
-              req.continue(),
+              browserProxy?.credentials
+                ? ready.then(() => req.continue())
+                : req.continue(),
               `Failed to continue intercepted request ${redactedURL}`,
             );
           }

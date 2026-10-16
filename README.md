@@ -199,8 +199,11 @@ New profiles enable "Stay logged in" by default during configuration. This lets
     az2aws --no-prompt
     az2aws --profile foo --no-prompt
 
-After a successful SSO login with `--no-prompt`, az2aws prints the assumed role
-ARN. For example, the command above adds this line when profile
+After a successful SSO login, az2aws prints the assumed role ARN whenever role
+selection is skipped: with `--no-prompt`, when only one role is available, or
+when the profile is wired to az2aws through `credential_process`. Choosing a role
+interactively does not print an additional role message.
+For example, the command above adds this line when profile
 `foo` assumes the `ReadOnly` role in account `123456789012`:
 
 ```text
