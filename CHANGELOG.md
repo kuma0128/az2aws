@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/kuma0128/az2aws/compare/v2.2.0...v2.2.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* report automatic role selection and restore proxy login ([#306](https://github.com/kuma0128/az2aws/issues/306)) ([a242841](https://github.com/kuma0128/az2aws/commit/a2428415a450d727247d5ba3925ba68d2b173f9c))
+
 ## [2.2.0](https://github.com/kuma0128/az2aws/compare/v2.1.0...v2.2.0) (2026-10-07)
 
 
