@@ -91,9 +91,18 @@ Chromium-based browser must still be installed (see the note at the top).
 
 ### npm
 
-Install [Node.js](https://nodejs.org/) v24 or higher, then install az2aws:
+Install [Node.js](https://nodejs.org/) 24.22.1 or later within 24.x, or
+26.12.1 or later within 26.x, then install az2aws:
 
     npm install -g az2aws
+
+These minimum versions include the fix for the
+[eMudhra intermediate CA compromise](https://github.com/nodejs/node/pull/66871).
+Other Node.js major versions are not supported. npm may only warn about an
+unsupported Node.js version; update the runtime before using az2aws.
+Standalone executables bundle Node.js, so updating your system's Node.js does
+not update an existing executable. Install a release rebuilt with a patched
+runtime. Keep your Chromium-based browser up to date as well.
 
 #### Linux Notes
 
@@ -137,12 +146,12 @@ You can also install the docker-launch.sh script to your PATH:
 
 > **Security Note:** Always download from a specific release tag (not `main`) and review the script before installing.
 
-### Snap
+### Migrating from Snap
 
-The [Snap Store](https://snapcraft.io/az2aws) remains available for existing
-v1 installations, but az2aws v2 and later are not published there. v2 drives
-an installed Chromium-based browser, which is not accessible from the current
-strictly confined Snap. Use npm or Docker for current releases.
+Snap distribution was retired in az2aws v2, and this repository no longer
+includes a Snap build configuration. v2 drives an installed Chromium-based
+browser, which is not accessible from the old strictly confined Snap.
+Use npm, Docker, or a standalone binary for current releases.
 
 The v1 update notifier may report a newer npm release; `snap refresh` cannot
 install v2. Migrate with `npm install -g az2aws`, verify the npm installation,

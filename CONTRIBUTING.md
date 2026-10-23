@@ -20,7 +20,9 @@ Please be respectful and constructive in all interactions. We are committed to p
 
 ## Getting Started
 
-This project is written in TypeScript and uses Prettier and ESLint for code formatting. You need Node.js v24 or higher.
+This project is written in TypeScript and uses Prettier and ESLint for code formatting.
+Use Node.js 24.22.1 or later within 24.x, or 26.12.1 or later within 26.x.
+These minimum versions include the eMudhra intermediate CA compromise fix.
 
 ### Prerequisites
 
@@ -38,22 +40,16 @@ echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc
 
 Then restart your shell or run `source ~/.zshrc` (or the appropriate config file for your shell, such as `~/.bashrc`).
 
-3. Install Node.js v24:
+3. Install the minimum supported Node.js 24 release:
 
 ```sh
-mise use --global node@24
+mise use --global node@24.22.1
 ```
 
-4. Verify Node.js version (should return v24.x.x):
+4. Verify Node.js version (should return v24.22.1 for the command above):
 
 ```sh
 node -v
-```
-
-5. Enable pnpm via corepack:
-
-```sh
-corepack enable
 ```
 
 ### Setup
@@ -65,9 +61,11 @@ git clone git@github.com:<YOUR_GITHUB_USERNAME>/az2aws.git
 cd az2aws
 ```
 
-2. Install dependencies:
+2. Install the pnpm version declared in `package.json`, then install dependencies.
+   Node.js 26 does not bundle Corepack:
 
 ```sh
+npm install --global "$(node -p "require('./package.json').packageManager")"
 pnpm install
 ```
 
@@ -296,7 +294,7 @@ transitive action dependencies. Workflow `uses:` entries contain release tags;
 the generated lockfile records their commit SHAs and repository identities.
 
 Use the official [github/gh-actions-lock](https://github.com/github/gh-actions-lock)
-tool (this lockfile was generated with v0.1.6). When available as a GitHub CLI
+tool (this lockfile was generated with v0.2.0). When available as a GitHub CLI
 extension, regenerate and verify with:
 
 ```sh
