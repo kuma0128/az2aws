@@ -19,7 +19,7 @@ parts:
   az2aws:
     plugin: npm
     npm-include-node: true
-    npm-node-version: "24"
+    npm-node-version: "24.22.1"
     source: .
 
 apps:
