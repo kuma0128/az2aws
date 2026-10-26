@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import inquirer, { type DistinctQuestion } from "inquirer";
 import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
-import puppeteer from "puppeteer-core";
+import puppeteer from "./puppeteer";
 import type {
   Browser,
   BrowserContext,

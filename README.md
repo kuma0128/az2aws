@@ -34,7 +34,7 @@ Firefox and Safari are not supported.
   - [Standalone binary](#standalone-binary)
   - [npm](#npm)
   - [Docker](#docker)
-  - [Snap](#snap)
+  - [Migrating from Snap](#migrating-from-snap)
 - [Command Options](#command-options)
 - [Usage](#usage)
   - [Configuration](#configuration)
@@ -88,6 +88,8 @@ Linux, macOS, and Windows:
 Assets follow the pattern `az2aws-{linux,darwin}-{x64,arm64}.tar.gz` and
 `az2aws-windows-x64.zip`, each with a matching `.sha256` checksum file. A
 Chromium-based browser must still be installed (see the note at the top).
+Archives also include `LICENSE` and `THIRD_PARTY_NOTICES.txt` for az2aws, its
+bundled dependencies, and Node.js.
 
 ### npm
 
@@ -103,6 +105,12 @@ unsupported Node.js version; update the runtime before using az2aws.
 Standalone executables bundle Node.js, so updating your system's Node.js does
 not update an existing executable. Install a release rebuilt with a patched
 runtime. Keep your Chromium-based browser up to date as well.
+
+The npm package includes Puppeteer and its dependencies as a prebuilt JavaScript
+bundle. Other runtime dependencies are installed normally. No browser is
+downloaded; Node.js and an installed Chromium-based browser are still required.
+Bundled dependency updates arrive with new az2aws releases. Their license texts
+are included in `lib/THIRD_PARTY_NOTICES.txt`.
 
 #### Linux Notes
 

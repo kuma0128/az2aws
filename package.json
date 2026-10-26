@@ -52,11 +52,12 @@
   },
   "files": [
     "lib/*.js",
+    "lib/THIRD_PARTY_NOTICES.txt",
     "CHANGELOG.md"
   ],
   "scripts": {
     "start": "pnpm build && node lib/index.js",
-    "build": "tsc",
+    "build": "tsc && node scripts/build-npm.mjs",
     "watch": "tsc -w",
     "eslint": "eslint .",
     "prettier:write": "prettier --write \"src/**/*.{ts,json}\"",
@@ -77,8 +78,7 @@
     "https-proxy-agent": "^9.0.0",
     "ini": "^6.0.0",
     "inquirer": "^14.0.1",
-    "proper-lockfile": "^4.1.2",
-    "puppeteer-core": "^25.1.0"
+    "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {
     "@types/debug": "^4.1.12",
@@ -93,6 +93,7 @@
     "eslint-config-prettier": "^10.1.8",
     "postject": "1.0.0-alpha.6",
     "prettier": "^3.8.1",
+    "puppeteer-core": "^25.16.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.7",
     "vitest": "^5.0.3"

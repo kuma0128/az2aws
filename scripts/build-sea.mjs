@@ -19,6 +19,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import esbuild from "esbuild";
 import postject from "postject";
+import { buildBundle, writeDependencyNotices } from "./bundle.mjs";
 
 const SUPPORTED_TARGETS = [
   "linux-x64",
@@ -99,32 +100,9 @@ fs.mkdirSync(binDir, { recursive: true });
 
 // --- 1. Bundle the CLI into a single CommonJS file ---------------------------
 const bundlePath = path.join(seaDir, "az2aws.cjs");
-const bundleResult = await esbuild.build({
-  entryPoints: [path.join(repoRoot, "src", "index.ts")],
-  bundle: true,
-  platform: "node",
-  format: "cjs",
-  target: "node24",
-  outfile: bundlePath,
-  minify: true,
-  // Error-type checks compare error.name (e.g. puppeteer-core's
-  // TargetCloseError); keep original class/function names under minification.
-  keepNames: true,
-  logLevel: "warning",
-  inject: [path.join(repoRoot, "scripts", "sea-proxy-agent-shim.mjs")],
-  metafile: true,
-  // Optional native accelerators probed by ws inside try/catch; leaving them
-  // external keeps the probe a harmless runtime miss instead of a build error.
-  external: ["bufferutil", "utf-8-validate"],
-});
-
-if (
-  !Object.keys(bundleResult.metafile.inputs).some((input) =>
-    /node_modules[\\/]https-proxy-agent[\\/]/.test(input),
-  )
-) {
-  throw new Error("SEA bundle is missing the https-proxy-agent dependency.");
-}
+const metafile = await buildBundle({ outfile: bundlePath });
+const noticesPath = path.join(seaDir, "THIRD_PARTY_NOTICES.txt");
+await writeDependencyNotices(metafile, noticesPath);
 
 // SEA evaluates the main script directly; drop the CLI shebang line.
 const bundleSource = fs.readFileSync(bundlePath, "utf8");
@@ -156,6 +134,18 @@ const nodeDistributionUrl = `https://nodejs.org/dist/${nodeVersion}`;
 const nodeShasums = (
   await downloadAsync(`${nodeDistributionUrl}/SHASUMS256.txt`)
 ).toString("utf8");
+// SEA also redistributes Node and its bundled third-party libraries.
+fs.appendFileSync(
+  noticesPath,
+  "\n\nNode.js " +
+    nodeVersion +
+    "\n\n" +
+    (
+      await downloadAsync(
+        `https://raw.githubusercontent.com/nodejs/node/${nodeVersion}/LICENSE`,
+      )
+    ).toString("utf8"),
+);
 const outPath = path.join(
   binDir,
   `az2aws-${target}${isWindowsTarget ? ".exe" : ""}`,
@@ -309,6 +299,11 @@ if (hasFlag("--archive")) {
   fs.rmSync(stageDir, { recursive: true, force: true });
   fs.mkdirSync(stageDir, { recursive: true });
   fs.copyFileSync(outPath, path.join(stageDir, binaryName));
+  fs.copyFileSync(
+    path.join(repoRoot, "LICENSE"),
+    path.join(stageDir, "LICENSE"),
+  );
+  fs.copyFileSync(noticesPath, path.join(stageDir, "THIRD_PARTY_NOTICES.txt"));
   if (!isWindowsTarget) {
     fs.chmodSync(path.join(stageDir, binaryName), 0o755);
   }
@@ -323,14 +318,37 @@ if (hasFlag("--archive")) {
       .relative(stageDir, assetPath)
       .split(path.sep)
       .join("/");
-    execFileSync("tar", ["-a", "-cf", relativeAssetPath, binaryName], {
-      cwd: stageDir,
-      stdio: "inherit",
-    });
+    execFileSync(
+      "tar",
+      [
+        "-a",
+        "-cf",
+        relativeAssetPath,
+        binaryName,
+        "LICENSE",
+        "THIRD_PARTY_NOTICES.txt",
+      ],
+      {
+        cwd: stageDir,
+        stdio: "inherit",
+      },
+    );
   } else {
-    execFileSync("tar", ["-czf", assetPath, "-C", stageDir, binaryName], {
-      stdio: "inherit",
-    });
+    execFileSync(
+      "tar",
+      [
+        "-czf",
+        assetPath,
+        "-C",
+        stageDir,
+        binaryName,
+        "LICENSE",
+        "THIRD_PARTY_NOTICES.txt",
+      ],
+      {
+        stdio: "inherit",
+      },
+    );
   }
 
   const digest = crypto

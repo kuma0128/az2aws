@@ -96,7 +96,7 @@ The watcher recompiles changes; it does not restart the CLI automatically.
 | Script | Description |
 |--------|-------------|
 | `pnpm start` | Build and run the CLI once |
-| `pnpm build` | Build for production |
+| `pnpm build` | Compile the CLI and bundle Puppeteer for npm |
 | `pnpm watch` | Recompile TypeScript sources when files change |
 | `pnpm test` | Run unit tests |
 | `pnpm test:coverage` | Run unit tests with coverage |
@@ -317,13 +317,45 @@ This project uses [release-please](https://github.com/googleapis/release-please)
 
 ### npm package contents
 
-The `files` allowlist in `package.json` includes only the compiled `lib/*.js`
-files and `CHANGELOG.md`. npm also includes `package.json`, `README.md`, and
-`LICENSE` automatically. Keep runtime assets in this allowlist; local screenshots,
+The `files` allowlist includes `lib/*.js`, `lib/THIRD_PARTY_NOTICES.txt`, and
+`CHANGELOG.md`. npm also includes `package.json`, `README.md`, and `LICENSE`
+automatically. Keep runtime assets in this allowlist; local screenshots,
 credentials, package-manager caches, and development files must not be published.
 
+`pnpm build` compiles the CLI and replaces `lib/puppeteer.js` with an esbuild
+bundle of `puppeteer-core` and its dependencies. Puppeteer is a development
+dependency; the other runtime dependencies remain in `dependencies` and are
+installed normally by consumers. Keep the `lib/*.js` modules available.
+`pnpm watch` uses the source adapter and the locally installed Puppeteer, so
+run `pnpm build` before packing or publishing.
+
+`scripts/bundle.mjs` shares bundle settings and license collection with the
+SEA build. npm includes notices for the Puppeteer bundle; SEA archives include
+notices for all bundled packages and Node.js, plus the az2aws license. Missing
+license files fail the build; reviewed repository copies live in
+`scripts/licenses`. Preserve upstream notices when updating those copies.
+
 After building, inspect the package contents with `npm pack --dry-run --ignore-scripts`.
-The packaging regression test checks the allowlist against synthetic local artifacts.
+The packaging regression test checks the allowlist against synthetic local artifacts
+and loads the Puppeteer bundle outside `node_modules`. The local browser E2E
+tests also use this bundle.
+
+### Dependency trust review
+
+`pnpm-workspace.yaml` enables `trustPolicy: no-downgrade`. The one exception is
+`chromium-bidi@157.0.8090-0`: the project moved from GitHub to Chromium publishing,
+the official Puppeteer 25.16.0 release depends on it, and its npmjs.org and mirror
+tarball SHA-512 digests were compared. The release lacks the trusted-publisher
+evidence carried by earlier releases. Do not widen this exception automatically.
+
+Review trust changes when updating dependencies, including Dependabot PRs.
+Frozen-lockfile installs trust existing resolutions; they do not repeat the
+publish-metadata review. Perform a fresh resolution in a temporary directory
+with copies of `package.json` and `pnpm-workspace.yaml` (no lockfile), using the
+repository’s pnpm version and `pnpm install --lockfile-only --ignore-scripts`.
+Review any exception against the upstream release, publisher, source and tarball.
+The bundled Puppeteer dependencies are updated for users only when az2aws is
+released; their trust review and vulnerability updates belong to maintainers.
 
 ### How It Works
 

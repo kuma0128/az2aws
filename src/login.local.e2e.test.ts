@@ -2,12 +2,13 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { paths } from "./paths";
 import { URL } from "node:url";
 import zlib from "node:zlib";
-import { describe, expect, it, vi } from "vitest";
-import puppeteer, { type Browser } from "puppeteer-core";
-import { login } from "./login";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import type { Browser } from "puppeteer-core";
+import { buildPuppeteerBundle } from "../scripts/bundle.mjs";
 import { detectSystemChromeAsync } from "./systemChrome";
 
 /**
@@ -25,6 +26,21 @@ import { detectSystemChromeAsync } from "./systemChrome";
 
 const systemBrowser =
   process.env.BROWSER_CHROME_BIN || (await detectSystemChromeAsync());
+
+// Load Puppeteer exactly as distributed, outside the repository's node_modules.
+const bundleDirectory = await fs.mkdtemp(
+  path.join(os.tmpdir(), "az2aws-browser-bundle-"),
+);
+const bundlePath = path.join(bundleDirectory, "puppeteer.cjs");
+await buildPuppeteerBundle(bundlePath);
+const puppeteer = createRequire(import.meta.url)(bundlePath)
+  .default as typeof import("puppeteer-core").default;
+vi.doMock("./puppeteer", () => ({ default: puppeteer }));
+const { login } = await import("./login");
+afterAll(async () => {
+  vi.doUnmock("./puppeteer");
+  await fs.rm(bundleDirectory, { recursive: true, force: true });
+});
 
 const TENANT_ID = "e2e-tenant";
 const APP_ID_URI = "https://signin.aws.amazon.com/saml#local-e2e";
