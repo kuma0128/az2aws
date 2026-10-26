@@ -14,4 +14,3 @@ vitest.e2e.config.ts
 .eslintrc.json
 .release-please-manifest.json
 release-please-config.json
-snapcraft.yaml

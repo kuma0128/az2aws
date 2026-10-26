@@ -16,9 +16,12 @@ permissions:
 
 jobs:
   build:
+    # Keep Node.js 24 job names compatible with required repository checks.
+    name: ${{ matrix.node-version == '24.22.1' && format('build ({0})', matrix.os) || format('build ({0}, {1})', matrix.node-version, matrix.os) }}
     strategy:
       fail-fast: false
       matrix:
+        node-version: ["24.22.1", "26.12.1"]
         os:
           - ubuntu-slim
           - windows-latest
@@ -30,8 +33,9 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: 24
-      - run: corepack enable pnpm
+          node-version: ${{ matrix.node-version }}
+      # Node.js 26 no longer bundles Corepack; use the declared pnpm version.
+      - run: npm install --global "$(node -p "require('./package.json').packageManager")"
         shell: bash
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
@@ -72,7 +76,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: 24
+          node-version: "24.22.1"
       - run: corepack enable pnpm
         shell: bash
       - run: pnpm install --frozen-lockfile
@@ -101,7 +105,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: 24
+          node-version: "24.22.1"
       - run: corepack enable pnpm
         shell: bash
       - run: pnpm install --frozen-lockfile

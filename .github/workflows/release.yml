@@ -135,7 +135,7 @@ jobs:
 
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: 24
+          node-version: "24.22.1"
       - run: corepack enable pnpm
         shell: bash
       - run: pnpm install --frozen-lockfile
@@ -169,7 +169,7 @@ jobs:
 
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: 24
+          node-version: "24.22.1"
           registry-url: https://registry.npmjs.org/
           package-manager-cache: false
 
@@ -275,7 +275,7 @@ jobs:
 
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: 24
+          node-version: "24.22.1"
       - run: corepack enable pnpm
         shell: bash
       - run: pnpm install --frozen-lockfile
