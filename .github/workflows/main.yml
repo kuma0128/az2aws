@@ -16,6 +16,8 @@ permissions:
 
 jobs:
   build:
+    # Keep Node.js 24 job names compatible with required repository checks.
+    name: ${{ matrix.node-version == '24.22.1' && format('build ({0})', matrix.os) || format('build ({0}, {1})', matrix.node-version, matrix.os) }}
     strategy:
       fail-fast: false
       matrix:
