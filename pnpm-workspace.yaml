@@ -3,3 +3,10 @@ packages:
 
 managePackageManagerVersions: false
 verifyDepsBeforeRun: false
+
+# Maintainers review trust changes before publishing bundled dependencies.
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  # Chromium migration: official Puppeteer 25.16.0 pins this release; npmjs and
+  # the mirror have identical tarball integrity. Re-review any future version.
+  - chromium-bidi@157.0.8090-0

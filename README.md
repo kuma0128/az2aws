@@ -88,12 +88,20 @@ Linux, macOS, and Windows:
 Assets follow the pattern `az2aws-{linux,darwin}-{x64,arm64}.tar.gz` and
 `az2aws-windows-x64.zip`, each with a matching `.sha256` checksum file. A
 Chromium-based browser must still be installed (see the note at the top).
+Archives also include `LICENSE` and `THIRD_PARTY_NOTICES.txt` for az2aws, its
+bundled dependencies, and Node.js.
 
 ### npm
 
 Install [Node.js](https://nodejs.org/) v24 or higher, then install az2aws:
 
     npm install -g az2aws
+
+The npm package includes Puppeteer and its dependencies as a prebuilt JavaScript
+bundle. Other runtime dependencies are installed normally. No browser is
+downloaded; Node.js and an installed Chromium-based browser are still required.
+Bundled dependency updates arrive with new az2aws releases. Their license texts
+are included in `lib/THIRD_PARTY_NOTICES.txt`.
 
 #### Linux Notes
 
