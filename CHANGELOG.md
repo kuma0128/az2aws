@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.2.2](https://github.com/kuma0128/az2aws/compare/v2.2.1...v2.2.2) (2026-10-26)
+
+
+### Bug Fixes
+
+* bundle Puppeteer for npm distribution ([2559189](https://github.com/kuma0128/az2aws/commit/25591893bb86b74fb904489e242295bfa259ac54))
+* **deps-dev:** apply Vite and Vitest security patches ([#310](https://github.com/kuma0128/az2aws/issues/310)) ([23f5f3c](https://github.com/kuma0128/az2aws/commit/23f5f3c70d8560b7be667aa51780349fe35687cd))
+* require Node.js releases patched for the eMudhra CA compromise ([#309](https://github.com/kuma0128/az2aws/issues/309)) ([ed8da76](https://github.com/kuma0128/az2aws/commit/ed8da769d875b393d0077528a5794a689d2f694d))
+
 ## [2.2.1](https://github.com/kuma0128/az2aws/compare/v2.2.0...v2.2.1) (2026-10-19)
 
 
