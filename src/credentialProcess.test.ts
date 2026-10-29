@@ -223,6 +223,7 @@ describe("credentialProcess", () => {
           "--credential-process",
           "--no-sandbox",
           "--no-prompt",
+          "--prompt",
           "--enable-chrome-network-service",
           "--no-verify-ssl",
           "--enable-chrome-seamless-sso",
