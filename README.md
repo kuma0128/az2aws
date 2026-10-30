@@ -182,6 +182,7 @@ then remove the old package with `sudo snap remove az2aws`.
 | `--no-disable-extensions`         | Keep browser extensions enabled                          |
 | `--disable-gpu`                   | Disable GPU acceleration                                 |
 | `--incognito`                     | Open the login flow in an incognito browser context      |
+| `--screenshot-on-error <path>`    | Opt in to saving an unrecognized login page as a new PNG (disabled in CI) |
 | `--credential-process`            | Output credentials for AWS CLI credential_process        |
 | `--version (-v)`                  | Show version number                                      |
 
@@ -434,7 +435,17 @@ If you see "Unable to recognize page state!", Azure's login pages may have
 changed. Try:
 
 - `--mode gui` or `--mode debug`
-- Filing an issue with the screenshot (`az2aws-unrecognized-state.png`) to help maintainers update selectors
+- For CLI/debug mode, explicitly capture the unrecognized page with
+  `az2aws --screenshot-on-error /private/directory/login-error.png`
+
+Screenshots are never saved by default, including in debug mode. The option
+captures only an unrecognized page timeout; it does not capture every login
+failure. Choose a private, non-synced directory and a new filename. Existing
+files and symbolic links are refused, and files are created with `0600`
+permissions on POSIX systems. On Windows, restrict access using the directory's
+ACL. Capture remains disabled when `CI` or `GITHUB_ACTIONS` is nonempty, even
+with the option. Inspect and redact any email addresses or other sensitive
+information before attaching an image to an issue.
 
 ## Automation
 

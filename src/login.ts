@@ -22,6 +22,7 @@ import { credentialCache } from "./credentialCache";
 import { isAz2awsCredentialProcess } from "./credentialProcess";
 import { paths } from "./paths";
 import { withFileLock } from "./fileLock";
+import { saveErrorScreenshotAsync } from "./errorScreenshot";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
@@ -510,6 +511,7 @@ export const login = {
     incognito = false,
     credentialProcess = false,
     forceRefresh = false,
+    screenshotOnError?: string,
   ): Promise<void> {
     const originalConsoleLog = console.log;
     const effectiveNoPrompt = credentialProcess ? true : noPrompt;
@@ -595,7 +597,11 @@ export const login = {
           disableGpu,
           incognito,
           allowSensitiveOutput,
-          { browserLockHeld, strictNonInteractive: credentialProcess },
+          {
+            browserLockHeld,
+            strictNonInteractive: credentialProcess,
+            screenshotOnError,
+          },
         );
         const roles = this._parseRolesFromSamlResponse(samlResponse);
         const useConfiguredRole = effectiveNoPrompt || wiredToCredentialProcess;
@@ -694,6 +700,7 @@ export const login = {
     noDisableExtensions: boolean,
     disableGpu: boolean,
     incognito = false,
+    screenshotOnError?: string,
   ): Promise<void> {
     const profiles = await awsConfig.getAz2awsProfileNames();
 
@@ -734,6 +741,9 @@ export const login = {
         noDisableExtensions,
         disableGpu,
         incognito,
+        false,
+        false,
+        screenshotOnError,
       );
     }
   },
@@ -1004,7 +1014,11 @@ export const login = {
     disableGpu: boolean,
     incognito = false,
     allowSensitiveStateOutput = true,
-    context: { browserLockHeld?: boolean; strictNonInteractive?: boolean } = {},
+    context: {
+      browserLockHeld?: boolean;
+      strictNonInteractive?: boolean;
+      screenshotOnError?: string;
+    } = {},
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
@@ -1335,17 +1349,26 @@ export const login = {
           } else {
             debug("State not recognized!");
             if (totalUnrecognizedDelay > MAX_UNRECOGNIZED_PAGE_DELAY) {
-              if (!allowSensitiveStateOutput) {
-                throw new CLIError(
-                  "Unable to recognize page state in a shared environment. Re-run locally with --mode=debug to capture a screenshot.",
-                );
+              let message =
+                "Unable to recognize page state! Try --mode=gui or --mode=debug.";
+              if (context.screenshotOnError && allowSensitiveStateOutput) {
+                try {
+                  await saveErrorScreenshotAsync(
+                    page,
+                    context.screenshotOnError,
+                  );
+                  message += ` Screenshot saved to ${context.screenshotOnError}. Review it for sensitive information before sharing.`;
+                } catch (error) {
+                  message += ` Could not save screenshot: ${formatDebugErrorMessage(error)}`;
+                }
+              } else if (context.screenshotOnError) {
+                message +=
+                  " Screenshot capture is disabled in shared environments.";
+              } else {
+                message +=
+                  " To save a diagnostic image, explicitly pass --screenshot-on-error <new-file.png>.";
               }
-
-              const path = "az2aws-unrecognized-state.png";
-              await page.screenshot({ path });
-              throw new CLIError(
-                `Unable to recognize page state! A screenshot has been dumped to ${path}. If this problem persists, try running with --mode=gui or --mode=debug`,
-              );
+              throw new CLIError(message);
             }
 
             totalUnrecognizedDelay += DELAY_ON_UNRECOGNIZED_PAGE;
