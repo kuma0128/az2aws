@@ -136,11 +136,13 @@ ships with Windows.
 
 ### Docker
 
-Run az2aws with a volume mounted to your AWS configuration directory:
+The image runs as a non-root user with Chrome's sandbox enabled by default.
+Use a dedicated AWS directory containing only the profiles needed in Docker.
+The launcher defaults to `${XDG_CONFIG_HOME:-$HOME/.config}/az2aws/docker`;
+set `AZ2AWS_DOCKER_AWS_DIR` to use another dedicated directory. It no longer
+mounts `~/.aws`, and it does not copy existing credentials automatically.
 
-    docker run --rm -it -v ~/.aws:/root/.aws taiseiito1000/az2aws
-
-You can also install the docker-launch.sh script to your PATH:
+Install the docker-launch.sh script to your PATH:
 
     # Download the script (replace VERSION with a specific release tag, e.g., v1.0.0)
     curl -o /tmp/az2aws https://raw.githubusercontent.com/kuma0128/az2aws/VERSION/docker-launch.sh -L
@@ -153,6 +155,43 @@ You can also install the docker-launch.sh script to your PATH:
     sudo chmod +x /usr/local/bin/az2aws
 
 > **Security Note:** Always download from a specific release tag (not `main`) and review the script before installing.
+
+Configure and log in using the launcher:
+
+    az2aws --configure --profile docker
+    az2aws --profile docker
+
+When configuring a profile for use by the host AWS CLI, answer `false` to
+"Let AWS CLI refresh credentials automatically via credential_process".
+The generated container executable path cannot be run on the host. This keeps
+the resulting credentials in the dedicated directory's `credentials` file.
+For an existing profile, migrate only its required settings and reconfigure
+it there; do not copy your entire `~/.aws` directory.
+
+Point the host AWS CLI at these separate files when using that profile:
+
+    docker_aws_dir="${AZ2AWS_DOCKER_AWS_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/az2aws/docker}"
+    AWS_CONFIG_FILE="$docker_aws_dir/config" \
+      AWS_SHARED_CREDENTIALS_FILE="$docker_aws_dir/credentials" \
+      aws sts get-caller-identity --profile docker
+
+The launcher uses your host UID/GID to preserve file ownership and requires a
+non-root caller. For a direct Docker invocation, use the same layout:
+
+    docker_aws_dir="${AZ2AWS_DOCKER_AWS_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/az2aws/docker}"
+    (umask 077; mkdir -p "$docker_aws_dir")
+    docker run --rm -it --user "$(id -u):$(id -g)" --env HOME=/tmp \
+      --volume "$docker_aws_dir:/tmp/.aws" taiseiito1000/az2aws --profile docker
+
+The dedicated directory remains writable because login updates credentials,
+configuration, locks, and browser sessions. Mount the directory rather than
+individual files: atomic saves replace files with `rename`. A compromised
+container can still access the data in this directory.
+
+Some container runtimes block the namespaces Chrome needs for its sandbox.
+Prefer a runtime that supports sandboxed Chrome. If that is unavailable,
+explicitly pass `--no-sandbox` to accept running without Chrome's sandbox;
+the launcher never adds this option or retries without the sandbox automatically.
 
 ### Migrating from Snap
 
@@ -174,7 +213,7 @@ then remove the old package with `sudo snap remove az2aws`.
 | `--force-refresh (-f)`            | Force refresh even if credentials are valid              |
 | `--configure (-c)`                | Configure the profile                                    |
 | `--mode (-m) <mode>`              | `cli` (default), `gui`, or `debug`                       |
-| `--no-sandbox`                    | Disable Puppeteer sandbox (needed on Linux)              |
+| `--no-sandbox`                    | Disable the browser sandbox when the environment requires it |
 | `--no-prompt`                     | Skip prompts, use defaults                               |
 | `--enable-chrome-network-service` | Enable Network Service (for 3XX redirects)               |
 | `--no-verify-ssl`                 | Disable AWS SSL verification                             |
@@ -369,7 +408,7 @@ Example:
 
     # Common
     export BROWSER_PROFILE_DIR="Default"
-    az2aws --mode gui --no-disable-extensions --no-sandbox
+    az2aws --mode gui --no-disable-extensions
 
 ### Logging In
 

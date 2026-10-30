@@ -25,6 +25,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     ca-certificates \
     chromium \
+    chromium-sandbox \
     fonts-liberation \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -36,4 +37,6 @@ COPY --from=deps /az2aws/node_modules ./node_modules
 COPY --from=deps /az2aws/package.json ./package.json
 COPY lib ./lib
 
-ENTRYPOINT ["node", "/az2aws/lib", "--no-sandbox"]
+USER node
+
+ENTRYPOINT ["node", "/az2aws/lib"]
