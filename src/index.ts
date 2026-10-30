@@ -64,6 +64,10 @@ program
     "Output credentials in JSON format for AWS CLI credential_process",
   )
   .option("--incognito", "Launch Chromium in incognito mode")
+  .option(
+    "--screenshot-on-error <path>",
+    "Save an unrecognized login page to a new PNG file (may contain sensitive data; disabled in CI)",
+  )
   .parse(process.argv);
 
 const options = program.opts();
@@ -111,6 +115,7 @@ async function runAsync(): Promise<void> {
         noDisableExtensions,
         disableGpu,
         incognito,
+        options.screenshotOnError as string | undefined,
       );
     } else if (options.configure) {
       await configureProfileAsync(profileName);
@@ -128,6 +133,7 @@ async function runAsync(): Promise<void> {
         incognito,
         credentialProcess,
         forceRefresh,
+        options.screenshotOnError as string | undefined,
       );
     }
   } catch (err: unknown) {

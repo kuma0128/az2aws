@@ -7,6 +7,11 @@ import {
 } from "./login";
 import { CLIError } from "./CLIError";
 import { withFileLock } from "./fileLock";
+import { saveErrorScreenshotAsync } from "./errorScreenshot";
+
+vi.mock("./errorScreenshot", () => ({
+  saveErrorScreenshotAsync: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock("./fileLock", () => ({
   withFileLock: vi.fn(
@@ -1166,6 +1171,35 @@ describe("login", () => {
       vi.restoreAllMocks();
     });
 
+    it("passes explicit screenshot consent to browser login", async () => {
+      vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
+        azure_tenant_id: "tenant",
+        azure_app_id_uri: "app",
+        azure_default_username: "user",
+        azure_default_role_arn: "role",
+        azure_default_duration_hours: "1",
+        azure_default_remember_me: false,
+        region: "us-east-1",
+      });
+      await login.loginAsync(
+        "default",
+        "cli",
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        "chosen.png",
+      );
+      const context = vi.mocked(login._performLoginAsync).mock.calls[0][14];
+      expect(context).toMatchObject({ screenshotOnError: "chosen.png" });
+    });
+
     it("should throw CLIError for invalid mode", async () => {
       vi.mocked(awsConfig.getProfileConfigAsync).mockResolvedValue({
         azure_tenant_id: "tenant",
@@ -2001,6 +2035,27 @@ describe("login", () => {
       vi.restoreAllMocks();
     });
 
+    it("passes screenshot consent when logging into all profiles", async () => {
+      vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue(["default"]);
+      const loginAsyncSpy = vi
+        .spyOn(login, "loginAsync")
+        .mockResolvedValue(undefined);
+      await login.loginAll(
+        "cli",
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        "chosen.png",
+      );
+      expect(loginAsyncSpy.mock.calls[0][12]).toBe("chosen.png");
+    });
+
     it("should not call loginAsync when no profiles are configured", async () => {
       vi.mocked(awsConfig.getAz2awsProfileNames).mockResolvedValue([]);
       const loginAsyncSpy = vi
@@ -2060,6 +2115,9 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
+        false,
+        undefined,
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
         "profile2",
@@ -2072,6 +2130,9 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
+        false,
+        undefined,
       );
     });
 
@@ -2114,6 +2175,9 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
+        false,
+        undefined,
       );
       expect(loginAsyncSpy).toHaveBeenCalledWith(
         "profile3",
@@ -2126,6 +2190,9 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
+        false,
+        undefined,
       );
     });
 
@@ -2249,6 +2316,9 @@ describe("login", () => {
         false,
         false,
         false,
+        false,
+        false,
+        undefined,
       );
     });
   });
@@ -4591,39 +4661,93 @@ describe("login", () => {
       });
     });
 
-    it("should throw CLIError with screenshot when unrecognized page persists beyond timeout", async () => {
-      const mockPage = createMockPage();
-      const mockBrowser = createMockBrowser(mockPage);
-      mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+    it.each([true, false])(
+      "should not capture a screenshot by default (headless=%s)",
+      async (headless) => {
+        const mockPage = createMockPage();
+        const mockBrowser = createMockBrowser(mockPage);
+        mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
 
-      // page.$ always returns null (no state recognized)
-      mockPage.$.mockResolvedValue(null);
+        // page.$ always returns null (no state recognized)
+        mockPage.$.mockResolvedValue(null);
 
-      const error = await login
-        ._performLoginAsync(
-          "https://login.example.com",
-          true, // headless
-          false,
-          true, // cliProxy=true
-          false,
-          false,
-          "",
-          undefined,
-          false,
-          false,
-          false,
-          false,
-        )
-        .catch((e: unknown) => e);
+        const error = await login
+          ._performLoginAsync(
+            "https://login.example.com",
+            headless,
+            false,
+            true, // cliProxy=true
+            false,
+            false,
+            "",
+            undefined,
+            false,
+            false,
+            false,
+            false,
+          )
+          .catch((e: unknown) => e);
 
-      expect(error).toBeInstanceOf(CLIError);
-      expect((error as CLIError).message).toContain(
-        "Unable to recognize page state!",
-      );
-      expect(mockPage.screenshot).toHaveBeenCalledWith({
-        path: "az2aws-unrecognized-state.png",
-      });
-    });
+        expect(error).toBeInstanceOf(CLIError);
+        expect((error as CLIError).message).toContain(
+          "Unable to recognize page state!",
+        );
+        expect(mockPage.screenshot).not.toHaveBeenCalled();
+        expect(saveErrorScreenshotAsync).not.toHaveBeenCalled();
+        expect((error as CLIError).message).toContain("--screenshot-on-error");
+      },
+    );
+
+    it.each([
+      {
+        allowed: true,
+        failure: false,
+        message: "Screenshot saved to chosen.png",
+      },
+      { allowed: false, failure: false, message: "capture is disabled" },
+      { allowed: true, failure: true, message: "Could not save screenshot" },
+    ])(
+      "handles explicit screenshot capture: %j",
+      async ({ allowed, failure, message }) => {
+        const mockPage = createMockPage();
+        const mockBrowser = createMockBrowser(mockPage);
+        mockPuppeteerLaunch.mockResolvedValue(mockBrowser);
+        const saveScreenshot = vi.mocked(saveErrorScreenshotAsync);
+        saveScreenshot.mockResolvedValue(undefined);
+        if (failure) saveScreenshot.mockRejectedValueOnce(new Error("EEXIST"));
+
+        const error = await login
+          ._performLoginAsync(
+            "https://login.example.com",
+            true,
+            false,
+            true,
+            false,
+            false,
+            "",
+            undefined,
+            false,
+            false,
+            false,
+            false,
+            false,
+            allowed,
+            { screenshotOnError: "chosen.png" },
+          )
+          .catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(CLIError);
+        expect((error as CLIError).message).toContain(
+          "Unable to recognize page state!",
+        );
+        expect((error as CLIError).message).toContain(message);
+        if (allowed)
+          expect(saveScreenshot).toHaveBeenCalledWith(mockPage, "chosen.png");
+        else expect(saveScreenshot).not.toHaveBeenCalled();
+        expect(mockPage.screenshot).not.toHaveBeenCalled();
+        expect(mockBrowser.close).toHaveBeenCalled();
+      },
+    );
 
     it("should suggest gui mode when cli login stalls after password input", async () => {
       const mockPage = createMockPage();
@@ -4728,10 +4852,11 @@ describe("login", () => {
         .catch((e: unknown) => e);
 
       expect(error).toBeInstanceOf(CLIError);
-      expect((error as CLIError).message).toBe(
-        "Unable to recognize page state in a shared environment. Re-run locally with --mode=debug to capture a screenshot.",
+      expect((error as CLIError).message).toContain(
+        "Unable to recognize page state!",
       );
       expect(mockPage.screenshot).not.toHaveBeenCalled();
+      expect(saveErrorScreenshotAsync).not.toHaveBeenCalled();
     });
 
     it("should continue loop when page.$ throws an error", async () => {
