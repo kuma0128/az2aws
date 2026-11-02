@@ -143,7 +143,7 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: lib
           path: lib
@@ -290,7 +290,7 @@ jobs:
             node scripts/build-sea.mjs --target "$target" --archive
           done
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: binaries-${{ matrix.os }}
           path: |
