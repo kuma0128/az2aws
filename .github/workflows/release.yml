@@ -133,7 +133,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v7.0.0
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: "24.22.1"
       - run: corepack enable pnpm
@@ -143,7 +143,7 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: lib
           path: lib
@@ -162,12 +162,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: lib
           path: lib
 
-      - uses: actions/setup-node@v7.0.0
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: "24.22.1"
           registry-url: https://registry.npmjs.org/
@@ -189,7 +189,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: lib
           path: lib
@@ -226,7 +226,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Login to DockerHub
-        uses: docker/login-action@v4.6.0
+        uses: docker/login-action@v4.7.0
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -273,7 +273,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v7.0.0
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: "24.22.1"
       - run: corepack enable pnpm
@@ -290,7 +290,7 @@ jobs:
             node scripts/build-sea.mjs --target "$target" --archive
           done
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: binaries-${{ matrix.os }}
           path: |
