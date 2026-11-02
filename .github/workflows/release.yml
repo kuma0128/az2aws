@@ -226,7 +226,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Login to DockerHub
-        uses: docker/login-action@v4.6.0
+        uses: docker/login-action@v4.7.0
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
