@@ -1364,7 +1364,7 @@ export const login = {
               } else if (context.screenshotOnError) {
                 message +=
                   " Screenshot capture is disabled in shared environments.";
-              } else {
+              } else if (allowSensitiveStateOutput) {
                 message +=
                   " To save a diagnostic image, explicitly pass --screenshot-on-error <new-file.png>.";
               }

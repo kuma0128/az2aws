@@ -4855,6 +4855,10 @@ describe("login", () => {
       expect((error as CLIError).message).toContain(
         "Unable to recognize page state!",
       );
+      // Capture is suppressed in CI, so do not suggest an option that has no effect.
+      expect((error as CLIError).message).not.toContain(
+        "--screenshot-on-error",
+      );
       expect(mockPage.screenshot).not.toHaveBeenCalled();
       expect(saveErrorScreenshotAsync).not.toHaveBeenCalled();
     });
