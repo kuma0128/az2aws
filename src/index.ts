@@ -36,7 +36,7 @@ program
   )
   .option(
     "--no-sandbox",
-    "Disable the browser sandbox (usually necessary on Linux/Docker)",
+    "Disable the browser sandbox only if your environment cannot support it",
   )
   .option(
     "--no-prompt",
