@@ -19,7 +19,15 @@ describe.skipIf(process.platform === "win32")(
       await fs.mkdir(bin);
       await fs.writeFile(
         path.join(bin, "docker"),
-        '#!/bin/sh\nprintf "%s\\0" "$@"\n',
+        [
+          "#!/bin/sh",
+          'case "$1" in',
+          '  --version) echo "${TEST_DOCKER_VERSION}"; exit 0 ;;',
+          '  info) echo "${TEST_DOCKER_SECURITY_OPTIONS}"; exit 0 ;;',
+          "esac",
+          'printf "%s\\0" "$@"',
+          "",
+        ].join("\n"),
         { mode: 0o700 },
       );
       await fs.writeFile(
@@ -33,7 +41,11 @@ describe.skipIf(process.platform === "win32")(
         PATH: `${bin}${path.delimiter}${process.env.PATH}`,
         XDG_CONFIG_HOME: "",
         AZ2AWS_DOCKER_AWS_DIR: "",
+        AZ2AWS_DOCKER_SANDBOX: "",
         TEST_UID: "1234",
+        TEST_DOCKER_VERSION: "Docker version 29.1.3, build f52814d",
+        TEST_DOCKER_SECURITY_OPTIONS:
+          "[name=seccomp,profile=builtin name=cgroupns]",
       };
     });
 
@@ -48,7 +60,7 @@ describe.skipIf(process.platform === "win32")(
       });
     }
 
-    it("shares only a private dedicated directory and preserves sandbox defaults", async () => {
+    it("shares only a private dedicated directory and disables the sandbox explicitly", async () => {
       const result = launch(["--profile", "profile with spaces"]);
       expect(result.status, result.stderr).toBe(0);
       const args = result.stdout.split("\0").slice(0, -1);
@@ -56,25 +68,50 @@ describe.skipIf(process.platform === "win32")(
       expect(args[args.indexOf("--volume") + 1]).toBe(`${awsDir}:/tmp/.aws`);
       expect(args[args.indexOf("--user") + 1]).toBe("1234:2345");
       expect(args[args.indexOf("--env") + 1]).toBe("HOME=/tmp");
-      expect(args).not.toContain("--no-sandbox");
       expect(args).not.toContain("-t");
-      expect(args.slice(-3)).toEqual([
+      expect(args.slice(-4)).toEqual([
         "taiseiito1000/az2aws",
+        "--no-sandbox",
         "--profile",
         "profile with spaces",
       ]);
       expect((await fs.stat(awsDir)).mode & 0o777).toBe(0o700);
+      expect(result.stderr).toContain("~/.aws is not shared");
     });
 
-    it("honors an explicit dedicated directory and explicit sandbox opt-out", () => {
+    it("honors an explicit dedicated directory and sandbox opt-in", async () => {
       env.AZ2AWS_DOCKER_AWS_DIR = path.join(directory, "selected profiles");
-      const result = launch(["--no-sandbox", "--version"]);
+      env.AZ2AWS_DOCKER_SANDBOX = "1";
+      await fs.mkdir(env.AZ2AWS_DOCKER_AWS_DIR);
+      await fs.writeFile(path.join(env.AZ2AWS_DOCKER_AWS_DIR, "config"), "");
+      const result = launch(["--version"]);
       expect(result.status, result.stderr).toBe(0);
       const args = result.stdout.split("\0").slice(0, -1);
       expect(args[args.indexOf("--volume") + 1]).toBe(
         `${env.AZ2AWS_DOCKER_AWS_DIR}:/tmp/.aws`,
       );
-      expect(args.slice(-2)).toEqual(["--no-sandbox", "--version"]);
+      expect(args).not.toContain("--no-sandbox");
+      expect(args.slice(-2)).toEqual(["taiseiito1000/az2aws", "--version"]);
+      expect(result.stderr).toBe("");
+    });
+
+    it("keeps the caller's UID with Podman", () => {
+      env.TEST_DOCKER_VERSION = "podman version 5.6.2";
+      const result = launch(["--version"]);
+      expect(result.status, result.stderr).toBe(0);
+      const args = result.stdout.split("\0").slice(0, -1);
+      expect(args).toContain("--userns=keep-id");
+      expect(args[args.indexOf("--user") + 1]).toBe("1234:2345");
+    });
+
+    it("maps container root to the caller with rootless Docker", () => {
+      env.TEST_DOCKER_SECURITY_OPTIONS =
+        "[name=seccomp,profile=builtin name=rootless name=cgroupns]";
+      const result = launch(["--version"]);
+      expect(result.status, result.stderr).toBe(0);
+      const args = result.stdout.split("\0").slice(0, -1);
+      expect(args[args.indexOf("--user") + 1]).toBe("0:0");
+      expect(args).not.toContain("--userns=keep-id");
     });
 
     it("refuses to replace the image's non-root user with host root", () => {

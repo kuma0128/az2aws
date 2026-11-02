@@ -25,7 +25,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     ca-certificates \
     chromium \
-    chromium-sandbox \
     fonts-liberation \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -36,7 +35,8 @@ ENV BROWSER_CHROME_BIN=/usr/bin/chromium
 COPY --from=deps /az2aws/node_modules ./node_modules
 COPY --from=deps /az2aws/package.json ./package.json
 COPY lib ./lib
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 USER node
 
-ENTRYPOINT ["node", "/az2aws/lib"]
+ENTRYPOINT ["/bin/sh", "/az2aws/docker-entrypoint.sh"]

@@ -136,11 +136,13 @@ ships with Windows.
 
 ### Docker
 
-The image runs as a non-root user with Chrome's sandbox enabled by default.
+The image runs as a non-root user.
 Use a dedicated AWS directory containing only the profiles needed in Docker.
 The launcher defaults to `${XDG_CONFIG_HOME:-$HOME/.config}/az2aws/docker`;
 set `AZ2AWS_DOCKER_AWS_DIR` to use another dedicated directory. It no longer
 mounts `~/.aws`, and it does not copy existing credentials automatically.
+
+> **Upgrading from 2.2.x or earlier:** Images from 2.3.0 no longer run as root, so the earlier `docker-launch.sh` and `docker run -v ~/.aws:/root/.aws ...` invocations stop with migration guidance. Install the launcher from v2.3.0 or later and set up the profiles you need in its dedicated directory as described below. To keep the previous behavior temporarily, change the image in your existing script to `taiseiito1000/az2aws:2.2`.
 
 Install the docker-launch.sh script to your PATH:
 
@@ -163,8 +165,9 @@ Configure and log in using the launcher:
 
 When configuring a profile for use by the host AWS CLI, answer `false` to
 "Let AWS CLI refresh credentials automatically via credential_process".
-The generated container executable path cannot be run on the host. This keeps
-the resulting credentials in the dedicated directory's `credentials` file.
+Host tools would run the generated `credential_process` command on the host,
+outside the container that configured it. Answering `false` keeps the
+resulting credentials in the dedicated directory's `credentials` file.
 For an existing profile, migrate only its required settings and reconfigure
 it there; do not copy your entire `~/.aws` directory.
 
@@ -176,22 +179,27 @@ Point the host AWS CLI at these separate files when using that profile:
       aws sts get-caller-identity --profile docker
 
 The launcher uses your host UID/GID to preserve file ownership and requires a
-non-root caller. For a direct Docker invocation, use the same layout:
+non-root caller. With Podman it adds `--userns=keep-id`; with rootless Docker it
+runs as container root, which maps to your user. For a direct Docker
+invocation, use the same layout:
 
     docker_aws_dir="${AZ2AWS_DOCKER_AWS_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/az2aws/docker}"
     (umask 077; mkdir -p "$docker_aws_dir")
     docker run --rm -it --user "$(id -u):$(id -g)" --env HOME=/tmp \
-      --volume "$docker_aws_dir:/tmp/.aws" taiseiito1000/az2aws --profile docker
+      --volume "$docker_aws_dir:/tmp/.aws" taiseiito1000/az2aws --no-sandbox \
+      --profile docker
 
 The dedicated directory remains writable because login updates credentials,
 configuration, locks, and browser sessions. Mount the directory rather than
 individual files: atomic saves replace files with `rename`. A compromised
 container can still access the data in this directory.
 
-Some container runtimes block the namespaces Chrome needs for its sandbox.
-Prefer a runtime that supports sandboxed Chrome. If that is unavailable,
-explicitly pass `--no-sandbox` to accept running without Chrome's sandbox;
-the launcher never adds this option or retries without the sandbox automatically.
+Docker's default seccomp profile, including rootless Docker's, blocks the user
+namespaces that Chrome's sandbox requires, so the launcher passes
+`--no-sandbox` to az2aws. Podman's default profile allows them: with Podman, set
+`AZ2AWS_DOCKER_SANDBOX=1` to keep Chrome's sandbox enabled. Do not set it with
+Docker; the browser fails to start, and a remembered browser session may be
+reset.
 
 ### Migrating from Snap
 
