@@ -229,9 +229,13 @@ async function startAuthenticatedProxyAsync(target: string) {
     upstream.on("error", () => res.destroy());
     req.pipe(upstream);
   });
-  server.on("connect", (_req, socket) =>
-    socket.end("HTTP/1.1 502 Bad Gateway\r\n\r\n"),
-  );
+  server.on("connect", (_req, socket) => {
+    // Node hands CONNECT sockets to us without an error handler. Chrome may
+    // reset a rejected tunnel, which would otherwise surface as an unhandled
+    // `read ECONNRESET` and fail the run after every test has passed.
+    socket.on("error", () => socket.destroy());
+    socket.end("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+  });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string")
