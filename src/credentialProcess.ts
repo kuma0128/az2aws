@@ -184,6 +184,7 @@ const credentialProcessRuntimeFlags = new Map<string, string>([
   ["--force-refresh", "--force-refresh"],
   ["--no-sandbox", "--no-sandbox"],
   ["--no-prompt", "--no-prompt"],
+  ["--prompt", "--prompt"],
   ["--enable-chrome-network-service", "--enable-chrome-network-service"],
   ["--no-verify-ssl", "--no-verify-ssl"],
   ["--enable-chrome-seamless-sso", "--enable-chrome-seamless-sso"],
