@@ -35,5 +35,8 @@ ENV BROWSER_CHROME_BIN=/usr/bin/chromium
 COPY --from=deps /az2aws/node_modules ./node_modules
 COPY --from=deps /az2aws/package.json ./package.json
 COPY lib ./lib
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
-ENTRYPOINT ["node", "/az2aws/lib", "--no-sandbox"]
+USER node
+
+ENTRYPOINT ["/bin/sh", "/az2aws/docker-entrypoint.sh"]
